@@ -1,13 +1,5 @@
 # 🔐 Bitcoin-Tausch-Netzwerk — Kurz-Anleitung
 
-**Status:** Live & funktional (Stand: 17. Aug 2025)
-
-Worum geht's?
-- Menschen, die Bitcoin direkt tauschen wollen, sicher und anonym verbinden.
-# 🔐 Bitcoin-Tausch-Netzwerk — Kurz-Anleitung & Masterplan
-
-**Status:** Live & funktional (Stand: 17. Aug 2025)
-
 Worum geht's?
 - Menschen, die Bitcoin direkt tauschen wollen, sicher und anonym verbinden.
 
