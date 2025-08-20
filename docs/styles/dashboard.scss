@@ -1,0 +1,285 @@
+// =====================================
+// 📊 DASHBOARD COMPONENTS
+// =====================================
+
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// 🌌 DASHBOARD BODY
+.glassmorphic-body {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: 
+      radial-gradient(circle at 25% 75%, rgba($nostr-purple, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 75% 25%, rgba($nostr-pink, 0.15) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+// 🏷️ GLASSMORPHIC CARDS
+.glassmorphic-card {
+  @include glass-card;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border-radius: $border-radius-xl;
+  
+  &.text-center {
+    text-align: center;
+  }
+}
+
+// 🎯 OFFER CARDS (Simplified)
+.offer-card {
+  @include glass-card;
+  border-radius: $border-radius-lg;
+  transition: all $transition-smooth;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  
+  &:hover {
+    transform: translateY(-8px);
+    box-shadow: 
+      0 20px 40px rgba(0, 0, 0, 0.15),
+      0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+  
+  .offer-icon {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  }
+  
+  .offer-title {
+    color: $text-dark;
+    font-size: $font-size-xl;
+    font-weight: $font-weight-semibold;
+    margin-bottom: 1rem;
+  }
+  
+  .offer-price {
+    color: $accent-yellow;
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-bold;
+    margin-bottom: 2rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}
+
+// 🎨 NAVIGATION
+.navbar-glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  
+  .navbar-brand {
+    color: $text-dark !important;
+    font-weight: $font-weight-bold;
+    
+    .bi-currency-bitcoin {
+      color: $accent-yellow !important;
+    }
+  }
+  
+  .nav-link {
+    color: $text-dark !important;
+    transition: color $transition-smooth;
+    
+    &:hover {
+      color: $accent-yellow !important;
+    }
+  }
+}
+
+// 🔘 BUTTONS & ACTIONS
+.btn-gradient {
+  @include button-gradient;
+  border-radius: $border-radius-md;
+  font-weight: $font-weight-semibold;
+  padding: 0.75rem 2rem;
+  transition: all $transition-smooth;
+  box-shadow: 0 4px 15px rgba($nostr-purple, 0.4);
+  
+      color: $text-dark;
+  }
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 8px 25px rgba($nostr-purple, 0.6),
+      0 0 0 1px rgba(255, 255, 255, 0.2);
+    color: $text-dark;
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  &.btn-lg {
+    padding: 1rem 2.5rem;
+    font-size: $font-size-lg;
+    border-radius: $border-radius-lg;
+  }
+}
+
+// 📝 MODALS
+.modal-content {
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: $border-radius-lg;
+  
+  .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    
+    .modal-title {
+      color: $text-dark;
+      font-weight: $font-weight-semibold;
+    }
+    
+    .btn-close-white {
+      filter: brightness(0) invert(1);
+      opacity: 0.8;
+      
+      &:hover {
+        opacity: 1;
+      }
+    }
+  }
+  
+  .modal-body {
+    .form-label {
+      color: $text-dark;
+      font-weight: $font-weight-medium;
+      margin-bottom: 0.5rem;
+    }
+    
+    .form-select,
+    .form-control {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: $text-dark;
+      border-radius: $border-radius-sm;
+      
+      &:focus {
+        background: rgba(0, 0, 0, 0.4);
+        border-color: $nostr-purple;
+        box-shadow: 0 0 0 0.2rem rgba($nostr-purple, 0.25);
+        color: $text-dark;
+      }
+      
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+    }
+  }
+  
+  .modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    
+    .btn-secondary {
+      background: rgba(108, 117, 125, 0.3);
+      border-color: rgba(108, 117, 125, 0.5);
+      color: $text-dark;
+      
+      &:hover {
+        background: rgba(108, 117, 125, 0.5);
+        border-color: rgba(108, 117, 125, 0.7);
+        color: $text-dark;
+      }
+    }
+  }
+}
+
+// 🚨 ALERTS & NOTIFICATIONS
+.alert {
+  @include glass-card;
+  border-radius: $border-radius-md;
+  border: none;
+  
+  &.alert-success {
+    background: rgba($success, 0.2);
+    border-left: 4px solid $success;
+    color: $text-dark;
+    
+    .bi-check-circle {
+      color: $success;
+    }
+  }
+}
+
+// 🎭 ANIMATIONS
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.offer-card {
+  animation: slideInUp 0.6s ease-out;
+  
+  &:nth-child(1) { animation-delay: 0.1s; }
+  &:nth-child(2) { animation-delay: 0.2s; }
+  &:nth-child(3) { animation-delay: 0.3s; }
+  &:nth-child(4) { animation-delay: 0.4s; }
+}
+
+// 📱 RESPONSIVE DASHBOARD
+@media (max-width: 768px) {
+  .glassmorphic-card {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .offer-card {
+    padding: 1.5rem;
+    
+    .offer-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    .offer-title {
+      font-size: $font-size-lg;
+    }
+    
+    .offer-price {
+      font-size: $font-size-xl;
+      margin-bottom: 1.5rem;
+    }
+  }
+  
+  .btn-gradient {
+    padding: 0.75rem 1.5rem;
+    
+    &.btn-lg {
+      padding: 1rem 2rem;
+      font-size: $font-size-base;
+    }
+  }
+}
+
+// 🌟 SPECIAL EFFECTS
+.offer-card:hover .offer-icon {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}

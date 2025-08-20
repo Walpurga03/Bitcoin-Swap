@@ -178,3 +178,55 @@
   background-clip: text;
   color: transparent;
 }
+
+// 💎 GLASS CARD (Enhanced)
+@mixin glass-card($opacity: 0.12, $blur: 12px) {
+  background: rgba(255, 255, 255, $opacity);
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+}
+
+// 🌟 BUTTON GRADIENT (Enhanced)
+@mixin button-gradient($from: $nostr-purple, $to: $nostr-pink) {
+  background: linear-gradient(135deg, $from 0%, $to 100%);
+  border: none;
+  color: white;
+  font-weight: $font-weight-semibold;
+  transition: all $transition-smooth;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity $transition-fast;
+  }
+  
+  &:hover::before {
+    opacity: 1;
+  }
+}
+
+// 📈 SLIDE UP ANIMATION
+@mixin slide-up($delay: 0s) {
+  animation: slideUp 0.6s ease-out $delay both;
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

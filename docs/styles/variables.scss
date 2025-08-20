@@ -19,6 +19,7 @@ $gradient-light: linear-gradient(135deg, rgba($nostr-purple, 0.1) 0%, rgba($nost
 $primary: $nostr-purple;
 $secondary: $nostr-violet;
 $accent: $nostr-pink;
+$accent-yellow: #fbbf24;
 $success: #10b981;
 $warning: #f59e0b;
 $error: #ef4444;
@@ -60,6 +61,7 @@ $shadow-neon: 0 0 24px rgba($nostr-violet, 0.5);
 $transition-fast: 0.15s ease-out;
 $transition-normal: 0.3s ease-out;
 $transition-slow: 0.5s ease-out;
+$transition-smooth: 0.3s ease;
 
 // 📱 BREAKPOINTS
 $mobile: 768px;
