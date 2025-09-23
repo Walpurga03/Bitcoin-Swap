@@ -2,7 +2,6 @@
 
 ## 1. Konzeptionelle Ausarbeitung & Technische Entscheidungen
 
-Bevor wir in die Phasenplanung gehen, schärfen wir die technischen Konzepte hinter den Funktionalitäten.
 
 ### 1.1 Private Chat-Gruppe (NIP-28 + Verschlüsselung)
 
@@ -105,5 +104,3 @@ Bevor wir in die Phasenplanung gehen, schärfen wir die technischen Konzepte hin
   - Deployment: Bereitstellung der Web-App auf einer statischen Hosting-Plattform (z.B. Vercel, Netlify, Cloudflare Pages) und Einrichtung eines dedizierten Relays (optional, aber empfehlenswert).
 
 ---
-
-Dies ist die überarbeitete und besser formatierte Version des Masterplans, die die Konzepte und Phasen klar strukturiert und leserlich darstellt.
