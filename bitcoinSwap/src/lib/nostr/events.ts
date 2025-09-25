@@ -2,6 +2,7 @@
 
 import { type Event as NostrEvent, type UnsignedEvent, finalizeEvent } from 'nostr-tools';
 import type { Offer, PaymentMethod } from './types';
+import { encryptMessage, decryptMessage, deriveKeyFromSecret } from './crypto';
 
 /**
  * Erstellt ein Nostr-Event für ein Bitcoin-Angebot
@@ -104,4 +105,52 @@ export function isOfferEvent(event: NostrEvent): boolean {
  */
 export function isInterestReaction(event: NostrEvent): boolean {
   return event.kind === 7 && event.content === '👍';
+}
+
+// --- Whitelist-Event Funktionen ---
+
+/**
+ * Erstellt ein verschlüsseltes Whitelist-Event für die Gruppenmitgliedschaft
+ * Nutze diese Funktion im Admin-Flow, um die erlaubten Pubkeys zu publizieren.
+ */
+export async function createWhitelistEvent(
+  allowedPubkeys: string[],
+  groupSecret: string,
+  groupId: string,
+  adminPubkey: string,
+  adminPrivkey: Uint8Array
+): Promise<NostrEvent> {
+  const key = await deriveKeyFromSecret(groupSecret);
+  // Whitelist-Objekt
+  const whitelist = JSON.stringify({ allowed_pubkeys: allowedPubkeys });
+  // Verschlüssle die Whitelist
+  const encrypted = await encryptMessage(whitelist, key);
+  // Event-Struktur
+  const event: UnsignedEvent = {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ['d', groupId],
+      ['t', 'whitelist']
+    ],
+    content: encrypted,
+    pubkey: adminPubkey
+  };
+  return finalizeEvent(event, adminPrivkey);
+}
+
+/**
+ * Parst und entschlüsselt ein Whitelist-Event
+ * Nutze diese Funktion beim Gruppenbeitritt, um die erlaubten Pubkeys zu prüfen.
+ */
+export async function parseWhitelistEvent(event: NostrEvent, groupSecret: string): Promise<string[]> {
+  try {
+    const key = await deriveKeyFromSecret(groupSecret);
+    const decrypted = await decryptMessage(event.content, key);
+    const obj = JSON.parse(decrypted);
+    return obj.allowed_pubkeys || [];
+  } catch (err) {
+    console.error('Fehler beim Entschlüsseln des Whitelist-Events:', err);
+    return [];
+  }
 }

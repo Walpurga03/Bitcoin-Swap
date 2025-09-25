@@ -2,11 +2,12 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { NostrClient } from '$lib/nostr/client';
-	import { getPublicKey } from 'nostr-tools';
+	import { getPublicKey, nip19 } from 'nostr-tools';
 	import { setUser } from '$lib/stores/userStore';
 	import { setGroupConfig } from '$lib/stores/groupStore';
 	import type { UserProfile, GroupConfig } from '$lib/nostr/types';
-	
+	import whitelistData from '../whitelist.json';
+
 	let inviteLink = '';
 	let privateKey = '';
 	let loading = false;
@@ -52,6 +53,7 @@
 		}
 	}
 
+
 	async function joinGroup() {
 		if (!inviteLink.trim() || !privateKey.trim()) {
 			error = 'Bitte füllen Sie alle Felder aus';
@@ -68,19 +70,38 @@
 				throw new Error('Ungültiger Einladungslink');
 			}
 
-			// Schlüssel validieren (flexiblere Hex-Prüfung)
-			const cleanKey = privateKey.trim().toLowerCase();
+			// Schlüssel validieren und ggf. nsec dekodieren
+			let cleanKey = privateKey.trim().toLowerCase();
+			if (cleanKey.startsWith('nsec')) {
+				// nsec-Format: dekodieren
+				try {
+					const decoded = nip19.decode(cleanKey);
+					if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
+						throw new Error('Ungültiger nsec-Schlüssel');
+					}
+					cleanKey = Array.from(decoded.data).map(b => b.toString(16).padStart(2, '0')).join('');
+				} catch (e) {
+					throw new Error('Ungültiger nsec-Schlüssel');
+				}
+			}
 			if (!/^[a-f0-9]{64}$/i.test(cleanKey) || cleanKey.length !== 64) {
-				throw new Error('Ungültiger privater Schlüssel (muss 64 Hex-Zeichen haben)');
+				throw new Error('Ungültiger privater Schlüssel (muss 64 Hex-Zeichen oder nsec sein)');
+			}
+
+			// Public Key aus privatem Schlüssel ableiten
+			const privkeyBytes = new Uint8Array(cleanKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+			const publicKey = getPublicKey(privkeyBytes);
+
+			// Whitelist laden und Pubkeys extrahieren
+			const allowedPubkeys = whitelistData.allowed_pubkeys.map((entry: any) => entry.pubkey);
+			const npub = nip19.npubEncode(publicKey);
+			if (!allowedPubkeys.includes(npub)) {
+				throw new Error('Du bist nicht auf der Whitelist!');
 			}
 
 			// NostrClient erstellen und testen
 			const client = new NostrClient();
-			
-			// Public Key aus private Key ableiten
-			const privkeyBytes = new Uint8Array(cleanKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-			const publicKey = getPublicKey(privkeyBytes);
-			
+
 			// User Profile erstellen
 			const userProfile: UserProfile = {
 				pubkey: publicKey,
@@ -102,10 +123,6 @@
 		}
 	}
 
-	function generateNewKey() {
-		const keyPair = NostrClient.generateKeyPair();
-		privateKey = keyPair.privkey;
-	}
 </script>
 
 <svelte:head>
@@ -144,9 +161,6 @@
 						placeholder="64-stelliger Hex-Schlüssel..."
 						required
 					/>
-					<button type="button" on:click={generateNewKey} class="generate-btn">
-						🎲 Neu
-					</button>
 				</div>
 				<small>Bewahren Sie Ihren privaten Schlüssel sicher auf!</small>
 			</div>
@@ -238,20 +252,6 @@
 
 	.key-input-group input {
 		flex: 1;
-	}
-
-	.generate-btn {
-		padding: 0.75rem 1rem;
-		background: #f8f9fa;
-		border: 2px solid #e1e5e9;
-		border-radius: 8px;
-		cursor: pointer;
-		transition: all 0.3s;
-	}
-
-	.generate-btn:hover {
-		background: #e9ecef;
-		border-color: #adb5bd;
 	}
 
 	small {
