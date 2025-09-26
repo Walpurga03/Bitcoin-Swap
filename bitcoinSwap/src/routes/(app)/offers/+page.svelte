@@ -17,11 +17,14 @@
 	let loading = true;
 	let error = '';
 	let showOfferForm = false;
+	let connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnected';
+	let retryCount = 0;
+	let maxRetries = 3;
 	
-	// Reactive subscriptions
-	userStore.subscribe(value => user = value);
-	groupConfig.subscribe(value => config = value);
-	offers.subscribe(value => offersList = value);
+	// Reactive subscriptions mit Unsubscribe-Funktionen
+	const unsubscribeUser = userStore.subscribe(value => user = value);
+	const unsubscribeConfig = groupConfig.subscribe(value => config = value);
+	const unsubscribeOffers = offers.subscribe(value => offersList = value);
 	
 	onMount(async () => {
 		if (!user || !config) {
@@ -29,45 +32,71 @@
 			return;
 		}
 		
+		await initializeConnection();
+	});
+	
+	async function initializeConnection() {
 		try {
+			loading = true;
+			error = '';
+			connectionStatus = 'connecting';
+			
 			// NostrClient für Angebote konfigurieren
 			client = new NostrClient();
-			client.setUserProfile(user);
-			await client.configureGroup(config);
-			await client.connectToRelays([config.relay]);
+			client.setUserProfile(user!);
+			await client.configureGroup(config!);
+			await client.connectToRelays([config!.relay]);
+			
+			connectionStatus = client.getConnectionStatus();
 			
 			// Auf Angebots-Events hören
 			subscribeToOffers();
 			
-			// DEBUG: Teste mit einem lokalen Dummy-Angebot
-			setTimeout(() => {
-				const testOffer: Offer = {
-					id: 'test-' + Date.now(),
-					title: '🧪 Test-Angebot (lokal)',
-					description: 'Dies ist ein Test-Angebot um zu prüfen ob die UI funktioniert',
-					amount: 0.01,
-					currency: 'EUR',
-					paymentMethods: ['bargeld', 'ueberweisung'],
-					createdAt: Math.floor(Date.now() / 1000),
-					interests: []
-				};
-				console.log('Füge Test-Angebot hinzu:', testOffer);
-				addOffer(testOffer);
-			}, 2000); // Nach 2 Sekunden hinzufügen
+			// DEBUG: Teste mit einem lokalen Dummy-Angebot (nur in Development)
+			if (import.meta.env.DEV) {
+				setTimeout(() => {
+					const testOffer: Offer = {
+						id: 'test-' + Date.now(),
+						title: '🧪 Test-Angebot (lokal)',
+						description: 'Dies ist ein Test-Angebot um zu prüfen ob die UI funktioniert',
+						amount: 0.01,
+						currency: 'EUR',
+						paymentMethods: ['bargeld', 'ueberweisung'],
+						createdAt: Math.floor(Date.now() / 1000),
+						interests: []
+					};
+					console.log('Füge Test-Angebot hinzu:', testOffer);
+					addOffer(testOffer);
+				}, 2000);
+			}
 			
 			loading = false;
+			retryCount = 0;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Verbindungsfehler';
 			loading = false;
+			connectionStatus = 'disconnected';
+			
+			// Automatischer Retry bei Verbindungsfehlern
+			if (retryCount < maxRetries) {
+				retryCount++;
+				console.log(`Wiederhole Verbindungsversuch ${retryCount}/${maxRetries} in 3 Sekunden...`);
+				setTimeout(() => initializeConnection(), 3000);
+			}
 		}
-	});
+	}
 	
 	onDestroy(() => {
-		if (client && config) {
+		// Alle Subscriptions ordnungsgemäß beenden
+		unsubscribeUser();
+		unsubscribeConfig();
+		unsubscribeOffers();
+		
+		if (client) {
 			try {
-				client.pool.close([config.relay]);
+				client.close();
 			} catch (err) {
-				console.warn('Fehler beim Schließen der Pool-Verbindungen:', err);
+				console.warn('Fehler beim Schließen der Client-Verbindungen:', err);
 			}
 		}
 	});
@@ -211,10 +240,10 @@
 			{:else}
 				<div class="offers-list">
 					{#each offersList as offer (offer.id)}
-						<OfferCard 
-							{offer} 
+						<OfferCard
+							{offer}
 							onShowInterest={showInterest}
-							canShowInterest={user?.pubkey !== user?.pubkey}
+							canShowInterest={true}
 						/>
 					{/each}
 				</div>

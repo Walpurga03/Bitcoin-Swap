@@ -20,9 +20,68 @@ export class NostrClient {
   private userProfile: UserProfile | null = null;
   private groupConfig: GroupConfig | null = null;
   private encryptionKey: CryptoKey | null = null;
+  private connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnected';
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
+  private eventCache = new Map<string, NostrEvent>();
+  private maxCacheSize = 1000;
 
   constructor() {
     this.pool = new SimplePool();
+    this.setupConnectionMonitoring();
+  }
+
+  /**
+   * Verbindungsüberwachung einrichten
+   */
+  private setupConnectionMonitoring() {
+    // Verbindungsstatus überwachen
+    setInterval(() => {
+      if (this.connectionStatus === 'disconnected' && this.relays.length > 0) {
+        this.handleReconnection();
+      }
+    }, 30000); // Alle 30 Sekunden prüfen
+  }
+
+  /**
+   * Automatische Wiederverbindung
+   */
+  private async handleReconnection() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('Maximale Anzahl Wiederverbindungsversuche erreicht');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    
+    console.log(`🔄 Wiederverbindungsversuch ${this.reconnectAttempts} in ${delay}ms`);
+    
+    setTimeout(() => {
+      this.connectToRelays(this.relays);
+    }, delay);
+  }
+
+  /**
+   * Event-Cache verwalten
+   */
+  private cacheEvent(event: NostrEvent) {
+    if (this.eventCache.size >= this.maxCacheSize) {
+      // Älteste Events entfernen (FIFO)
+      const firstKey = this.eventCache.keys().next().value;
+      if (firstKey) {
+        this.eventCache.delete(firstKey);
+      }
+    }
+    this.eventCache.set(event.id, event);
+  }
+
+  /**
+   * Prüfen ob Event bereits im Cache
+   */
+  private isEventCached(eventId: string): boolean {
+    return this.eventCache.has(eventId);
   }
 
   /**
@@ -30,7 +89,32 @@ export class NostrClient {
    */
   async connectToRelays(relays: string[]) {
     this.relays = relays;
+    this.connectionStatus = 'connecting';
     console.log('Verbinde zu Relays:', relays);
+    
+    // Verbindungstest mit Timeout
+    try {
+      const testPromises = relays.map(relay =>
+        Promise.race([
+          fetch(relay.replace('wss://', 'https://').replace('ws://', 'http://'), {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(5000) // 5 Sekunden Timeout
+          })
+          .then(() => console.log(`✅ Relay erreichbar: ${relay}`))
+          .catch(() => console.warn(`⚠️ Relay möglicherweise nicht erreichbar: ${relay}`)),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+          )
+        ])
+      );
+      
+      await Promise.allSettled(testPromises);
+      this.connectionStatus = 'connected';
+      this.reconnectAttempts = 0;
+    } catch (error) {
+      console.error('Fehler beim Verbindungstest:', error);
+      this.connectionStatus = 'disconnected';
+    }
   }
 
   /**
@@ -76,12 +160,26 @@ export class NostrClient {
     const privkeyBytes = new Uint8Array(this.userProfile.privkey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
     const signedEvent = finalizeEvent(event as NostrEvent, privkeyBytes);
 
-    // An Relays senden
-    await Promise.all(
-      this.relays.map(relay => this.pool.publish([relay], signedEvent))
-    );
+    // An Relays senden mit Fehlerbehandlung
+    const publishPromises = this.relays.map(async (relay) => {
+      try {
+        await this.pool.publish([relay], signedEvent);
+        console.log(`✅ Nachricht an ${relay} gesendet`);
+      } catch (error) {
+        console.error(`❌ Fehler beim Senden an ${relay}:`, error);
+        throw error;
+      }
+    });
 
-    console.log('Gruppennachricht gesendet:', signedEvent.id);
+    // Mindestens ein Relay muss erfolgreich sein
+    const results = await Promise.allSettled(publishPromises);
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    
+    if (successful === 0) {
+      throw new Error('Nachricht konnte an keinen Relay gesendet werden');
+    }
+
+    console.log(`Gruppennachricht gesendet: ${signedEvent.id} (${successful}/${this.relays.length} Relays)`);
   }
 
   /**
@@ -103,6 +201,12 @@ export class NostrClient {
       {
         onevent: async (event: NostrEvent) => {
           try {
+            // Duplikate vermeiden durch Cache-Prüfung
+            if (this.isEventCached(event.id)) {
+              return;
+            }
+            this.cacheEvent(event);
+
             // Nachricht entschlüsseln
             let decryptedContent = event.content;
             let decrypted = false;
@@ -131,6 +235,8 @@ export class NostrClient {
         },
         oneose: () => {
           console.log('Initiale Gruppennachrichten geladen');
+          this.connectionStatus = 'connected';
+          this.reconnectAttempts = 0;
         }
       }
     );
@@ -153,7 +259,33 @@ export class NostrClient {
    */
   close() {
     this.unsubscribeAll();
-    this.pool.close(this.relays);
+    this.connectionStatus = 'disconnected';
+    
+    // Cache leeren
+    this.eventCache.clear();
+    
+    try {
+      this.pool.close(this.relays);
+    } catch (error) {
+      console.warn('Fehler beim Schließen der Pool-Verbindungen:', error);
+    }
+  }
+
+  /**
+   * Verbindungsstatus abrufen
+   */
+  getConnectionStatus(): 'disconnected' | 'connecting' | 'connected' {
+    return this.connectionStatus;
+  }
+
+  /**
+   * Cache-Statistiken abrufen
+   */
+  getCacheStats(): { size: number; maxSize: number } {
+    return {
+      size: this.eventCache.size,
+      maxSize: this.maxCacheSize
+    };
   }
 
   /**

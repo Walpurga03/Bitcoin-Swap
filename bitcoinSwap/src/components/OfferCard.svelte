@@ -1,6 +1,14 @@
 <!-- Komponente für die Anzeige eines einzelnen Angebots -->
 <script lang="ts">
 	import { userStore } from '$lib/stores/userStore';
+	import {
+		formatTime,
+		formatAmount,
+		getPaymentMethodIcon,
+		getPaymentMethodLabel,
+		getCurrencySymbol,
+		truncatePubkey
+	} from '$lib/utils';
 	import type { Offer, UserProfile } from '$lib/nostr/types';
 	
 	export let offer: Offer;
@@ -12,40 +20,8 @@
 	
 	$: isOwnOffer = user?.pubkey === offer.tempPubkey || (!offer.tempPubkey && user?.pubkey);
 	$: hasShownInterest = user?.pubkey ? offer.interests.includes(user.pubkey) : false;
-	
-	function formatTime(timestamp: number): string {
-		return new Date(timestamp * 1000).toLocaleString('de-DE', {
-			day: '2-digit',
-			month: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
-	
-	function formatAmount(amount: number, currency: string): string {
-		return new Intl.NumberFormat('de-DE', {
-			minimumFractionDigits: currency === 'BTC' ? 8 : 2,
-			maximumFractionDigits: currency === 'BTC' ? 8 : 2
-		}).format(amount);
-	}
-	
-	function getPaymentMethodIcon(method: string): string {
-		switch (method) {
-			case 'rechnung': return '🧾';
-			case 'bargeld': return '💵';
-			case 'ueberweisung': return '🏦';
-			default: return '💳';
-		}
-	}
-	
-	function getPaymentMethodLabel(method: string): string {
-		switch (method) {
-			case 'rechnung': return 'Rechnung';
-			case 'bargeld': return 'Bargeld';
-			case 'ueberweisung': return 'Überweisung';
-			default: return method;
-		}
-	}
+	$: isExpired = offer.expiresAt ? offer.expiresAt < Math.floor(Date.now() / 1000) : false;
+	$: canInteract = !isOwnOffer && !hasShownInterest && !isExpired && canShowInterest;
 </script>
 
 <div class="offer-card" class:own={isOwnOffer}>
@@ -66,7 +42,7 @@
 		
 		<div class="offer-amount">
 			<span class="amount">{formatAmount(offer.amount, offer.currency)}</span>
-			<span class="currency">{offer.currency}</span>
+			<span class="currency">{getCurrencySymbol(offer.currency)}</span>
 		</div>
 		
 		<div class="payment-methods">
@@ -93,26 +69,24 @@
 			{/if}
 		</div>
 		
-		{#if !isOwnOffer && canShowInterest}
-			<button 
+		{#if isExpired}
+			<span class="expired-badge">⏰ Abgelaufen</span>
+		{:else if canInteract}
+			<button
 				class="interest-btn"
-				class:interested={hasShownInterest}
-				disabled={hasShownInterest}
 				on:click={() => onShowInterest(offer.id)}
 			>
-				{#if hasShownInterest}
-					✅ Interesse gezeigt
-				{:else}
-					🙋 Interesse zeigen
-				{/if}
+				🙋 Interesse zeigen
 			</button>
+		{:else if hasShownInterest}
+			<span class="interested-badge">✅ Interesse gezeigt</span>
 		{/if}
 		
 		{#if isOwnOffer && offer.interests.length > 0}
 			<div class="interested-users">
 				<span class="interested-label">Interessenten:</span>
 				{#each offer.interests as pubkey}
-					<span class="interested-user">{pubkey.substring(0, 8)}...</span>
+					<span class="interested-user">{truncatePubkey(pubkey, 6)}</span>
 				{/each}
 			</div>
 		{/if}
@@ -265,11 +239,22 @@
 		box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 	}
 	
-	.interest-btn:disabled {
-		background: #6b7280;
-		cursor: not-allowed;
-		transform: none;
-		box-shadow: none;
+	.interested-badge {
+		background: #10b981;
+		color: white;
+		padding: 0.6rem 1.2rem;
+		border-radius: 25px;
+		font-weight: 600;
+		font-size: 0.9rem;
+	}
+	
+	.expired-badge {
+		background: #ef4444;
+		color: white;
+		padding: 0.6rem 1.2rem;
+		border-radius: 25px;
+		font-weight: 600;
+		font-size: 0.9rem;
 	}
 	
 	.interested-users {
