@@ -3,6 +3,10 @@
 	import { userStore } from '$lib/stores/userStore';
 	import { groupConfig, groupMessages, addGroupMessage } from '$lib/stores/groupStore';
 	import { NostrClient } from '$lib/nostr/client';
+	import { formatTime, truncatePubkey, debounce } from '$lib/utils';
+	import { sanitizeInput } from '$lib/security/validation';
+	import ErrorBoundary from '../../../components/ErrorBoundary.svelte';
+	import LoadingSpinner from '../../../components/LoadingSpinner.svelte';
 	import type { GroupMessage, UserProfile, GroupConfig } from '$lib/nostr/types';
 	
 	let client: NostrClient | null = null;
@@ -13,41 +17,98 @@
 	let loading = true;
 	let error = '';
 	let messagesContainer: HTMLElement;
+	let connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnected';
+	let retryCount = 0;
+	let maxRetries = 3;
+	let refreshing = false;
+	let lastRefresh = '';
 
-	// Reactive subscriptions
-	userStore.subscribe(value => user = value);
-	groupConfig.subscribe(value => config = value);
-	groupMessages.subscribe(value => messages = value);
+	// Reactive subscriptions mit Unsubscribe-Funktionen
+	const unsubscribeUser = userStore.subscribe(value => user = value);
+	const unsubscribeConfig = groupConfig.subscribe(value => config = value);
+	const unsubscribeMessages = groupMessages.subscribe(value => messages = value);
+
+	// Debounced scroll function für Performance
+	const debouncedScrollToBottom = debounce(scrollToBottom, 100);
 
 	onMount(async () => {
+		console.log('🚀 Group page mounted');
+		console.log('👤 User:', user ? user.pubkey.substring(0, 8) : 'null');
+		console.log('⚙️ Config:', config ? config.channelId : 'null');
+		
 		if (!user || !config) {
+			console.warn('❌ User oder Config fehlt, redirect zur Anmeldung');
 			window.location.href = '/';
 			return;
 		}
 
+		await initializeConnection();
+	});
+
+	async function initializeConnection() {
 		try {
+			loading = true;
+			error = '';
+			connectionStatus = 'connecting';
+			console.log('🔄 Initialisiere Verbindung...');
+
 			// NostrClient initialisieren
 			client = new NostrClient();
-			client.setUserProfile(user);
-			await client.configureGroup(config);
-			await client.connectToRelays([config.relay]);
+			console.log('✅ NostrClient erstellt');
+			
+			client.setUserProfile(user!);
+			console.log('✅ User-Profil gesetzt');
+			
+			await client.configureGroup(config!);
+			console.log('✅ Gruppe konfiguriert:', config!.channelId);
+			
+			await client.connectToRelays([config!.relay]);
+			console.log('✅ Relay-Verbindung hergestellt:', config!.relay);
+
+			connectionStatus = client.getConnectionStatus();
+			console.log('📊 Verbindungsstatus:', connectionStatus);
 
 			// Auf Nachrichten hören
 			client.subscribeToGroupMessages((message: GroupMessage) => {
+				console.log('📨 Neue Nachricht empfangen:', message.id);
 				addGroupMessage(message);
-				scrollToBottom();
+				debouncedScrollToBottom();
 			});
+			console.log('👂 Subscription für Gruppennachrichten gestartet');
 
 			loading = false;
+			retryCount = 0;
+			console.log('🎉 Verbindung erfolgreich initialisiert');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Verbindungsfehler';
+			const errorMsg = err instanceof Error ? err.message : 'Verbindungsfehler';
+			console.error('❌ Fehler bei Verbindungsinitialisierung:', errorMsg);
+			error = errorMsg;
 			loading = false;
+			connectionStatus = 'disconnected';
+
+			// Automatischer Retry bei Verbindungsfehlern
+			if (retryCount < maxRetries) {
+				retryCount++;
+				console.log(`🔄 Wiederhole Verbindungsversuch ${retryCount}/${maxRetries} in 3 Sekunden...`);
+				setTimeout(() => initializeConnection(), 3000);
+			} else {
+				console.error('💥 Maximale Anzahl Wiederverbindungsversuche erreicht');
+			}
 		}
-	});
+	}
 
 	onDestroy(() => {
+		// Alle Subscriptions ordnungsgemäß beenden
+		unsubscribeUser();
+		unsubscribeConfig();
+		unsubscribeMessages();
+
 		if (client) {
-			client.close();
+			try {
+				client.close();
+			} catch (err) {
+				console.warn('Fehler beim Schließen der Client-Verbindungen:', err);
+			}
 		}
 	});
 
@@ -60,26 +121,77 @@
 	}
 
 	async function sendMessage() {
-		if (!messageInput.trim() || !client) return;
+		const cleanMessage = sanitizeInput(messageInput.trim(), 280);
+		if (!cleanMessage || !client) {
+			console.warn('⚠️ Nachricht leer oder Client nicht verfügbar');
+			return;
+		}
 
+		console.log('📤 Sende Nachricht:', cleanMessage.substring(0, 50) + '...');
+		
 		try {
-			await client.sendGroupMessage(messageInput.trim());
+			// 🚀 Nachricht mit sofortiger lokaler Anzeige senden
+			await client.sendGroupMessage(cleanMessage, (localMessage) => {
+				console.log('⚡ Lokale Nachricht sofort hinzugefügt:', localMessage.id);
+				addGroupMessage(localMessage);
+				debouncedScrollToBottom();
+			});
+			console.log('✅ Nachricht erfolgreich gesendet');
 			messageInput = '';
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Fehler beim Senden';
+			const errorMsg = err instanceof Error ? err.message : 'Fehler beim Senden';
+			console.error('❌ Fehler beim Senden der Nachricht:', errorMsg);
+			error = errorMsg;
 		}
 	}
 
-	function formatTime(timestamp: number): string {
-		return new Date(timestamp * 1000).toLocaleTimeString('de-DE', {
-			hour: '2-digit',
-			minute: '2-digit'
-		});
+	async function refreshMessages() {
+		if (!client || refreshing) {
+			console.warn('⚠️ Client nicht verfügbar oder Refresh bereits aktiv');
+			return;
+		}
+
+		refreshing = true;
+		console.log('🔄 Starte manuelle Nachrichten-Aktualisierung...');
+		
+		try {
+			const newMessageCount = await client.refreshGroupMessages((message) => {
+				console.log('🔄 Neue Nachricht durch Refresh:', message.id);
+				addGroupMessage(message);
+				debouncedScrollToBottom();
+			});
+			
+			const now = new Date().toLocaleTimeString();
+			lastRefresh = `${now} (${newMessageCount} neue)`;
+			console.log(`✅ Refresh abgeschlossen: ${newMessageCount} neue Nachrichten`);
+			
+			if (newMessageCount === 0) {
+				lastRefresh = `${now} (keine neuen)`;
+			}
+		} catch (err) {
+			const errorMsg = err instanceof Error ? err.message : 'Fehler beim Aktualisieren';
+			console.error('❌ Fehler beim Refresh:', errorMsg);
+			error = errorMsg;
+			lastRefresh = `Fehler: ${errorMsg}`;
+		} finally {
+			refreshing = false;
+		}
 	}
 
-	function formatPubkey(pubkey: string): string {
-		return `${pubkey.substring(0, 8)}...${pubkey.substring(-8)}`;
+	// Fehler-Handler für ErrorBoundary
+	let chatError: Error | null = null;
+
+	function handleRetry() {
+		chatError = null;
+		error = '';
+		initializeConnection();
 	}
+
+	// Verbindungsstatus-Indikator
+	$: statusColor = connectionStatus === 'connected' ? '#10b981' :
+					 connectionStatus === 'connecting' ? '#f59e0b' : '#ef4444';
+	$: statusText = connectionStatus === 'connected' ? 'Verbunden' :
+					connectionStatus === 'connecting' ? 'Verbinde...' : 'Getrennt';
 </script>
 
 <svelte:head>
@@ -88,18 +200,42 @@
 
 <div class="chat-container">
 	<header class="chat-header">
-		<h1>🔐 Private Bitcoin-Gruppe</h1>
+		<div class="header-left">
+			<h1>🔐 Private Bitcoin-Gruppe</h1>
+			<div class="refresh-controls">
+				<button
+					on:click={refreshMessages}
+					disabled={refreshing || connectionStatus !== 'connected'}
+					class="refresh-btn"
+					title="Neue Nachrichten vom Relay laden"
+				>
+					{#if refreshing}
+						🔄 Lädt...
+					{:else}
+						🔄 Aktualisieren
+					{/if}
+				</button>
+				{#if lastRefresh}
+					<span class="last-refresh">Zuletzt: {lastRefresh}</span>
+				{/if}
+			</div>
+		</div>
 		<div class="group-info">
+			<span class="connection-status" style="color: {statusColor}">
+				● {statusText}
+			</span>
 			<span class="relay-info">📡 {config?.relay || 'Unbekannt'}</span>
-			<span class="user-info">👤 {user?.name || formatPubkey(user?.pubkey || '')}</span>
+			<span class="user-info">👤 {user?.name || truncatePubkey(user?.pubkey || '')}</span>
 		</div>
 	</header>
 
 	{#if loading}
-		<div class="loading">
-			<div class="spinner"></div>
-			<p>Verbinde zur Gruppe...</p>
-		</div>
+		<LoadingSpinner
+			size="large"
+			variant="bitcoin"
+			text="Verbinde zur Gruppe..."
+			overlay={true}
+		/>
 	{:else if error}
 		<div class="error">
 			<p>❌ {error}</p>
@@ -111,10 +247,12 @@
 				{#each messages as message (message.id)}
 					<div class="message {message.pubkey === user?.pubkey ? 'own' : 'other'}">
 						<div class="message-header">
-							<span class="sender">{formatPubkey(message.pubkey)}</span>
+							<span class="sender">{truncatePubkey(message.pubkey)}</span>
 							<span class="time">{formatTime(message.timestamp)}</span>
 							{#if !message.decrypted}
-								<span class="unencrypted">🔓</span>
+								<span class="unencrypted" title="Unverschlüsselte Nachricht">🔓</span>
+							{:else}
+								<span class="encrypted" title="Verschlüsselte Nachricht">🔒</span>
 							{/if}
 						</div>
 						<div class="message-content">
@@ -152,6 +290,12 @@
 			<a href="/offers" class="nav-item">
 				🏷️ Angebote
 			</a>
+			<a href="/debug" class="nav-item">
+				🔍 Debug
+			</a>
+			<a href="/admin" class="nav-item">
+				⚙️ Admin
+			</a>
 		</nav>
 	{/if}
 </div>
@@ -174,10 +318,53 @@
 		align-items: center;
 	}
 
+	.header-left {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
 	.chat-header h1 {
 		margin: 0;
 		font-size: 1.2rem;
 		color: #333;
+	}
+
+	.refresh-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.refresh-btn {
+		padding: 0.25rem 0.75rem;
+		background: #28a745;
+		color: white;
+		border: none;
+		border-radius: 15px;
+		cursor: pointer;
+		font-size: 0.8rem;
+		transition: all 0.3s;
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.refresh-btn:hover:not(:disabled) {
+		background: #218838;
+		transform: translateY(-1px);
+	}
+
+	.refresh-btn:disabled {
+		background: #6c757d;
+		cursor: not-allowed;
+		opacity: 0.6;
+	}
+
+	.last-refresh {
+		font-size: 0.7rem;
+		color: #666;
+		font-style: italic;
 	}
 
 	.group-info {
@@ -189,25 +376,11 @@
 		gap: 0.25rem;
 	}
 
-	.loading, .error {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		color: white;
-		text-align: center;
+	.connection-status {
+		font-weight: 600;
+		font-size: 0.75rem;
 	}
 
-	.spinner {
-		width: 40px;
-		height: 40px;
-		border: 4px solid rgba(255, 255, 255, 0.3);
-		border-top: 4px solid white;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		margin-bottom: 1rem;
-	}
 
 	@keyframes spin {
 		0% { transform: rotate(0deg); }
@@ -282,6 +455,13 @@
 	.unencrypted {
 		color: #ffc107;
 		font-size: 0.9rem;
+		cursor: help;
+	}
+
+	.encrypted {
+		color: #10b981;
+		font-size: 0.9rem;
+		cursor: help;
 	}
 
 	.no-messages {

@@ -5,6 +5,15 @@
 	import { getPublicKey, nip19 } from 'nostr-tools';
 	import { setUser } from '$lib/stores/userStore';
 	import { setGroupConfig } from '$lib/stores/groupStore';
+	import {
+		validatePrivateKey,
+		validateRelayUrl,
+		validateGroupSecret,
+		sanitizeInput
+	} from '$lib/security/validation';
+	import { parseInviteLink, createInviteLink } from '$lib/utils';
+	import ErrorBoundary from '../components/ErrorBoundary.svelte';
+	import LoadingSpinner from '../components/LoadingSpinner.svelte';
 	import type { UserProfile, GroupConfig } from '$lib/nostr/types';
 	import whitelistData from '../whitelist.json';
 
@@ -33,29 +42,66 @@
 		}
 	});
 
-	async function parseInviteLink(link: string): Promise<GroupConfig | null> {
+	async function parseInviteLinkLocal(link: string): Promise<GroupConfig | null> {
 		try {
-			const url = new URL(link);
-			const relay = url.searchParams.get('relay');
-			const secret = url.searchParams.get('secret');
-			
-			if (!relay || !secret) {
+			// Verwende die Utility-Funktion
+			const parsed = parseInviteLink(link);
+			if (!parsed || !parsed.relay || !parsed.secret) {
 				throw new Error('Ungültiger Einladungslink');
 			}
 
+			// Validiere Relay-URL
+			const relayValidation = validateRelayUrl(parsed.relay);
+			if (!relayValidation.isValid) {
+				throw new Error(`Ungültige Relay-URL: ${relayValidation.errors.join(', ')}`);
+			}
+
+			// Validiere Secret
+			const secretValidation = validateGroupSecret(parsed.secret);
+			if (!secretValidation.isValid) {
+				throw new Error(`Ungültiges Secret: ${secretValidation.errors.join(', ')}`);
+			}
+
+			// Channel-ID aus dem Secret ableiten für konsistente Gruppenzugehörigkeit
+			const channelId = await deriveChannelIdFromSecret(parsed.secret);
+
 			return {
-				channelId: generateRandomChannelId(), // Generiere eine gültige Event-ID
-				relay,
-				secret
+				channelId: channelId,
+				relay: parsed.relay,
+				secret: parsed.secret,
+				name: 'Private Bitcoin-Gruppe'
 			};
 		} catch (err) {
+			console.error('Fehler beim Parsen des Einladungslinks:', err);
 			return null;
 		}
 	}
 
+	// Channel-ID deterministisch aus Secret ableiten
+	async function deriveChannelIdFromSecret(secret: string): Promise<string> {
+		const encoder = new TextEncoder();
+		const data = encoder.encode(secret + 'bitcoin-group-channel');
+		const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+		const hashArray = Array.from(new Uint8Array(hashBuffer));
+		const channelId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+		
+		console.log('🔧 Channel-ID Ableitung:');
+		console.log('  🔐 Secret (first 8 chars):', secret.substring(0, 8) + '...');
+		console.log('  📋 Abgeleitete Channel-ID:', channelId);
+		
+		return channelId;
+	}
+
 
 	async function joinGroup() {
-		if (!inviteLink.trim() || !privateKey.trim()) {
+		// Input sanitization
+		const cleanInviteLink = sanitizeInput(inviteLink.trim(), 500);
+		const cleanPrivateKey = sanitizeInput(privateKey.trim(), 100);
+
+		console.log('🚀 Starte Login-Prozess...');
+		console.log('🔗 Invite Link:', cleanInviteLink.substring(0, 50) + '...');
+
+		if (!cleanInviteLink || !cleanPrivateKey) {
 			error = 'Bitte füllen Sie alle Felder aus';
 			return;
 		}
@@ -64,16 +110,28 @@
 		error = '';
 
 		try {
-			// Gruppenkonfiguration aus Link parsen
-			const groupConfig = await parseInviteLink(inviteLink);
+			// Gruppenkonfiguration aus Link parsen mit Validierung
+			console.log('📋 Parse Einladungslink...');
+			const groupConfig = await parseInviteLinkLocal(cleanInviteLink);
 			if (!groupConfig) {
 				throw new Error('Ungültiger Einladungslink');
 			}
+			console.log('✅ Gruppenkonfiguration erstellt:');
+			console.log('  📋 Channel-ID:', groupConfig.channelId);
+			console.log('  📡 Relay:', groupConfig.relay);
+			console.log('  📛 Name:', groupConfig.name);
+			console.log('  🔐 Secret (first 8 chars):', groupConfig.secret.substring(0, 8) + '...');
 
-			// Schlüssel validieren und ggf. nsec dekodieren
-			let cleanKey = privateKey.trim().toLowerCase();
+			// Private Key validieren mit der neuen Validierungsfunktion
+			console.log('🔐 Validiere Private Key...');
+			const keyValidation = validatePrivateKey(cleanPrivateKey);
+			if (!keyValidation.isValid) {
+				throw new Error(`Ungültiger privater Schlüssel: ${keyValidation.errors.join(', ')}`);
+			}
+
+			// Schlüssel normalisieren
+			let cleanKey = cleanPrivateKey.toLowerCase();
 			if (cleanKey.startsWith('nsec')) {
-				// nsec-Format: dekodieren
 				try {
 					const decoded = nip19.decode(cleanKey);
 					if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
@@ -84,43 +142,65 @@
 					throw new Error('Ungültiger nsec-Schlüssel');
 				}
 			}
-			if (!/^[a-f0-9]{64}$/i.test(cleanKey) || cleanKey.length !== 64) {
-				throw new Error('Ungültiger privater Schlüssel (muss 64 Hex-Zeichen oder nsec sein)');
-			}
 
-			// Public Key aus privatem Schlüssel ableiten
+			// Public Key ableiten
 			const privkeyBytes = new Uint8Array(cleanKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
 			const publicKey = getPublicKey(privkeyBytes);
+			console.log('🔑 Public Key abgeleitet:', publicKey.substring(0, 16) + '...');
 
-			// Whitelist laden und Pubkeys extrahieren
+			// Whitelist-Prüfung
 			const allowedPubkeys = whitelistData.allowed_pubkeys.map((entry: any) => entry.pubkey);
 			const npub = nip19.npubEncode(publicKey);
+			console.log('📋 Prüfe Whitelist für:', npub.substring(0, 20) + '...');
+			
 			if (!allowedPubkeys.includes(npub)) {
-				throw new Error('Du bist nicht auf der Whitelist!');
+				throw new Error('Du bist nicht auf der Whitelist! Kontaktieren Sie einen Administrator.');
 			}
 
-			// NostrClient erstellen und testen
+			// Finde den Namen aus der Whitelist
+			const whitelistEntry = whitelistData.allowed_pubkeys.find((entry: any) => entry.pubkey === npub);
+			const userName = whitelistEntry?.name || `User_${publicKey.substring(0, 8)}`;
+			console.log('👤 Benutzer gefunden:', userName);
+
+			// NostrClient erstellen und Verbindung testen
+			console.log('🌐 Teste Relay-Verbindung...');
 			const client = new NostrClient();
+			await client.connectToRelays([groupConfig.relay]);
+			console.log('✅ Relay-Verbindung erfolgreich');
 
 			// User Profile erstellen
 			const userProfile: UserProfile = {
 				pubkey: publicKey,
 				privkey: cleanKey,
-				name: `User_${publicKey.substring(0, 8)}`
+				name: userName
 			};
 
 			// Stores aktualisieren
+			console.log('💾 Aktualisiere Stores...');
 			setUser(userProfile);
 			setGroupConfig(groupConfig);
+			console.log('✅ Stores aktualisiert');
 
 			// Zur Gruppenansicht navigieren
+			console.log('🎯 Navigiere zur Gruppenansicht...');
 			await goto('/group');
 
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ein Fehler ist aufgetreten';
+			const errorMsg = err instanceof Error ? err.message : 'Ein unerwarteter Fehler ist aufgetreten';
+			console.error('❌ Login-Fehler:', errorMsg);
+			error = errorMsg;
 		} finally {
 			loading = false;
 		}
+	}
+
+	// Fehler-Handler für ErrorBoundary
+	let loginError: Error | null = null;
+
+	function handleRetry() {
+		loginError = null;
+		error = '';
+		loading = false;
 	}
 
 </script>
@@ -167,7 +247,8 @@
 
 			<button type="submit" disabled={loading} class="join-btn">
 				{#if loading}
-					⏳ Verbinde...
+					<LoadingSpinner size="small" variant="dots" color="#ffffff" />
+					Verbinde...
 				{:else}
 					🚀 Gruppe beitreten
 				{/if}

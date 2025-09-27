@@ -130,13 +130,17 @@ export class NostrClient {
   async configureGroup(config: GroupConfig) {
     this.groupConfig = config;
     this.encryptionKey = await deriveKeyFromSecret(config.secret);
-    console.log('Gruppe konfiguriert:', config.channelId);
+    console.log('🔧 Gruppe konfiguriert:');
+    console.log('  📋 Channel ID:', config.channelId);
+    console.log('  🔐 Secret (first 8 chars):', config.secret.substring(0, 8) + '...');
+    console.log('  📡 Relay:', config.relay);
+    console.log('  📛 Name:', config.name);
   }
 
   /**
    * Verschlüsselte Nachricht in die Gruppe senden
    */
-  async sendGroupMessage(content: string): Promise<void> {
+  async sendGroupMessage(content: string, onLocalMessage?: (message: GroupMessage) => void): Promise<void> {
     if (!this.userProfile?.privkey || !this.groupConfig || !this.encryptionKey) {
       throw new Error('Client nicht vollständig konfiguriert');
     }
@@ -156,9 +160,27 @@ export class NostrClient {
       pubkey: this.userProfile.pubkey
     };
 
+    console.log('📤 Sende Event mit:');
+    console.log('  📋 Channel ID:', this.groupConfig.channelId);
+    console.log('  👤 Pubkey:', this.userProfile.pubkey.substring(0, 16) + '...');
+    console.log('  🏷️ Tags:', event.tags);
+
     // Event signieren mit finalizeEvent
     const privkeyBytes = new Uint8Array(this.userProfile.privkey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
     const signedEvent = finalizeEvent(event as NostrEvent, privkeyBytes);
+
+    // 🚀 SOFORTIGE LOKALE ANZEIGE - Nachricht sofort anzeigen
+    if (onLocalMessage) {
+      const localMessage: GroupMessage = {
+        id: signedEvent.id,
+        pubkey: this.userProfile.pubkey,
+        content: content, // Unverschlüsselte Version für lokale Anzeige
+        timestamp: signedEvent.created_at,
+        decrypted: true
+      };
+      console.log('⚡ Zeige Nachricht sofort lokal an:', localMessage.id);
+      onLocalMessage(localMessage);
+    }
 
     // An Relays senden mit Fehlerbehandlung
     const publishPromises = this.relays.map(async (relay) => {
@@ -183,6 +205,98 @@ export class NostrClient {
   }
 
   /**
+   * Manuelle Aktualisierung der Gruppennachrichten
+   */
+  async refreshGroupMessages(callback: (message: GroupMessage) => void): Promise<number> {
+    if (!this.groupConfig) {
+      throw new Error('Gruppe nicht konfiguriert');
+    }
+
+    console.log('🔄 Lade neueste Nachrichten vom Relay...');
+    
+    const refreshFilter: Filter = {
+      kinds: [42], // channel_message
+      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
+      since: Math.floor(Date.now() / 1000) - 3600, // Letzte Stunde
+      limit: 50 // Maximal 50 neueste Nachrichten
+    } as any;
+
+    console.log('🔍 Refresh Filter:', refreshFilter);
+
+    let messageCount = 0;
+    
+    return new Promise((resolve) => {
+      const refreshSub = this.pool.subscribeMany(
+        this.relays,
+        [refreshFilter] as any,
+        {
+          onevent: async (event: NostrEvent) => {
+            try {
+              console.log('🔄 Refresh Event:', event.id, 'from', event.pubkey.substring(0, 8));
+              
+              // Duplikate vermeiden
+              if (this.isEventCached(event.id)) {
+                console.log('⚠️ Event bereits im Cache, überspringe:', event.id);
+                return;
+              }
+              this.cacheEvent(event);
+
+              // Channel-Prüfung
+              const channelTag = event.tags.find(tag => tag[0] === 'e' && tag[1] === this.groupConfig!.channelId);
+              if (!channelTag) {
+                console.log('⚠️ Event nicht für diese Channel:', event.id);
+                return;
+              }
+
+              // Nachricht entschlüsseln
+              let decryptedContent = event.content;
+              let decrypted = false;
+
+              if (this.encryptionKey) {
+                try {
+                  decryptedContent = await decryptMessage(event.content, this.encryptionKey);
+                  decrypted = true;
+                } catch (error) {
+                  console.warn('🔒 Entschlüsselung fehlgeschlagen:', event.id);
+                  decryptedContent = '[Verschlüsselte Nachricht]';
+                }
+              }
+
+              const message: GroupMessage = {
+                id: event.id,
+                pubkey: event.pubkey,
+                content: decryptedContent,
+                timestamp: event.created_at,
+                decrypted
+              };
+
+              console.log('✅ Refresh Message verarbeitet:', message.id);
+              callback(message);
+              messageCount++;
+            } catch (error) {
+              console.error('❌ Fehler beim Verarbeiten der Refresh-Nachricht:', error);
+            }
+          },
+          oneose: () => {
+            console.log(`✅ Refresh abgeschlossen: ${messageCount} neue Nachrichten geladen`);
+            refreshSub.close();
+            resolve(messageCount);
+          },
+          onclose: () => {
+            console.log('🔌 Refresh-Subscription geschlossen');
+          }
+        }
+      );
+
+      // Timeout nach 10 Sekunden
+      setTimeout(() => {
+        refreshSub.close();
+        resolve(messageCount);
+      }, 10000);
+    });
+  }
+
+  /**
    * Auf Gruppennachrichten hören
    */
   subscribeToGroupMessages(callback: (message: GroupMessage) => void) {
@@ -190,22 +304,67 @@ export class NostrClient {
       throw new Error('Gruppe nicht konfiguriert');
     }
 
-    const filter: Filter = {
+    // Zwei Filter: Einer für historische Events, einer für Live-Events
+    const historicalFilter: Filter = {
       kinds: [42], // channel_message
-      since: Math.floor(Date.now() / 1000) - 3600 // Letzte Stunde
+      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
+      since: Math.floor(Date.now() / 1000) - 604800, // Letzte 7 Tage
+      until: Math.floor(Date.now() / 1000) // Bis jetzt
     } as any;
+
+    const liveFilter: Filter = {
+      kinds: [42], // channel_message
+      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
+      since: Math.floor(Date.now() / 1000) // Ab jetzt (Live-Events)
+    } as any;
+
+    console.log('🔍 Subscribing to group messages with filters:');
+    console.log('  📋 Channel ID:', this.groupConfig.channelId);
+    console.log('  🔐 Secret (first 8 chars):', this.groupConfig.secret.substring(0, 8) + '...');
+    console.log('  📊 Historical Filter:', historicalFilter);
+    console.log('  📊 Live Filter:', liveFilter);
+    console.log('  ⏰ Historical: seit', new Date(historicalFilter.since! * 1000).toLocaleString());
+    console.log('  ⏰ Live: seit', new Date(liveFilter.since! * 1000).toLocaleString());
 
     const sub = this.pool.subscribeMany(
       this.relays,
-      [filter] as any,
+      [historicalFilter, liveFilter] as any,
       {
         onevent: async (event: NostrEvent) => {
           try {
+            console.log('📨 Received event:', event.id, 'from', event.pubkey.substring(0, 8));
+            
             // Duplikate vermeiden durch Cache-Prüfung
             if (this.isEventCached(event.id)) {
+              console.log('⚠️ Event already cached, skipping:', event.id);
               return;
             }
             this.cacheEvent(event);
+
+            // Prüfen ob Event zur richtigen Channel gehört
+            const channelTag = event.tags.find(tag => tag[0] === 'e' && tag[1] === this.groupConfig!.channelId);
+            if (!channelTag) {
+              console.log('⚠️ Event nicht für diese Channel, ignoriert:', event.id);
+              return;
+            }
+
+            // 🔍 DEBUGGING: Alle Events loggen (auch eigene)
+            console.log('📨 Event Details:');
+            console.log('  🆔 ID:', event.id);
+            console.log('  👤 From:', event.pubkey.substring(0, 16) + '...');
+            console.log('  👤 Own pubkey:', this.userProfile?.pubkey.substring(0, 16) + '...');
+            console.log('  📋 Channel tags:', event.tags.filter(t => t[0] === 'e'));
+            console.log('  🕐 Timestamp:', new Date(event.created_at * 1000).toLocaleString());
+
+            // 🔍 TEMPORÄR: Alle Nachrichten verarbeiten (auch eigene) für Debugging
+            const isOwnMessage = event.pubkey === this.userProfile?.pubkey;
+            console.log(`📨 ${isOwnMessage ? 'EIGENE' : 'FREMDE'} Nachricht empfangen:`, event.id);
+            
+            // TODO: Später wieder aktivieren wenn Live-Updates funktionieren
+            // if (isOwnMessage) {
+            //   console.log('⚠️ Eigene Nachricht vom Relay empfangen, bereits lokal angezeigt:', event.id);
+            //   return;
+            // }
 
             // Nachricht entschlüsseln
             let decryptedContent = event.content;
@@ -215,8 +374,11 @@ export class NostrClient {
               try {
                 decryptedContent = await decryptMessage(event.content, this.encryptionKey);
                 decrypted = true;
+                console.log('🔓 Message decrypted successfully');
               } catch (error) {
-                console.warn('Entschlüsselung fehlgeschlagen für Event:', event.id);
+                console.warn('🔒 Entschlüsselung fehlgeschlagen für Event:', event.id, error);
+                // Fallback: Zeige verschlüsselte Nachricht an
+                decryptedContent = '[Verschlüsselte Nachricht]';
               }
             }
 
@@ -228,20 +390,26 @@ export class NostrClient {
               decrypted
             };
 
+            console.log('✅ Processing message from other user:', message.id, 'content length:', message.content.length);
             callback(message);
           } catch (error) {
-            console.error('Fehler beim Verarbeiten der Nachricht:', error);
+            console.error('❌ Fehler beim Verarbeiten der Nachricht:', error);
           }
         },
         oneose: () => {
-          console.log('Initiale Gruppennachrichten geladen');
+          console.log('✅ Initiale Gruppennachrichten geladen');
           this.connectionStatus = 'connected';
           this.reconnectAttempts = 0;
+        },
+        onclose: () => {
+          console.log('🔌 Subscription geschlossen');
+          this.connectionStatus = 'disconnected';
         }
       }
     );
 
     this.subscriptions.set('groupMessages', sub);
+    console.log('📡 Subscription für Gruppennachrichten gestartet');
   }
 
   /**

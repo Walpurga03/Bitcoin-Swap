@@ -24,4 +24,5 @@ vite.config.ts.timestamp-*
 
 # Sensitive local config and whitelist
 src/whitelist.json
+src/config.json
 src/routes/testConfig.ts
