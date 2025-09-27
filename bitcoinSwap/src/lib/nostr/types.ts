@@ -116,3 +116,119 @@ export interface ValidationResult {
 export type Nullable<T> = T | null;
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+
+// ===== PHASE 2: Erweiterte Angebots-Typen =====
+
+/**
+ * Erweiterte Bitcoin-Angebots-Struktur für Phase 2
+ */
+export interface BitcoinOffer {
+  id: string;
+  type: 'buy' | 'sell';
+  amount: number; // in Satoshis
+  price: number; // in EUR
+  paymentMethods: Array<{
+    type: 'cash' | 'bank' | 'rechnung';
+    label: string;
+    details?: string; // Verschlüsselte Details
+  }>;
+  location?: string;
+  description?: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'active' | 'expired' | 'completed' | 'cancelled';
+  
+  // Anonymität
+  anonymousKey: string; // Temporärer Public Key
+  encrypted: boolean;
+  
+  // Nostr-spezifisch
+  eventId?: string;
+  authorPubkey: string;
+}
+
+/**
+ * Interesse an einem Angebot
+ */
+export interface OfferInterest {
+  id: string;
+  offerId: string;
+  interestedParty: string; // Anonymer Public Key
+  message?: string;
+  contactMethod: 'nostr' | 'signal' | 'telegram' | 'email';
+  createdAt: number;
+  eventId?: string;
+}
+
+/**
+ * Nostr Event für Bitcoin-Angebote (Kind 30402)
+ */
+export interface OfferEvent extends Omit<NostrEvent, 'kind' | 'tags'> {
+  kind: 30402;
+  content: string; // Verschlüsseltes BitcoinOffer JSON
+  tags: string[][]; // Standard Nostr tags format
+}
+
+/**
+ * Nostr Event für Interesse (Kind 7 - Reaction)
+ */
+export interface InterestEvent extends Omit<NostrEvent, 'kind' | 'tags'> {
+  kind: 7;
+  content: string; // Verschlüsselte Kontaktdaten
+  tags: string[][]; // Standard Nostr tags format
+}
+
+/**
+ * Helper-Funktionen für Tag-Erstellung
+ */
+export interface OfferTags {
+  createOfferTags: (offer: BitcoinOffer, channelId: string) => string[][];
+  createInterestTags: (interest: OfferInterest, offerEventId: string, offerAuthor: string) => string[][];
+  parseOfferTags: (tags: string[][]) => {
+    channelId?: string;
+    offerType?: 'buy' | 'sell';
+    amount?: string;
+    price?: string;
+    expires?: string;
+    payment?: string;
+    location?: string;
+  };
+}
+
+/**
+ * Temporäres Schlüsselpaar für Anonymität
+ */
+export interface AnonymousKeyPair {
+  privateKey: string;
+  publicKey: string;
+  npub: string;
+  createdAt: number;
+  expiresAt: number;
+  purpose: 'offer' | 'interest' | 'contact';
+}
+
+/**
+ * Erweiterte Filter für Phase 2
+ */
+export interface Phase2OfferFilter {
+  type?: 'buy' | 'sell';
+  minAmount?: number; // Satoshis
+  maxAmount?: number; // Satoshis
+  minPrice?: number; // EUR
+  maxPrice?: number; // EUR
+  paymentMethods?: ('cash' | 'bank' | 'rechnung')[];
+  location?: string;
+  status?: ('active' | 'expired' | 'completed' | 'cancelled')[];
+}
+
+/**
+ * Angebots-Statistiken
+ */
+export interface OfferStats {
+  totalOffers: number;
+  activeOffers: number;
+  buyOffers: number;
+  sellOffers: number;
+  totalVolume: number; // Satoshis
+  averagePrice: number; // EUR
+}
