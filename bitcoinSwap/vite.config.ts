@@ -10,26 +10,9 @@ export default defineConfig(({ mode }) => ({
 		rollupOptions: {
 			output: {
 				manualChunks: {
-					// Nostr-Tools in separaten Chunk
+					// Nur existierende Vendor-Pakete
 					'nostr': ['nostr-tools'],
-					// Svelte-spezifische Chunks
-					'svelte-vendor': ['svelte', 'svelte/store'],
-					// Eigene Nostr-Implementierung
-					'nostr-client': [
-						'./src/lib/nostr/realNostrClient.ts',
-						'./src/lib/nostr/optimizedNostrClient.ts',
-						'./src/lib/nostr/strategicNostrClient.ts'
-					],
-					// Krypto-Funktionen
-					'crypto': [
-						'./src/lib/nostr/realCrypto.ts',
-						'./src/lib/crypto/encryption.ts'
-					],
-					// UI-Komponenten
-					'components': [
-						'./src/components/SimpleOfferInterface.svelte',
-						'./src/components/OfferCard.svelte'
-					]
+					'svelte-vendor': ['svelte', 'svelte/store']
 				}
 			}
 		},
