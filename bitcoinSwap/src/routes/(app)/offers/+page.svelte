@@ -1,10 +1,9 @@
-<!-- Phase 2 Bitcoin-Angebots-Seite mit Benutzerfreundlichkeits-Features -->
+<!-- Vereinfachte Bitcoin-Angebots-Seite mit schlichter Textarena -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { userStore } from '$lib/stores/userStore';
   import { groupConfig } from '$lib/stores/groupStore';
-  import { offerActions } from '$lib/stores/phase2OfferStore';
-  import OfferTab from '../../../components/OfferTab.svelte';
+  import SimpleOfferInterface from '../../../components/SimpleOfferInterface.svelte';
   import FeedbackToast from '../../../components/FeedbackToast.svelte';
   import MobileOptimization from '../../../components/MobileOptimization.svelte';
   import NotificationSettings from '../../../components/NotificationSettings.svelte';
@@ -53,10 +52,8 @@
         return;
       }
 
-      // Initialisiere Angebots-Service
-      // await offerActions.initialize(); // TODO: Implement initialize method
-      // offerActions.loadOffers(); // TODO: Implement loadOffers method
-      console.log('Angebots-Service initialisiert');
+      // Vereinfachte Angebots-Initialisierung
+      console.log('Vereinfachte Angebots-Interface initialisiert');
       
       // Benachrichtigungs-Berechtigung anfordern
       const permission = await notificationManager.requestPermission();
@@ -134,8 +131,7 @@
     
     // Cleanup
     if (isInitialized) {
-      // offerActions.cleanup?.(); // TODO: Implement cleanup method
-      offerActions.cleanupExpiredOffers();
+      console.log('Vereinfachte Angebots-Interface beendet');
     }
   });
 
@@ -204,13 +200,13 @@
     <header class="page-header" class:mobile={isMobile}>
       <div class="header-content">
         <h1>🏷️ Bitcoin-Angebote</h1>
-        <p class="header-subtitle">Sicher • Anonym • Dezentral</p>
+        <p class="header-subtitle">Einfach • Schlicht • Effektiv</p>
       </div>
       
       <!-- Desktop Settings Button -->
       {#if !isMobile}
         <div class="header-actions">
-          <button 
+          <button
             class="settings-btn"
             on:click={openNotificationSettings}
             title="Benachrichtigungs-Einstellungen"
@@ -221,9 +217,9 @@
       {/if}
     </header>
 
-    <!-- Phase 2 Angebots-Interface -->
+    <!-- Vereinfachtes Angebots-Interface -->
     <main class="main-content">
-      <OfferTab />
+      <SimpleOfferInterface />
     </main>
     
     <!-- Navigation -->
