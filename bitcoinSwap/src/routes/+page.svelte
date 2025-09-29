@@ -15,7 +15,7 @@
 	import ErrorBoundary from '../components/ErrorBoundary.svelte';
 	import LoadingSpinner from '../components/LoadingSpinner.svelte';
 	import type { UserProfile, GroupConfig } from '$lib/nostr/types';
-	import whitelistData from '../whitelist.json';
+	import { PUBLIC_ALLOWED_PUBKEYS } from '$env/static/public';
 
 	let inviteLink = '';
 	let privateKey = '';
@@ -148,18 +148,18 @@
 			const publicKey = getPublicKey(privkeyBytes);
 			console.log('🔑 Public Key abgeleitet:', publicKey.substring(0, 16) + '...');
 
-			// Whitelist-Prüfung
-			const allowedPubkeys = whitelistData.allowed_pubkeys.map((entry: any) => entry.pubkey);
+			// Whitelist-Prüfung über Environment Variable
+			const allowedPubkeysEnv = PUBLIC_ALLOWED_PUBKEYS || '';
+			const allowedPubkeys = allowedPubkeysEnv.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
 			const npub = nip19.npubEncode(publicKey);
 			console.log('📋 Prüfe Whitelist für:', npub.substring(0, 20) + '...');
 			
-			if (!allowedPubkeys.includes(npub)) {
+			if (allowedPubkeys.length > 0 && !allowedPubkeys.includes(npub)) {
 				throw new Error('Du bist nicht auf der Whitelist! Kontaktieren Sie einen Administrator.');
 			}
 
-			// Finde den Namen aus der Whitelist
-			const whitelistEntry = whitelistData.allowed_pubkeys.find((entry: any) => entry.pubkey === npub);
-			const userName = whitelistEntry?.name || `User_${publicKey.substring(0, 8)}`;
+			// Einfacher Benutzername basierend auf Public Key
+			const userName = `User_${publicKey.substring(0, 8)}`;
 			console.log('👤 Benutzer gefunden:', userName);
 
 			// NostrClient erstellen und Verbindung testen

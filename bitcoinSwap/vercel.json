@@ -1,9 +1,9 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "pnpm run build",
   "outputDirectory": "build",
-  "framework": "svelte",
-  "installCommand": "npm install",
-  "devCommand": "npm run dev",
+  "framework": "sveltekit",
+  "installCommand": "pnpm install",
+  "devCommand": "pnpm run dev",
   "rewrites": [
     {
       "source": "/(.*)",
