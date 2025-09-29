@@ -8,7 +8,7 @@
 		createSecureInviteLink,
 		getDefaultRelay 
 	} from '$lib/config';
-	import whitelistData from '../../whitelist.json';
+	import { PUBLIC_ALLOWED_PUBKEYS } from '$env/static/public';
 
 	let relay = '';
 	let selectedGroup = '';
@@ -21,6 +21,9 @@
 	// Dynamisch geladene Optionen
 	let relayOptions: string[] = [];
 	let groupOptions: Array<{key: string, name: string}> = [];
+	
+	// Whitelist aus Environment Variables
+	let allowedUsers: Array<{name: string, pubkey: string}> = [];
 
 	onMount(async () => {
 		baseUrl = window.location.origin;
@@ -37,6 +40,14 @@
 			if (groupOptions.length > 0) {
 				selectedGroup = groupOptions[0].key;
 			}
+			
+			// Parse Whitelist aus Environment Variable
+			const allowedPubkeysEnv = PUBLIC_ALLOWED_PUBKEYS || '';
+			const pubkeys = allowedPubkeysEnv.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
+			allowedUsers = pubkeys.map((pubkey, index) => ({
+				name: `User_${index + 1}`,
+				pubkey: pubkey
+			}));
 			
 			loading = false;
 		} catch (err) {
@@ -95,9 +106,9 @@
 	<h1>🔧 Admin Panel - Einladungslink Generator</h1>
 	
 	<div class="whitelist-info">
-		<h2>📋 Aktuelle Whitelist ({whitelistData.allowed_pubkeys.length} Benutzer)</h2>
+		<h2>📋 Aktuelle Whitelist ({allowedUsers.length} Benutzer)</h2>
 		<div class="whitelist-users">
-			{#each whitelistData.allowed_pubkeys as user}
+			{#each allowedUsers as user}
 				<div class="user-entry">
 					<span class="name">{user.name}</span>
 					<span class="pubkey">{user.pubkey.substring(0, 20)}...</span>
@@ -165,7 +176,7 @@
 						<li><strong>Gruppe:</strong> {groupOptions.find(g => g.key === selectedGroup)?.name || selectedGroup}</li>
 						<li><strong>Relay:</strong> {relay}</li>
 						<li><strong>Base URL:</strong> {baseUrl}</li>
-						<li><strong>Erlaubte Benutzer:</strong> {whitelistData.allowed_pubkeys.length}</li>
+						<li><strong>Erlaubte Benutzer:</strong> {allowedUsers.length}</li>
 					</ul>
 				</div>
 			</div>

@@ -6,16 +6,6 @@ export default defineConfig(({ mode }) => ({
 	
 	// Build-Optimierungen für Vercel
 	build: {
-		// Chunk-Splitting für bessere Caching-Strategien
-		rollupOptions: {
-			output: {
-				manualChunks: {
-					// Nur existierende Vendor-Pakete
-					'nostr': ['nostr-tools'],
-					'svelte-vendor': ['svelte', 'svelte/store']
-				}
-			}
-		},
 		// Optimierungen für Production
 		minify: mode === 'production' ? 'terser' : false,
 		sourcemap: mode === 'development',

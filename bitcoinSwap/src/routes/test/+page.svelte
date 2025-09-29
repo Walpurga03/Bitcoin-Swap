@@ -4,7 +4,7 @@
 	import { setUser } from '$lib/stores/userStore';
 	import { setGroupConfig, groupMessages, addGroupMessage } from '$lib/stores/groupStore';
 	import type { UserProfile, GroupConfig, GroupMessage } from '$lib/nostr/types';
-	import whitelistData from '../../whitelist.json';
+	import { PUBLIC_ALLOWED_PUBKEYS } from '$env/static/public';
 
 	let testResults: string[] = [];
 	let client: NostrClient | null = null;
@@ -128,9 +128,16 @@
 
 	function testWhitelist() {
 		log('🧪 Teste Whitelist...');
-		log(`📋 Whitelist enthält ${whitelistData.allowed_pubkeys.length} Einträge:`);
-		whitelistData.allowed_pubkeys.forEach((entry, index) => {
-			log(`  ${index + 1}. ${entry.name}: ${entry.pubkey.substring(0, 20)}...`);
+		
+		if (!PUBLIC_ALLOWED_PUBKEYS) {
+			log('❌ PUBLIC_ALLOWED_PUBKEYS nicht konfiguriert');
+			return;
+		}
+		
+		const pubkeyList = PUBLIC_ALLOWED_PUBKEYS.split(',').map((key: string) => key.trim());
+		log(`📋 Whitelist enthält ${pubkeyList.length} Einträge:`);
+		pubkeyList.forEach((pubkey: string, index: number) => {
+			log(`  ${index + 1}. ${pubkey.substring(0, 20)}...`);
 		});
 	}
 </script>
