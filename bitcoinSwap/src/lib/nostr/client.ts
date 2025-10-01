@@ -64,9 +64,18 @@ export class NostrClient {
   }
 
   /**
-   * Event-Cache verwalten
+   * Event-Cache verwalten (mit Channel-ID Validierung)
    */
   private cacheEvent(event: NostrEvent) {
+    // 🔒 SICHERHEIT: Nur Events für die aktuelle Channel cachen
+    if (this.groupConfig) {
+      const channelTag = event.tags.find(tag => tag[0] === 'e' && tag[1] === this.groupConfig!.channelId);
+      if (!channelTag) {
+        console.warn('🚫 Event gehört nicht zur aktuellen Channel, wird nicht gecacht:', event.id);
+        return;
+      }
+    }
+
     if (this.eventCache.size >= this.maxCacheSize) {
       // Älteste Events entfernen (FIFO)
       const firstKey = this.eventCache.keys().next().value;
@@ -75,6 +84,7 @@ export class NostrClient {
       }
     }
     this.eventCache.set(event.id, event);
+    console.log('💾 Event gecacht für Channel:', this.groupConfig?.channelId?.substring(0, 16) + '...', 'Event:', event.id);
   }
 
   /**
@@ -128,13 +138,30 @@ export class NostrClient {
    * Gruppe konfigurieren mit Secret
    */
   async configureGroup(config: GroupConfig) {
+    // 🔥 WICHTIG: Cache und Nachrichten leeren bei Gruppenwechsel
+    const previousChannelId = this.groupConfig?.channelId;
+    if (previousChannelId && previousChannelId !== config.channelId) {
+      console.log('🧹 Gruppenwechsel erkannt - leere Cache und Nachrichten');
+      console.log('  📋 Alte Channel-ID:', previousChannelId);
+      console.log('  📋 Neue Channel-ID:', config.channelId);
+      
+      // Event-Cache leeren
+      this.eventCache.clear();
+      
+      // Alte Subscriptions beenden
+      this.unsubscribeAll();
+      
+      console.log('✅ Cache geleert und Subscriptions beendet');
+    }
+
     this.groupConfig = config;
     this.encryptionKey = await deriveKeyFromSecret(config.secret);
     console.log('🔧 Gruppe konfiguriert:');
     console.log('  📋 Channel ID:', config.channelId);
-    console.log('  🔐 Secret (first 8 chars):', config.secret.substring(0, 8) + '...');
+    console.log('  🔐 Secret (vollständig):', `"${config.secret}"`);
     console.log('  📡 Relay:', config.relay);
     console.log('  📛 Name:', config.name);
+    console.log('  🗂️ Cache-Größe nach Konfiguration:', this.eventCache.size);
   }
 
   /**
@@ -341,10 +368,20 @@ export class NostrClient {
             }
             this.cacheEvent(event);
 
-            // Prüfen ob Event zur richtigen Channel gehört
+            // 🔒 STRENGE Channel-Prüfung
             const channelTag = event.tags.find(tag => tag[0] === 'e' && tag[1] === this.groupConfig!.channelId);
             if (!channelTag) {
               console.log('⚠️ Event nicht für diese Channel, ignoriert:', event.id);
+              console.log('  📋 Erwartet Channel-ID:', this.groupConfig!.channelId);
+              console.log('  📋 Event Channel-Tags:', event.tags.filter(t => t[0] === 'e'));
+              return;
+            }
+
+            // 🔒 ZUSÄTZLICHE VALIDIERUNG: Channel-ID muss exakt übereinstimmen
+            if (channelTag[1] !== this.groupConfig!.channelId) {
+              console.log('🚫 Channel-ID stimmt nicht exakt überein, ignoriert:', event.id);
+              console.log('  📋 Erwartet:', this.groupConfig!.channelId);
+              console.log('  📋 Gefunden:', channelTag[1]);
               return;
             }
 

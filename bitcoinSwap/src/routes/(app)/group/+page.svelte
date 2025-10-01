@@ -224,6 +224,7 @@
 			<span class="connection-status" style="color: {statusColor}">
 				● {statusText}
 			</span>
+			<span class="channel-info">🆔 {config?.channelId?.substring(0, 16) || 'Unbekannt'}...</span>
 			<span class="relay-info">📡 {config?.relay || 'Unbekannt'}</span>
 			<span class="user-info">👤 {user?.name || truncatePubkey(user?.pubkey || '')}</span>
 		</div>

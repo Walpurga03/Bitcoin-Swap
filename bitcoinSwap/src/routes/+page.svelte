@@ -4,7 +4,7 @@
 	import { NostrClient } from '$lib/nostr/client';
 	import { getPublicKey, nip19 } from 'nostr-tools';
 	import { setUser } from '$lib/stores/userStore';
-	import { setGroupConfig } from '$lib/stores/groupStore';
+	import { setGroupConfig, clearGroupData } from '$lib/stores/groupStore';
 	import {
 		validatePrivateKey,
 		validateRelayUrl,
@@ -80,14 +80,19 @@
 	// Channel-ID deterministisch aus Secret ableiten
 	async function deriveChannelIdFromSecret(secret: string): Promise<string> {
 		const encoder = new TextEncoder();
-		const data = encoder.encode(secret + 'bitcoin-group-channel');
+		const input = secret + 'bitcoin-group-channel';
+		const data = encoder.encode(input);
 		const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 		const hashArray = Array.from(new Uint8Array(hashBuffer));
 		const channelId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 		
 		console.log('🔧 Channel-ID Ableitung:');
-		console.log('  🔐 Secret (first 8 chars):', secret.substring(0, 8) + '...');
+		console.log('  🔐 Secret (vollständig):', `"${secret}"`);
+		console.log('  📝 Input für Hash:', `"${input}"`);
+		console.log('  📏 Secret Länge:', secret.length);
+		console.log('  📏 Input Länge:', input.length);
 		console.log('  📋 Abgeleitete Channel-ID:', channelId);
+		console.log('  📋 Channel-ID (erste 16):', channelId.substring(0, 16) + '...');
 		
 		return channelId;
 	}
@@ -110,6 +115,10 @@
 		error = '';
 
 		try {
+			// 🧹 WICHTIG: Alte Gruppendaten leeren vor neuem Login
+			console.log('🧹 Leere alte Gruppendaten...');
+			clearGroupData();
+
 			// Gruppenkonfiguration aus Link parsen mit Validierung
 			console.log('📋 Parse Einladungslink...');
 			const groupConfig = await parseInviteLinkLocal(cleanInviteLink);
@@ -120,7 +129,7 @@
 			console.log('  📋 Channel-ID:', groupConfig.channelId);
 			console.log('  📡 Relay:', groupConfig.relay);
 			console.log('  📛 Name:', groupConfig.name);
-			console.log('  🔐 Secret (first 8 chars):', groupConfig.secret.substring(0, 8) + '...');
+			console.log('  🔐 Secret (vollständig):', `"${groupConfig.secret}"`);
 
 			// Private Key validieren mit der neuen Validierungsfunktion
 			console.log('🔐 Validiere Private Key...');
