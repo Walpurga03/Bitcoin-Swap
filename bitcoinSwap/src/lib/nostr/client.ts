@@ -196,6 +196,16 @@ export class NostrClient {
     // Event signieren mit finalizeEvent
     const privkeyBytes = new Uint8Array(this.userProfile.privkey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
     const signedEvent = finalizeEvent(event as NostrEvent, privkeyBytes);
+    
+    // 🔍 DETAILLIERTE EVENT-LOGS
+    console.log('🔍 VOLLSTÄNDIGES EVENT ZUM SPEICHERN:');
+    console.log('  🆔 Event ID:', signedEvent.id);
+    console.log('  🔢 Kind:', signedEvent.kind);
+    console.log('  👤 Pubkey:', signedEvent.pubkey);
+    console.log('  🏷️ Tags (vollständig):', JSON.stringify(signedEvent.tags, null, 2));
+    console.log('  📝 Content (verschlüsselt):', signedEvent.content.substring(0, 50) + '...');
+    console.log('  🕐 Created_at:', signedEvent.created_at, '(', new Date(signedEvent.created_at * 1000).toLocaleString(), ')');
+    console.log('  ✍️ Sig:', signedEvent.sig.substring(0, 16) + '...');
 
     // 🚀 SOFORTIGE LOKALE ANZEIGE - Nachricht sofort anzeigen
     if (onLocalMessage) {
@@ -352,10 +362,11 @@ export class NostrClient {
     console.log('🔍 Subscribing to group messages with filters:');
     console.log('  📋 Channel ID:', this.groupConfig.channelId);
     console.log('  🔐 Secret (first 8 chars):', this.groupConfig.secret.substring(0, 8) + '...');
-    console.log('  📊 Historical Filter:', historicalFilter);
-    console.log('  📊 Live Filter:', liveFilter);
+    console.log('  📊 Historical Filter (JSON):', JSON.stringify(historicalFilter, null, 2));
+    console.log('  📊 Live Filter (JSON):', JSON.stringify(liveFilter, null, 2));
     console.log('  ⏰ Historical: seit', new Date(historicalFilter.since! * 1000).toLocaleString());
     console.log('  ⏰ Live: seit', new Date(liveFilter.since! * 1000).toLocaleString());
+    console.log('  🎯 SUCHE NACH EVENTS MIT e-TAG:', this.groupConfig.channelId);
 
     console.log('🚀 Starte Subscription mit Relays:', this.relays);
     console.log('📊 Filter werden gesendet an Relay...');
