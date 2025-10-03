@@ -244,8 +244,8 @@ export class NostrClient {
     const refreshFilter: Filter = {
       kinds: [42], // channel_message
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: Math.floor(Date.now() / 1000) - 3600, // Letzte Stunde
-      limit: 50 // Maximal 50 neueste Nachrichten
+      since: Math.floor(Date.now() / 1000) - 86400, // Letzte 24 Stunden (erweitert)
+      limit: 100 // Maximal 100 neueste Nachrichten (erweitert)
     } as any;
 
     console.log('🔍 Refresh Filter:', refreshFilter);
@@ -337,8 +337,9 @@ export class NostrClient {
     const historicalFilter: Filter = {
       kinds: [42], // channel_message
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: now - 604800, // Letzte 7 Tage (korrekt: VERGANGENHEIT)
-      until: now // Bis jetzt
+      since: now - 86400, // Letzte 24 Stunden (reduziert für bessere Relay-Kompatibilität)
+      until: now, // Bis jetzt
+      limit: 100 // Maximal 100 Events
     } as any;
 
     const liveFilter: Filter = {
