@@ -255,8 +255,8 @@ export class NostrClient {
     const refreshFilter: Filter = {
       kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: Math.floor(Date.now() / 1000) - 86400, // Letzte 24 Stunden (erweitert)
-      limit: 100 // Maximal 100 neueste Nachrichten (erweitert)
+      // KEIN since - ALLE Events laden beim Refresh
+      limit: 500 // Maximal 500 neueste Nachrichten (erweitert)
     } as any;
 
     console.log('🔍 Refresh Filter:', refreshFilter);
@@ -348,9 +348,8 @@ export class NostrClient {
     const historicalFilter: Filter = {
       kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: now - 86400, // Letzte 24 Stunden
-      // KEIN until - alle Events ab 'since' bis zur Gegenwart
-      limit: 100 // Maximal 100 Events
+      // KEIN since - ALLE historischen Events laden!
+      limit: 500 // Maximal 500 Events (mehr Verlauf)
     } as any;
 
     const liveFilter: Filter = {
@@ -364,7 +363,7 @@ export class NostrClient {
     console.log('  🔐 Secret (first 8 chars):', this.groupConfig.secret.substring(0, 8) + '...');
     console.log('  📊 Historical Filter (JSON):', JSON.stringify(historicalFilter, null, 2));
     console.log('  📊 Live Filter (JSON):', JSON.stringify(liveFilter, null, 2));
-    console.log('  ⏰ Historical: seit', new Date(historicalFilter.since! * 1000).toLocaleString());
+    console.log('  ⏰ Historical: ALLE Events (kein since-Filter)');
     console.log('  ⏰ Live: seit', new Date(liveFilter.since! * 1000).toLocaleString());
     console.log('  🎯 SUCHE NACH EVENTS MIT e-TAG:', this.groupConfig.channelId);
 
