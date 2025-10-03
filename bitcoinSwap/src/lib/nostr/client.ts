@@ -12,6 +12,7 @@ import {
 } from 'nostr-tools';
 import type { GroupConfig, GroupMessage, UserProfile } from './types';
 import { encryptMessage, decryptMessage, deriveKeyFromSecret } from './crypto';
+import { localEventStore } from '../storage/localEventStore';
 
 export class NostrClient {
   public pool: SimplePool;
@@ -98,9 +99,21 @@ export class NostrClient {
    * Verbindung zu Relays herstellen
    */
   async connectToRelays(relays: string[]) {
-    this.relays = relays;
+    // 🔄 WICHTIG: Zusätzliche zuverlässige Relays hinzufügen für Event-Persistenz
+    const additionalRelays = [
+      'wss://relay.damus.io',
+      'wss://nos.lol',
+      'wss://relay.nostr.band'
+    ];
+    
+    // Deduplizieren und kombinieren
+    const allRelays = [...new Set([...relays, ...additionalRelays])];
+    
+    this.relays = allRelays;
     this.connectionStatus = 'connecting';
-    console.log('Verbinde zu Relays:', relays);
+    console.log('🔗 Verbinde zu Relays:', allRelays);
+    console.log('  📡 Primär:', relays);
+    console.log('  🔄 Backup:', additionalRelays);
     
     // Verbindungstest mit Timeout
     try {
@@ -240,6 +253,55 @@ export class NostrClient {
     }
 
     console.log(`Gruppennachricht gesendet: ${signedEvent.id} (${successful}/${this.relays.length} Relays)`);
+    
+    // � WICHTIG: Event LOKAL speichern (garantierte Persistenz!)
+    try {
+      await localEventStore.saveEvent(this.groupConfig.channelId, signedEvent);
+      console.log('✅ Event lokal gespeichert für späteres Laden');
+    } catch (error) {
+      console.error('❌ Fehler beim lokalen Speichern:', error);
+      // Nicht kritisch - Event wurde bereits an Relays gesendet
+    }
+    
+    // �🐛 DEBUG: Prüfe ob Event wirklich gespeichert wurde (nach 2 Sekunden)
+    setTimeout(async () => {
+      console.log('🐛 DEBUG: Prüfe ob Event im Relay gespeichert wurde...');
+      const checkEvents = await this.pool.querySync(this.relays, { 
+        ids: [signedEvent.id],
+        kinds: [1]
+      } as any);
+      
+      if (checkEvents.length > 0) {
+        console.log('✅ DEBUG: Event WURDE im Relay gespeichert! Event-ID:', signedEvent.id);
+        console.log('✅ DEBUG: Tags im gespeicherten Event:', checkEvents[0].tags);
+      } else {
+        console.warn('⚠️ DEBUG: Event wurde NICHT im Relay gespeichert! Event-ID:', signedEvent.id);
+        console.warn('⚠️ DEBUG: Aber Event ist lokal gespeichert und wird beim Re-Login geladen!');
+      }
+    }, 2000);
+  }
+
+  /**
+   * Debug: Alle Events vom Relay abrufen (ohne Filter)
+   */
+  async debugFetchAllEvents(): Promise<void> {
+    console.log('🐛 DEBUG: Lade ALLE Events (ohne Channel-Filter)...');
+    
+    const debugFilter: Filter = {
+      kinds: [1],
+      limit: 50
+    } as any;
+
+    const events = await this.pool.querySync(this.relays, debugFilter as any);
+    
+    console.log(`🐛 DEBUG: ${events.length} Events vom Relay gefunden (ohne Filter)`);
+    events.forEach(event => {
+      console.log('🐛 Event:', event.id);
+      console.log('   Kind:', event.kind);
+      console.log('   Pubkey:', event.pubkey.substring(0, 16));
+      console.log('   Tags:', event.tags);
+      console.log('   Content:', event.content.substring(0, 30) + '...');
+    });
   }
 
   /**
@@ -252,11 +314,12 @@ export class NostrClient {
 
     console.log('🔄 Lade neueste Nachrichten vom Relay...');
     
+    const now = Math.floor(Date.now() / 1000);
     const refreshFilter: Filter = {
-      kinds: [1], // text_note (bessere Relay-Unterstützung)
-      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      // KEIN since - ALLE Events laden beim Refresh
-      limit: 500 // Maximal 500 neueste Nachrichten (erweitert)
+      kinds: [1], // text_note
+      authors: [this.userProfile!.pubkey], // NUR eigene Events
+      since: now - (90 * 24 * 60 * 60), // Letzte 90 Tage
+      limit: 500 // Maximal 500 Events
     } as any;
 
     console.log('🔍 Refresh Filter:', refreshFilter);
@@ -337,24 +400,59 @@ export class NostrClient {
   /**
    * Auf Gruppennachrichten hören
    */
-  subscribeToGroupMessages(callback: (message: GroupMessage) => void) {
+  async subscribeToGroupMessages(callback: (message: GroupMessage) => void) {
     if (!this.groupConfig) {
       throw new Error('Gruppe nicht konfiguriert');
+    }
+
+    // 🎯 SCHRITT 1: Lokale Events ZUERST laden (sofort verfügbar!)
+    console.log('💾 Lade lokale Events aus IndexedDB...');
+    try {
+      const localEvents = await localEventStore.loadEvents(this.groupConfig.channelId);
+      console.log(`✅ ${localEvents.length} lokale Events gefunden`);
+      
+      // Lokale Events sofort anzeigen
+      for (const event of localEvents) {
+        if (this.isEventCached(event.id)) {
+          continue; // Duplikat überspringen
+        }
+        this.cacheEvent(event);
+        
+        // Entschlüsseln und anzeigen
+        try {
+          const decryptedContent = await decryptMessage(event.content, this.encryptionKey!);
+          const message: GroupMessage = {
+            id: event.id,
+            pubkey: event.pubkey,
+            content: decryptedContent,
+            timestamp: event.created_at,
+            decrypted: true
+          };
+          callback(message);
+        } catch (error) {
+          console.warn('⚠️ Konnte lokales Event nicht entschlüsseln:', event.id);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Fehler beim Laden lokaler Events:', error);
     }
 
     // Zwei Filter: Einer für historische Events, einer für Live-Events
     const now = Math.floor(Date.now() / 1000); // Aktuelle Zeit in Sekunden
     
+    // 🔧 ULTIMATIVE STRATEGIE: Lade NUR Events vom eigenen Pubkey
+    // Grund: Relays geben keine Events zurück ohne authors-Filter
+    // Die clientseitige Filterung nach Channel-ID sorgt für Gruppentrennung
     const historicalFilter: Filter = {
-      kinds: [1], // text_note (bessere Relay-Unterstützung)
-      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      // KEIN since - ALLE historischen Events laden!
-      limit: 500 // Maximal 500 Events (mehr Verlauf)
+      kinds: [1], // text_note
+      authors: [this.userProfile!.pubkey], // NUR eigene Events
+      since: now - (90 * 24 * 60 * 60), // Letzte 90 Tage
+      limit: 500 // Maximal 500 Events
     } as any;
 
     const liveFilter: Filter = {
-      kinds: [1], // text_note (bessere Relay-Unterstützung)
-      '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
+      kinds: [1], // text_note
+      authors: [this.userProfile!.pubkey], // NUR eigene Events
       since: now // Ab jetzt (Live-Events)
     } as any;
 
@@ -365,10 +463,22 @@ export class NostrClient {
     console.log('  📊 Live Filter (JSON):', JSON.stringify(liveFilter, null, 2));
     console.log('  ⏰ Historical: ALLE Events (kein since-Filter)');
     console.log('  ⏰ Live: seit', new Date(liveFilter.since! * 1000).toLocaleString());
-    console.log('  🎯 SUCHE NACH EVENTS MIT e-TAG:', this.groupConfig.channelId);
+    console.log('  �️ Filter-Strategie: Hashtag #t=bitcoin-group (clientseitige Channel-Filterung)');
+    console.log('  🎯 Clientseitige Filterung nach Channel-ID:', this.groupConfig.channelId);
 
     console.log('🚀 Starte Subscription mit Relays:', this.relays);
     console.log('📊 Filter werden gesendet an Relay...');
+    
+    // 🐛 DEBUG: Test ob Relays überhaupt Events mit #e Tags unterstützen
+    console.log('🐛 DEBUG: Teste ob Relays #e Tag Queries unterstützen...');
+    this.pool.querySync(this.relays, { kinds: [1], limit: 10 } as any).then(testEvents => {
+      console.log(`🐛 DEBUG: ${testEvents.length} Events gefunden (ohne #e Filter)`);
+      const eventsWithETags = testEvents.filter(e => e.tags.some(t => t[0] === 'e'));
+      console.log(`🐛 DEBUG: ${eventsWithETags.length} davon haben e-Tags`);
+      if (eventsWithETags.length > 0) {
+        console.log('🐛 DEBUG: Beispiel e-Tags:', eventsWithETags[0].tags.filter(t => t[0] === 'e'));
+      }
+    });
     
     const sub = this.pool.subscribeMany(
       this.relays,
@@ -376,6 +486,14 @@ export class NostrClient {
       {
         onevent: async (event: NostrEvent) => {
           console.log('🎯 RELAY ANTWORT: Event empfangen!', event.id);
+          console.log('🔍 VOLLSTÄNDIGES EVENT VOM RELAY:');
+          console.log('  🆔 Event ID:', event.id);
+          console.log('  🔢 Kind:', event.kind);
+          console.log('  👤 Pubkey:', event.pubkey);
+          console.log('  🏷️ Tags (vollständig):', JSON.stringify(event.tags, null, 2));
+          console.log('  📝 Content (Anfang):', event.content.substring(0, 50) + '...');
+          console.log('  🕐 Created_at:', event.created_at, '(', new Date(event.created_at * 1000).toLocaleString(), ')');
+          
           try {
             console.log('📨 Received event:', event.id, 'from', event.pubkey.substring(0, 8));
             
@@ -391,7 +509,8 @@ export class NostrClient {
             if (!channelTag) {
               console.log('⚠️ Event nicht für diese Channel, ignoriert:', event.id);
               console.log('  📋 Erwartet Channel-ID:', this.groupConfig!.channelId);
-              console.log('  📋 Event Channel-Tags:', event.tags.filter(t => t[0] === 'e'));
+              console.log('  📋 Event hat Channel-Tags:', event.tags.filter(t => t[0] === 'e'));
+              console.log('  📋 ALLE Tags:', event.tags);
               return;
             }
 
@@ -445,7 +564,16 @@ export class NostrClient {
               decrypted
             };
 
-            console.log('✅ Processing message from other user:', message.id, 'content length:', message.content.length);
+            console.log('✅ Processing message from relay:', message.id, 'content length:', message.content.length);
+            
+            // 💾 Event vom Relay auch lokal speichern (für nächsten Login)
+            try {
+              await localEventStore.saveEvent(this.groupConfig!.channelId, event);
+              console.log('💾 Relay-Event lokal gespeichert:', event.id);
+            } catch (error) {
+              console.warn('⚠️ Konnte Relay-Event nicht lokal speichern:', error);
+            }
+            
             callback(message);
           } catch (error) {
             console.error('❌ Fehler beim Verarbeiten der Nachricht:', error);
@@ -455,6 +583,11 @@ export class NostrClient {
           console.log('✅ Initiale Gruppennachrichten geladen');
           console.log('📊 RELAY-STATUS: End of stored events (EOSE) empfangen');
           console.log('📊 Cache-Größe nach EOSE:', this.eventCache.size);
+          console.log('⚠️ WICHTIG: Wenn Cache-Größe 0 ist, hat das Relay KEINE Events für diese Filter zurückgegeben!');
+          console.log('🔍 Das bedeutet entweder:');
+          console.log('   1. Es wurden noch keine Events mit dieser Channel-ID gespeichert');
+          console.log('   2. Das Relay hat die Events verloren/gelöscht');
+          console.log('   3. Der Filter ist falsch (Channel-ID stimmt nicht)');
           this.connectionStatus = 'connected';
           this.reconnectAttempts = 0;
         },
