@@ -348,8 +348,8 @@ export class NostrClient {
     const historicalFilter: Filter = {
       kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: now - 86400, // Letzte 24 Stunden (reduziert für bessere Relay-Kompatibilität)
-      until: now, // Bis jetzt
+      since: now - 86400, // Letzte 24 Stunden
+      until: now + 300, // Bis 5 Minuten in die Zukunft (für Zeitstempel-Toleranz)
       limit: 100 // Maximal 100 Events
     } as any;
 
