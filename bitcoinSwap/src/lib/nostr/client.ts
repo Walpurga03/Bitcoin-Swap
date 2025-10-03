@@ -355,11 +355,15 @@ export class NostrClient {
     console.log('  ⏰ Historical: seit', new Date(historicalFilter.since! * 1000).toLocaleString());
     console.log('  ⏰ Live: seit', new Date(liveFilter.since! * 1000).toLocaleString());
 
+    console.log('🚀 Starte Subscription mit Relays:', this.relays);
+    console.log('📊 Filter werden gesendet an Relay...');
+    
     const sub = this.pool.subscribeMany(
       this.relays,
       [historicalFilter, liveFilter] as any,
       {
         onevent: async (event: NostrEvent) => {
+          console.log('🎯 RELAY ANTWORT: Event empfangen!', event.id);
           try {
             console.log('📨 Received event:', event.id, 'from', event.pubkey.substring(0, 8));
             
@@ -437,6 +441,8 @@ export class NostrClient {
         },
         oneose: () => {
           console.log('✅ Initiale Gruppennachrichten geladen');
+          console.log('📊 RELAY-STATUS: End of stored events (EOSE) empfangen');
+          console.log('📊 Cache-Größe nach EOSE:', this.eventCache.size);
           this.connectionStatus = 'connected';
           this.reconnectAttempts = 0;
         },
