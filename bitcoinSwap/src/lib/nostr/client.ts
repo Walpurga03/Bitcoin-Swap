@@ -349,7 +349,7 @@ export class NostrClient {
       kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
       since: now - 86400, // Letzte 24 Stunden
-      until: now + 300, // Bis 5 Minuten in die Zukunft (für Zeitstempel-Toleranz)
+      // KEIN until - alle Events ab 'since' bis zur Gegenwart
       limit: 100 // Maximal 100 Events
     } as any;
 
