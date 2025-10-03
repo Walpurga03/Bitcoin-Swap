@@ -175,13 +175,14 @@ export class NostrClient {
     // Nachricht verschlüsseln
     const encryptedContent = await encryptMessage(content, this.encryptionKey);
 
-    // Nostr Event erstellen (NIP-28 Channel Message)
+    // Nostr Event erstellen (Kind 1 für bessere Relay-Kompatibilität)
     const event: Partial<NostrEvent> = {
-      kind: 42, // channel_message
+      kind: 1, // text_note (bessere Relay-Unterstützung)
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ['e', this.groupConfig.channelId, '', 'root'], // Bezug zur Channel
-        ['p', this.userProfile.pubkey] // Mention des eigenen pubkeys
+        ['p', this.userProfile.pubkey], // Mention des eigenen pubkeys
+        ['t', 'bitcoin-group'] // Hashtag für Filterung
       ],
       content: encryptedContent,
       pubkey: this.userProfile.pubkey
@@ -242,7 +243,7 @@ export class NostrClient {
     console.log('🔄 Lade neueste Nachrichten vom Relay...');
     
     const refreshFilter: Filter = {
-      kinds: [42], // channel_message
+      kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
       since: Math.floor(Date.now() / 1000) - 86400, // Letzte 24 Stunden (erweitert)
       limit: 100 // Maximal 100 neueste Nachrichten (erweitert)
@@ -335,7 +336,7 @@ export class NostrClient {
     const now = Math.floor(Date.now() / 1000); // Aktuelle Zeit in Sekunden
     
     const historicalFilter: Filter = {
-      kinds: [42], // channel_message
+      kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
       since: now - 86400, // Letzte 24 Stunden (reduziert für bessere Relay-Kompatibilität)
       until: now, // Bis jetzt
@@ -343,7 +344,7 @@ export class NostrClient {
     } as any;
 
     const liveFilter: Filter = {
-      kinds: [42], // channel_message
+      kinds: [1], // text_note (bessere Relay-Unterstützung)
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
       since: now // Ab jetzt (Live-Events)
     } as any;
