@@ -332,17 +332,19 @@ export class NostrClient {
     }
 
     // Zwei Filter: Einer für historische Events, einer für Live-Events
+    const now = Math.floor(Date.now() / 1000); // Aktuelle Zeit in Sekunden
+    
     const historicalFilter: Filter = {
       kinds: [42], // channel_message
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: Math.floor(Date.now() / 1000) - 604800, // Letzte 7 Tage
-      until: Math.floor(Date.now() / 1000) // Bis jetzt
+      since: now - 604800, // Letzte 7 Tage (korrekt: VERGANGENHEIT)
+      until: now // Bis jetzt
     } as any;
 
     const liveFilter: Filter = {
       kinds: [42], // channel_message
       '#e': [this.groupConfig.channelId], // Nur Nachrichten für diese Channel
-      since: Math.floor(Date.now() / 1000) // Ab jetzt (Live-Events)
+      since: now // Ab jetzt (Live-Events)
     } as any;
 
     console.log('🔍 Subscribing to group messages with filters:');
