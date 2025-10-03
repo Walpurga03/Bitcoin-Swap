@@ -445,14 +445,14 @@ export class NostrClient {
     // Die clientseitige Filterung nach Channel-ID sorgt für Gruppentrennung
     const historicalFilter: Filter = {
       kinds: [1], // text_note
-      authors: [this.userProfile!.pubkey], // NUR eigene Events
+      "#t": ["bitcoin-group"], // NUR eigene Events
       since: now - (90 * 24 * 60 * 60), // Letzte 90 Tage
       limit: 500 // Maximal 500 Events
     } as any;
 
     const liveFilter: Filter = {
       kinds: [1], // text_note
-      authors: [this.userProfile!.pubkey], // NUR eigene Events
+      "#t": ["bitcoin-group"], // NUR eigene Events
       since: now // Ab jetzt (Live-Events)
     } as any;
 
