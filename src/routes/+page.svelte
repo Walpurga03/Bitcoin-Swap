@@ -6,7 +6,10 @@
   import { groupStore } from '$lib/stores/groupStore';
   import { parseInviteLink } from '$lib/utils';
   import { validatePrivateKey, validateRelayUrl, isInWhitelist } from '$lib/security/validation';
-  import { PUBLIC_ALLOWED_PUBKEYS } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  
+  // Fallback für Environment Variable
+  const PUBLIC_ALLOWED_PUBKEYS = env.PUBLIC_ALLOWED_PUBKEYS || 'npub1s98sys9c58fy2xn62wp8cy5ke2rak3hjdd3z7ahc4jm5tck4fadqrfd9f5,npub1vj0rae3fxgx5k7uluvgg2fk2hzagaqpqqdxxtt9lrmuqgzwspv6qw5vdam,npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
 
   let nsecInput = '';
   let nameInput = '';
