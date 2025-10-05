@@ -1,4 +1,4 @@
-# Setup-Anleitung für NostrGroupChat
+# Setup-Anleitung für Bitcoin-Swap
 
 ## 📦 Schnellstart
 
@@ -57,19 +57,51 @@ node -e "const { generatePrivateKey, getPublicKey } = require('nostr-tools'); co
 
 ## 🔗 Einladungslinks erstellen
 
-### Format
+### 📋 Was sind Einladungslinks?
+
+Einladungslinks sind spezielle URLs, die es Benutzern ermöglichen, direkt einer Bitcoin-Swap Gruppe beizutreten. Sie enthalten alle notwendigen Informationen:
+
+- **Domain**: Die URL der deployed App
+- **Relay**: Der Nostr-Relay Server für die Kommunikation
+- **Secret**: Das Gruppen-Passwort für den Zugang
+
+### 🔧 Format und Aufbau
 
 ```
 https://deine-domain.com/?relay=RELAY_URL&secret=GRUPPEN_SECRET
 ```
 
-### Beispiel
+**Komponenten erklärt:**
+- `https://deine-domain.com` - Die URL deiner Bitcoin-Swap App
+- `?relay=RELAY_URL` - Der URL-encodierte Nostr-Relay Server
+- `&secret=GRUPPEN_SECRET` - Das eindeutige Gruppen-Secret
+
+### 🌐 Live-Beispiel (Bitcoin-Swap)
 
 ```
-https://example.com/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
 
-**Wichtig:** Die Relay-URL muss URL-encoded sein!
+**Aufschlüsselung:**
+- **App-URL**: `https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app`
+- **Relay**: `wss://nostr-relay.online` (URL-encoded als `wss%3A%2F%2Fnostr-relay.online`)
+- **Secret**: `premium-group123`
+
+### 🏠 Lokales Beispiel (Development)
+
+```
+http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+```
+
+### ⚠️ Wichtige Hinweise
+
+1. **URL-Encoding**: Die Relay-URL muss URL-encoded sein!
+   - `wss://nostr-relay.online` → `wss%3A%2F%2Fnostr-relay.online`
+   - `:` wird zu `%3A`
+   - `/` wird zu `%2F`
+
+2. **Sicherheit**: Teile Einladungslinks nur mit vertrauenswürdigen Personen
+3. **Gültigkeit**: Links funktionieren nur, wenn der Public Key in der Whitelist steht
 
 ### Mit der Debug-Seite erstellen
 
@@ -84,18 +116,75 @@ https://example.com/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group12
 // In der Browser-Console
 const relay = 'wss://nostr-relay.online';
 const secret = 'premium-group123';
-const domain = 'https://example.com';
+const domain = 'https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app';
 
 const encodedRelay = encodeURIComponent(relay);
 const encodedSecret = encodeURIComponent(secret);
 const link = `${domain}/?relay=${encodedRelay}&secret=${encodedSecret}`;
 
 console.log(link);
+// Ausgabe: https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
 
 ## 🚀 Deployment
 
-### Vercel (empfohlen)
+### ✅ Erfolgreich deployed auf Vercel!
+
+**Live URL:** `https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app`
+
+**Repository:** `git@github.com:Walpurga03/Bitcoin-Swap.git`
+
+### Deployment-Details
+
+1. **Git Repository Migration** ✅
+   ```bash
+   # Altes Remote entfernt: Bitcoin-Tausch-Netzwerk
+   # Neues Remote hinzugefügt: Bitcoin-Swap
+   git remote add origin git@github.com:Walpurga03/Bitcoin-Swap.git
+   git branch -M main
+   git push -u origin main
+   ```
+
+2. **Vercel Setup** ✅
+   ```bash
+   # Vercel CLI Login
+   npx vercel login
+   
+   # Projekt verlinkt: walpurga03s-projects/bitcoin-swap
+   npx vercel --prod
+   ```
+
+3. **Environment Variables** ✅
+   - `PUBLIC_ALLOWED_PUBKEYS` bereits konfiguriert
+   - Whitelist aktiv mit 3 autorisierten Public Keys
+
+### Für zukünftige Updates
+
+```bash
+# Code ändern und committen
+git add .
+git commit -m "Update message"
+git push
+
+# Automatisches Deployment oder manuell:
+npx vercel --prod
+```
+
+### Vercel Dashboard
+
+- **Projekt:** https://vercel.com/walpurga03s-projects/bitcoin-swap
+- **Settings:** https://vercel.com/walpurga03s-projects/bitcoin-swap/settings
+- **Deployments:** https://vercel.com/walpurga03s-projects/bitcoin-swap/deployments
+
+### Test-Einladungslink (Live)
+
+```
+https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+```
+
+### Alternative Deployment-Optionen
+
+#### Vercel (für neue Projekte)
 
 1. **Vercel Account erstellen** auf [vercel.com](https://vercel.com)
 
