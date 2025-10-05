@@ -1,0 +1,131 @@
+import type { InviteLinkData } from '$lib/nostr/types';
+
+/**
+ * Parse einen Einladungslink und extrahiere Relay und Secret
+ */
+export function parseInviteLink(url: string): InviteLinkData | null {
+  try {
+    const urlObj = new URL(url);
+    const relay = urlObj.searchParams.get('relay');
+    const secret = urlObj.searchParams.get('secret');
+
+    if (!relay || !secret) {
+      return null;
+    }
+
+    // Dekodiere URL-encoded Werte
+    const decodedRelay = decodeURIComponent(relay);
+    const decodedSecret = decodeURIComponent(secret);
+
+    return {
+      relay: decodedRelay,
+      secret: decodedSecret
+    };
+  } catch (error) {
+    console.error('Fehler beim Parsen des Einladungslinks:', error);
+    return null;
+  }
+}
+
+/**
+ * Erstelle einen Einladungslink
+ */
+export function createInviteLink(domain: string, relay: string, secret: string): string {
+  const encodedRelay = encodeURIComponent(relay);
+  const encodedSecret = encodeURIComponent(secret);
+  return `${domain}/?relay=${encodedRelay}&secret=${encodedSecret}`;
+}
+
+/**
+ * Formatiere Timestamp zu lesbarem Datum
+ */
+export function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) {
+    return 'gerade eben';
+  } else if (minutes < 60) {
+    return `vor ${minutes} Min.`;
+  } else if (hours < 24) {
+    return `vor ${hours} Std.`;
+  } else if (days < 7) {
+    return `vor ${days} Tag${days > 1 ? 'en' : ''}`;
+  } else {
+    return date.toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+}
+
+/**
+ * Kürze einen Public Key für die Anzeige
+ */
+export function truncatePubkey(pubkey: string, length: number = 8): string {
+  if (pubkey.length <= length * 2) {
+    return pubkey;
+  }
+  return `${pubkey.slice(0, length)}...${pubkey.slice(-length)}`;
+}
+
+/**
+ * Generiere eine zufällige ID
+ */
+export function generateRandomId(): string {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+/**
+ * Debounce-Funktion für Rate-Limiting
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      timeout = null;
+      func(...args);
+    };
+    
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(later, wait);
+  };
+}
+
+/**
+ * Validiere ob ein String eine gültige URL ist
+ */
+export function isValidUrl(string: string): boolean {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Extrahiere Domain aus URL
+ */
+export function extractDomain(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch (_) {
+    return url;
+  }
+}
