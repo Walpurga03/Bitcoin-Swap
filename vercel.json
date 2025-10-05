@@ -1,8 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "build",
-  "framework": "sveltekit",
-  "env": {
-    "PUBLIC_ALLOWED_PUBKEYS": "@public_allowed_pubkeys"
-  }
+  "framework": "sveltekit"
 }
