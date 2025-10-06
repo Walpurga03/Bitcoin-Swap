@@ -87,11 +87,14 @@ function createGroupStore() {
       });
 
       try {
-        // Beim ersten Laden (lastFetch === 0) oder wenn explizit gewünscht: Lade ALLE Nachrichten
-        // Bei Updates: Nutze lastFetch mit 60 Sekunden Buffer (statt 10) wegen Relay-Delays
-        const since = loadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 60 : undefined);
+        // ✅ FIX: Wenn lastFetch === 0, lade IMMER alle (auch wenn loadAll = false)
+        // Das passiert beim ersten Login nach initialize()
+        const shouldLoadAll = loadAll || state.lastFetch === 0;
         
-        console.log('📊 [STORE] Fetch-Parameter:', { loadAll, since, lastFetch: state.lastFetch });
+        // Bei Updates: Nutze lastFetch mit 60 Sekunden Buffer (statt 10) wegen Relay-Delays
+        const since = shouldLoadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 60 : undefined);
+        
+        console.log('📊 [STORE] Fetch-Parameter:', { loadAll, shouldLoadAll, since, lastFetch: state.lastFetch });
         
         const events = await fetchGroupMessages(
           state.channelId,
