@@ -134,33 +134,42 @@ export async function fetchEvents(
   
   const pool = initPool();
   const events: NostrEvent[] = [];
+  let eoseReceived = false;
 
   try {
+    console.log('  🔌 Erstelle Subscription...');
     const sub = pool.subscribeMany(
       relays,
       [filter] as any,
       {
         onevent(event) {
-          console.log('  📨 Event empfangen:', event.id.substring(0, 16) + '...');
+          console.log('  📨 Event empfangen:', event.id.substring(0, 16) + '...', 'Tags:', event.tags?.map(t => t[0]));
           events.push(event as NostrEvent);
         },
         oneose() {
           console.log('  ✅ EOSE (End of Stored Events) empfangen');
+          eoseReceived = true;
+        },
+        onclose() {
+          console.log('  🔌 Subscription geschlossen');
         }
       }
     );
+    
+    console.log('  ⏳ Warte auf Events...', timeout + 'ms');
 
     // Warte auf Timeout
     await new Promise(resolve => setTimeout(resolve, timeout));
     
     console.log('📊 [FETCH] Ergebnis:', events.length + ' Events geladen');
+    console.log('  📊 EOSE empfangen:', eoseReceived);
     
     // Schließe Subscription
     sub.close();
 
     return events;
   } catch (error) {
-    console.error('Fehler beim Abrufen von Events:', error);
+    console.error('❌ [FETCH] Fehler beim Abrufen von Events:', error);
     return events;
   }
 }
