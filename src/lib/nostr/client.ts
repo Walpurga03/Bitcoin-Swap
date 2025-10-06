@@ -137,35 +137,20 @@ export async function fetchEvents(
   let eoseReceived = false;
 
   try {
-    console.log('  🔌 Erstelle Subscription...');
-    const sub = pool.subscribeMany(
-      relays,
-      [filter] as any,
-      {
-        onevent(event) {
-          console.log('  📨 Event empfangen:', event.id.substring(0, 16) + '...', 'Tags:', event.tags?.map(t => t[0]));
-          events.push(event as NostrEvent);
-        },
-        oneose() {
-          console.log('  ✅ EOSE (End of Stored Events) empfangen');
-          eoseReceived = true;
-        },
-        onclose() {
-          console.log('  🔌 Subscription geschlossen');
-        }
-      }
-    );
+    console.log('  🔌 Alternative: Verwende pool.querySync()...');
     
-    console.log('  ⏳ Warte auf Events...', timeout + 'ms');
-
-    // Warte auf Timeout
-    await new Promise(resolve => setTimeout(resolve, timeout));
+    // ⚠️ WORKAROUND: subscribeMany funktioniert nicht, verwende querySync
+    // Dies ist eine synchrone Abfrage die Events direkt zurückgibt
+    const fetchedEvents = await pool.querySync(relays, filter as any);
+    
+    console.log('  📨 Events von querySync:', fetchedEvents.length);
+    
+    fetchedEvents.forEach(event => {
+      console.log('    ├─ Event:', event.id.substring(0, 16) + '...', 'Tags:', event.tags?.map((t: any) => t[0]));
+      events.push(event as NostrEvent);
+    });
     
     console.log('📊 [FETCH] Ergebnis:', events.length + ' Events geladen');
-    console.log('  📊 EOSE empfangen:', eoseReceived);
-    
-    // Schließe Subscription
-    sub.close();
 
     return events;
   } catch (error) {
