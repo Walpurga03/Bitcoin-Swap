@@ -79,11 +79,11 @@ https://deine-domain.com/?relay=RELAY_URL&secret=GRUPPEN_SECRET
 ### 🌐 Live-Beispiel (Bitcoin-Swap)
 
 ```
-https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
 
 **Aufschlüsselung:**
-- **App-URL**: `https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app`
+- **App-URL**: `https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app`
 - **Relay**: `wss://nostr-relay.online` (URL-encoded als `wss%3A%2F%2Fnostr-relay.online`)
 - **Secret**: `premium-group123`
 
@@ -116,123 +116,74 @@ http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group
 // In der Browser-Console
 const relay = 'wss://nostr-relay.online';
 const secret = 'premium-group123';
-const domain = 'https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app';
+const domain = 'https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app';
 
 const encodedRelay = encodeURIComponent(relay);
 const encodedSecret = encodeURIComponent(secret);
 const link = `${domain}/?relay=${encodedRelay}&secret=${encodedSecret}`;
 
 console.log(link);
-// Ausgabe: https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+// Ausgabe: https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
 
 ## 🚀 Deployment
 
 ### ✅ Erfolgreich deployed auf Vercel!
 
-**Live URL:** `https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app`
+**Live URL:** `https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app`
 
 **Repository:** `git@github.com:Walpurga03/Bitcoin-Swap.git`
 
-### Deployment-Details
-
-1. **Git Repository Migration** ✅
-   ```bash
-   # Altes Remote entfernt: Bitcoin-Tausch-Netzwerk
-   # Neues Remote hinzugefügt: Bitcoin-Swap
-   git remote add origin git@github.com:Walpurga03/Bitcoin-Swap.git
-   git branch -M main
-   git push -u origin main
-   ```
-
-2. **Vercel Setup** ✅
-   ```bash
-   # Vercel CLI Login
-   npx vercel login
-   
-   # Projekt verlinkt: walpurga03s-projects/bitcoin-swap
-   npx vercel --prod
-   ```
-
-3. **Environment Variables** ✅
-   - `PUBLIC_ALLOWED_PUBKEYS` bereits konfiguriert
-   - Whitelist aktiv mit 3 autorisierten Public Keys
-
-### Für zukünftige Updates
-
-```bash
-# Code ändern und committen
-git add .
-git commit -m "Update message"
-git push
-
-# Automatisches Deployment oder manuell:
-npx vercel --prod
-```
-
-### Vercel Dashboard
+### 🎛️ Vercel Dashboard
 
 - **Projekt:** https://vercel.com/walpurga03s-projects/bitcoin-swap
 - **Settings:** https://vercel.com/walpurga03s-projects/bitcoin-swap/settings
 - **Deployments:** https://vercel.com/walpurga03s-projects/bitcoin-swap/deployments
 
+### 🔐 Environment Variables
+
+Konfiguriert in Vercel:
+- ✅ `PUBLIC_ALLOWED_PUBKEYS` - Whitelist mit 3 autorisierten Public Keys
+
 ### Test-Einladungslink (Live)
 
 ```
-https://bitcoin-swap-ogfmixoxv-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
 
-### Alternative Deployment-Optionen
-
-#### Vercel (für neue Projekte)
-
-1. **Vercel Account erstellen** auf [vercel.com](https://vercel.com)
-
-2. **Projekt verbinden**
-   ```bash
-   npm install -g vercel
-   vercel login
-   vercel
-   ```
-
-3. **Environment Variables setzen**
-   - Gehe zu deinem Projekt auf vercel.com
-   - Settings → Environment Variables
-   - Füge hinzu: `PUBLIC_ALLOWED_PUBKEYS` mit deiner Whitelist
-
-4. **Deployen**
-   ```bash
-   npm run deploy
-   ```
-
-### Netlify
-
-1. **Build Command:** `npm run build`
-2. **Publish Directory:** `build`
-3. **Environment Variables:** `PUBLIC_ALLOWED_PUBKEYS`
-
-### Andere Plattformen
+### 🔄 Updates Deployen
 
 ```bash
-# Build erstellen
-npm run build
+# Code ändern, committen und pushen
+git add .
+git commit -m "Update: Beschreibung der Änderungen"
+git push
 
-# Der 'build' Ordner enthält die statischen Dateien
-# Diese können auf jedem Static-Hosting deployed werden
+# Production Deployment
+npx vercel --prod
 ```
+
+**Automatisches Deployment:** Vercel deployed automatisch bei jedem Push zum `main` Branch!
 
 ## 🔧 Konfiguration
 
-### Relay-Auswahl
+### 🔌 Relay-Auswahl
 
-Empfohlene öffentliche Relays:
+**Empfohlen:** Eigener Relay für maximale Privatsphäre und Kontrolle!
 
+Aktuell verwendet:
+- ✅ `wss://nostr-relay.online` - Eigener nostr-rs-relay Server
+
+Alternative öffentliche Relays:
 - `wss://relay.damus.io`
-- `wss://nostr-relay.online`
 - `wss://relay.nostr.info`
 - `wss://nos.lol`
 
-**Tipp:** Für private Gruppen kannst du auch einen eigenen Relay betreiben!
+**Vorteile eigener Relay:**
+- 🔒 Volle Datenkontrolle
+- ⚡ Keine 24-48h Löschung
+- 🚀 Optimale Performance
+- 🛡️ Maximale Privatsphäre
 
 ### Gruppen-Secrets
 
@@ -353,7 +304,31 @@ npm install
 # Stelle sicher, dass der Public Key korrekt ist
 ```
 
-## 🆘 Support
+## 🚀 Technische Features
+
+### ✨ Aktuelle Implementierung
+
+1. **Hybrid Storage System**
+   - 💾 IndexedDB für lokale Persistenz
+   - 📡 Nostr Relay für Multi-User Sync
+   - ⚡ <100ms Ladezeit aus lokalem Cache
+
+2. **Optimierte Event-Abfrage**
+   - 🔍 `pool.querySync()` für zuverlässige Event-Retrieval
+   - 🏷️ NIP-12 Tag-Filter (`#t=bitcoin-group`)
+   - � Automatische Filter-Validierung
+
+3. **Intelligente Fehlerbehandlung**
+   - ✅ Filtert Events mit falschem Gruppen-Secret
+   - 🔇 Keine Console-Spam bei ungültigen Events
+   - 📊 Zeigt nur erfolgreich entschlüsselte Nachrichten
+
+4. **Sicherheit**
+   - 🔐 AES-GCM Gruppen-Verschlüsselung
+   - 🔑 Whitelist-basierte Zugriffskontrolle
+   - 🛡️ Temporäre Keys für Marketplace-Angebote
+
+## �🆘 Support
 
 Bei Problemen:
 
@@ -361,6 +336,13 @@ Bei Problemen:
 2. Teste mit `/test-login` und `/debug-secret`
 3. Überprüfe die `.env` Konfiguration
 4. Stelle sicher, dass alle Dependencies installiert sind
+
+**Console-Logs verstehen:**
+```
+📨 Events von querySync: 19          ← Events vom Relay geladen
+✅ 5/19 Events erfolgreich entschlüsselt  ← Nur gültige Events
+✅ [STORE] Nachrichten geladen: 5    ← Im UI angezeigt
+```
 
 ## 📚 Weitere Ressourcen
 
