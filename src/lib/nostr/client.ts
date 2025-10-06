@@ -233,11 +233,11 @@ export async function fetchGroupMessages(
     }
     console.log('  📊 Limit:', limit);
     
-    const filter: NostrFilter = {
+    const filter = {
       kinds: [1],
-      '#e': [channelId],
+      '#t': ['bitcoin-group'],  // Filter nach Hashtag statt e-Tag!
       limit
-    };
+    } as NostrFilter;
 
     if (since) {
       filter.since = since;
@@ -309,11 +309,11 @@ export async function fetchMarketplaceOffers(
   relays: string[]
 ): Promise<Array<NostrEvent & { decrypted?: string }>> {
   try {
-    const filter: NostrFilter = {
+    const filter = {
       kinds: [30000],
-      '#e': [channelId],
+      '#t': ['bitcoin-group'],  // Filter nach Hashtag für Marketplace
       limit: 50
-    };
+    } as NostrFilter;
 
     const events = await fetchEvents(relays, filter);
 
