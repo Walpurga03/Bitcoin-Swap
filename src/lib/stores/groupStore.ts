@@ -44,6 +44,7 @@ function createGroupStore() {
      */
     initialize: async (secret: string, relay: string) => {
       try {
+        console.log('🔧 [STORE] Initialize Gruppe...');
         const channelId = await deriveChannelId(secret);
         const groupKey = await deriveKeyFromSecret(secret);
 
@@ -53,9 +54,13 @@ function createGroupStore() {
           relay,
           secret,
           groupKey,
-          isConnected: true
+          isConnected: true,
+          lastFetch: 0,  // ✅ Reset lastFetch beim Initialize!
+          messages: [],  // ✅ Leere alte Nachrichten
+          offers: []     // ✅ Leere alte Angebote
         }));
 
+        console.log('✅ [STORE] Gruppe initialisiert, lastFetch auf 0 gesetzt');
         return { channelId, groupKey };
       } catch (error) {
         console.error('Fehler beim Initialisieren der Gruppe:', error);
