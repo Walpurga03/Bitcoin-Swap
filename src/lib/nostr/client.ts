@@ -233,25 +233,22 @@ export async function fetchGroupMessages(
     }
     console.log('  📊 Limit:', limit);
     
-    // ⚠️ Viele Relays unterstützen #t Filter nicht (NIP-12)
-    // Daher: Lade ALLE Events und filtere clientseitig
+    // ✅ Unser eigenes Relay unterstützt #t Filter (NIP-12)!
+    // Test mit websocat bestätigt: ["REQ","test",{"kinds":[1],"#t":["bitcoin-group"]}]
     const filter = {
       kinds: [1],
-      limit: limit * 2  // Mehr laden weil wir clientseitig filtern
+      '#t': ['bitcoin-group'],  // 🎯 Direkter Tag-Filter
+      limit: limit
     } as NostrFilter;
 
     if (since) {
       filter.since = since;
     }
 
-    const allEvents = await fetchEvents(relays, filter);
+    console.log('  🎯 Verwende #t Filter direkt (Relay unterstützt NIP-12)');
+    const events = await fetchEvents(relays, filter);
     
-    // Clientseitige Filterung nach #t=bitcoin-group Tag
-    const events = allEvents.filter(event => 
-      event.tags.some(tag => tag[0] === 't' && tag[1] === 'bitcoin-group')
-    );
-    
-    console.log(`  🔍 Clientseitige Filterung: ${allEvents.length} → ${events.length} Events (mit #t=bitcoin-group)`);
+    console.log(`  � ${events.length} Events mit #t=bitcoin-group geladen`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
@@ -317,21 +314,16 @@ export async function fetchMarketplaceOffers(
   relays: string[]
 ): Promise<Array<NostrEvent & { decrypted?: string }>> {
   try {
-    // ⚠️ Viele Relays unterstützen #t Filter nicht
-    // Lade alle Marketplace-Events und filtere clientseitig
+    // ✅ Unser Relay unterstützt #t Filter (NIP-12)
     const filter = {
       kinds: [30000],
+      '#t': ['bitcoin-group'],  // 🎯 Direkter Tag-Filter
       limit: 100
     } as NostrFilter;
 
-    const allEvents = await fetchEvents(relays, filter);
+    const events = await fetchEvents(relays, filter);
     
-    // Clientseitige Filterung nach #t=bitcoin-group
-    const events = allEvents.filter(event => 
-      event.tags.some(tag => tag[0] === 't' && tag[1] === 'bitcoin-group')
-    );
-    
-    console.log(`  🔍 Marketplace: ${allEvents.length} → ${events.length} Events (mit #t=bitcoin-group)`);
+    console.log(`  🔍 Marketplace: ${events.length} Events mit #t=bitcoin-group geladen`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
