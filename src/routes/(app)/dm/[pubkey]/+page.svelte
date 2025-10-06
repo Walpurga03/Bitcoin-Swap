@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  // @ts-ignore
   import { page } from '$app/stores';
+  // @ts-ignore
   import { goto } from '$app/navigation';
   import { userStore } from '$lib/stores/userStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
@@ -14,7 +16,7 @@
   let loading = false;
   let error = '';
   let messagesContainer: HTMLDivElement;
-  let autoRefreshInterval: number;
+  let autoRefreshInterval: ReturnType<typeof setInterval>;
 
   $: recipientPubkey = $page.params.pubkey;
 

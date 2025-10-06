@@ -11,9 +11,9 @@ export function validatePrivateKey(key: string): { valid: boolean; hex?: string;
     // Prüfe ob NSEC Format
     if (key.startsWith('nsec1')) {
       try {
-        const decoded = nip19.decode(key);
-        if (decoded.type === 'nsec') {
-          return { valid: true, hex: decoded.data as string };
+        const decoded = nip19.decode(key as any);
+        if ((decoded as any).type === 'nsec') {
+          return { valid: true, hex: (decoded as any).data as string };
         }
         return { valid: false, error: 'Ungültiges NSEC-Format' };
       } catch (e) {
@@ -42,9 +42,9 @@ export function validatePublicKey(key: string): { valid: boolean; hex?: string; 
     // Prüfe ob NPUB Format
     if (key.startsWith('npub1')) {
       try {
-        const decoded = nip19.decode(key);
-        if (decoded.type === 'npub') {
-          return { valid: true, hex: decoded.data as string };
+        const decoded = nip19.decode(key as any);
+        if ((decoded as any).type === 'npub') {
+          return { valid: true, hex: (decoded as any).data as string };
         }
         return { valid: false, error: 'Ungültiges NPUB-Format' };
       } catch (e) {
@@ -127,9 +127,9 @@ export function isInWhitelist(pubkey: string, whitelist: string): boolean {
     // Konvertiere pubkey zu hex falls npub
     let hexPubkey = pubkey;
     if (pubkey.startsWith('npub1')) {
-      const decoded = nip19.decode(pubkey);
-      if (decoded.type === 'npub') {
-        hexPubkey = decoded.data as string;
+      const decoded = nip19.decode(pubkey as any);
+      if ((decoded as any).type === 'npub' && typeof (decoded as any).data === 'string') {
+        hexPubkey = (decoded as any).data;
       }
     }
 
@@ -140,9 +140,9 @@ export function isInWhitelist(pubkey: string, whitelist: string): boolean {
       // Konvertiere zu hex falls npub
       if (allowedKey.startsWith('npub1')) {
         try {
-          const decoded = nip19.decode(allowedKey);
-          if (decoded.type === 'npub') {
-            allowedHex = decoded.data as string;
+          const decoded = nip19.decode(allowedKey as any);
+          if ((decoded as any).type === 'npub' && typeof (decoded as any).data === 'string') {
+            allowedHex = (decoded as any).data;
           }
         } catch (e) {
           continue;

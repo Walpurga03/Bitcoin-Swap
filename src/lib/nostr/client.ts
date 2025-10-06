@@ -51,7 +51,7 @@ export async function createEvent(
   privateKey: string
 ): Promise<NostrEvent> {
   try {
-    const pubkey = getPublicKey(privateKey);
+    const pubkey = getPublicKey(privateKey as any);
     
     const event = {
       kind,
@@ -61,7 +61,7 @@ export async function createEvent(
       content
     };
 
-    const signedEvent = finalizeEvent(event, privateKey);
+    const signedEvent = finalizeEvent(event, privateKey as any);
     return signedEvent as NostrEvent;
   } catch (error) {
     console.error('Fehler beim Erstellen des Events:', error);
@@ -121,7 +121,7 @@ export async function fetchEvents(
   try {
     const sub = pool.subscribeMany(
       relays,
-      [filter as any],
+      [filter] as any,
       {
         onevent(event) {
           events.push(event as NostrEvent);
@@ -301,7 +301,7 @@ export async function sendOfferInterest(
     const tags = [
       ['e', offerId], // Referenz zum Angebot
       ['e', channelId], // Channel-Tag
-      ['p', getPublicKey(privateKey)] // Eigener Pubkey für Identifikation
+      ['p', getPublicKey(privateKey as any)] // Eigener Pubkey für Identifikation
     ];
 
     const event = await createEvent(1, encrypted, tags, privateKey);

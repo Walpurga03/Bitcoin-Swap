@@ -66,7 +66,7 @@ function createGroupStore() {
     /**
      * Lade Nachrichten
      */
-    loadMessages: async () => {
+    loadMessages: async (loadAll: boolean = false) => {
       const state = get({ subscribe });
       
       if (!state.channelId || !state.groupKey || !state.relay) {
@@ -74,28 +74,47 @@ function createGroupStore() {
       }
 
       try {
+        // Beim ersten Laden oder wenn explizit gewünscht, lade alle Nachrichten
+        const since = loadAll ? undefined : state.lastFetch;
+        
         const events = await fetchGroupMessages(
           state.channelId,
           state.groupKey,
           [state.relay],
-          state.lastFetch
+          since,
+          loadAll ? 200 : 100 // Mehr Nachrichten beim ersten Laden
         );
 
         const messages: GroupMessage[] = events
-          .filter(e => e.decrypted)
-          .map(e => ({
+          .filter((e: any) => e.decrypted)
+          .map((e: any) => ({
             id: e.id,
             content: e.decrypted!,
             pubkey: e.pubkey,
             created_at: e.created_at
           }))
-          .sort((a, b) => a.created_at - b.created_at);
+          .sort((a: GroupMessage, b: GroupMessage) => a.created_at - b.created_at);
 
-        update(state => ({
-          ...state,
-          messages: [...state.messages, ...messages],
-          lastFetch: Math.floor(Date.now() / 1000)
-        }));
+        // Beim ersten Laden ersetze alle Nachrichten, sonst füge neue hinzu
+        update(state => {
+          if (loadAll) {
+            return {
+              ...state,
+              messages: messages,
+              lastFetch: Math.floor(Date.now() / 1000)
+            };
+          } else {
+            // Verhindere Duplikate
+            const existingIds = new Set(state.messages.map(m => m.id));
+            const newMessages = messages.filter(m => !existingIds.has(m.id));
+            
+            return {
+              ...state,
+              messages: [...state.messages, ...newMessages],
+              lastFetch: Math.floor(Date.now() / 1000)
+            };
+          }
+        });
 
         return messages;
       } catch (error) {
@@ -161,8 +180,8 @@ function createGroupStore() {
         );
 
         const offers: MarketplaceOffer[] = events
-          .filter(e => e.decrypted)
-          .map(e => ({
+          .filter((e: any) => e.decrypted)
+          .map((e: any) => ({
             id: e.id,
             content: e.decrypted!,
             tempPubkey: e.pubkey,

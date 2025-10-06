@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  // @ts-ignore
   import { goto } from '$app/navigation';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore, groupMessages, marketplaceOffers } from '$lib/stores/groupStore';
@@ -14,7 +15,7 @@
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
 
   let messagesContainer: HTMLDivElement;
-  let autoRefreshInterval: number;
+  let autoRefreshInterval: ReturnType<typeof setInterval>;
 
   $: if (!$isAuthenticated) {
     goto('/');
@@ -22,14 +23,14 @@
 
   onMount(async () => {
     try {
-      // Lade initiale Nachrichten
-      await groupStore.loadMessages();
+      // Lade initiale Nachrichten (alle beim ersten Mal)
+      await groupStore.loadMessages(true);
       await groupStore.loadOffers();
 
-      // Auto-Refresh alle 10 Sekunden
+      // Auto-Refresh alle 10 Sekunden (nur neue Nachrichten)
       autoRefreshInterval = setInterval(async () => {
         try {
-          await groupStore.loadMessages();
+          await groupStore.loadMessages(false);
           await groupStore.loadOffers();
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);

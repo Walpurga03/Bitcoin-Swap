@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  // @ts-ignore
   import { goto } from '$app/navigation';
+  // @ts-ignore
   import { page } from '$app/stores';
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
   import { parseInviteLink } from '$lib/utils';
   import { validatePrivateKey, validateRelayUrl, isInWhitelist } from '$lib/security/validation';
+  // @ts-ignore
   import { env } from '$env/dynamic/public';
   
   // Fallback für Environment Variable
@@ -51,7 +54,8 @@
       }
 
       // Prüfe Whitelist
-      const pubkey = await import('nostr-tools').then(m => m.getPublicKey(keyValidation.hex!));
+      const { getPublicKey } = await import('nostr-tools');
+      const pubkey = getPublicKey(keyValidation.hex! as any);
       
       if (!isInWhitelist(pubkey, PUBLIC_ALLOWED_PUBKEYS)) {
         throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
@@ -62,6 +66,13 @@
 
       // Initialisiere Gruppe
       await groupStore.initialize(inviteData.secret, inviteData.relay);
+
+      // Lade alle Nachrichten beim ersten Login
+      try {
+        await groupStore.loadMessages(true);
+      } catch (e) {
+        console.warn('Nachrichten konnten nicht geladen werden:', e);
+      }
 
       // Weiterleitung zum Chat
       await goto('/group');

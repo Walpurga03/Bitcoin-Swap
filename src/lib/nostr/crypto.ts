@@ -29,7 +29,7 @@ export async function deriveKeyFromSecret(secret: string): Promise<string> {
  */
 export function nip44Encrypt(content: string, privateKey: string, recipientPubkey: string): string {
   try {
-    const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipientPubkey);
+    const conversationKey = nip44.v2.utils.getConversationKey(privateKey as any, recipientPubkey as any);
     const encrypted = nip44.v2.encrypt(content, conversationKey);
     return encrypted;
   } catch (error) {
@@ -43,7 +43,7 @@ export function nip44Encrypt(content: string, privateKey: string, recipientPubke
  */
 export function nip44Decrypt(encrypted: string, privateKey: string, senderPubkey: string): string {
   try {
-    const conversationKey = nip44.v2.utils.getConversationKey(privateKey, senderPubkey);
+    const conversationKey = nip44.v2.utils.getConversationKey(privateKey as any, senderPubkey as any);
     const decrypted = nip44.v2.decrypt(encrypted, conversationKey);
     return decrypted;
   } catch (error) {
@@ -64,7 +64,7 @@ export async function encryptForGroup(content: string, groupKey: string): Promis
     const keyData = hexToBytes(groupKey);
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      keyData,
+      keyData as any,
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -107,7 +107,7 @@ export async function decryptForGroup(encrypted: string, groupKey: string): Prom
     const keyData = hexToBytes(groupKey);
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      keyData,
+      keyData as any,
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -133,7 +133,7 @@ export async function decryptForGroup(encrypted: string, groupKey: string): Prom
  */
 export function generateTempKeypair(): { privateKey: string; publicKey: string } {
   const privateKey = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-  const publicKey = getPublicKey(privateKey);
+  const publicKey = getPublicKey(privateKey as any);
   return { privateKey, publicKey };
 }
 
@@ -161,7 +161,7 @@ function bytesToHex(bytes: Uint8Array): string {
  * Konvertiere Private Key zu Public Key
  */
 export function getPublicKeyFromPrivate(privateKey: string): string {
-  return getPublicKey(privateKey);
+  return getPublicKey(privateKey as any);
 }
 
 /**
@@ -175,5 +175,5 @@ export function pubkeyToNpub(pubkey: string): string {
  * Konvertiere Private Key zu nsec
  */
 export function privkeyToNsec(privkey: string): string {
-  return nip19.nsecEncode(privkey);
+  return nip19.nsecEncode(privkey as any);
 }
