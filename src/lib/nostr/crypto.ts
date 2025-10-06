@@ -99,6 +99,11 @@ export async function decryptForGroup(encrypted: string, groupKey: string): Prom
   try {
     const combined = hexToBytes(encrypted);
     
+    // Validierung: Mindestens IV (12 bytes) + 1 byte Daten
+    if (combined.length < 13) {
+      throw new Error('Encrypted data too small');
+    }
+    
     // Extrahiere IV und Encrypted
     const iv = combined.slice(0, 12);
     const data = combined.slice(12);
@@ -123,8 +128,9 @@ export async function decryptForGroup(encrypted: string, groupKey: string): Prom
     const decoder = new TextDecoder();
     return decoder.decode(decrypted);
   } catch (error) {
-    console.error('Gruppen-Entschlüsselung fehlgeschlagen:', error);
-    throw new Error('Entschlüsselung fehlgeschlagen');
+    // ⚠️ Silent fail - Event wurde mit anderem Secret verschlüsselt
+    // Dies ist normal wenn alte Events im Relay existieren
+    throw error; // Werfe Error weiter, aber ohne Console-Spam
   }
 }
 

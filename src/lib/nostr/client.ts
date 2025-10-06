@@ -254,13 +254,19 @@ export async function fetchGroupMessages(
           const decrypted = await decryptForGroup(event.content, groupKey);
           return { ...event, decrypted };
         } catch (error) {
-          console.error('Entschlüsselung fehlgeschlagen für Event:', event.id);
-          return event;
+          // ⚠️ Entschlüsselung fehlgeschlagen - Event wurde mit anderem Secret erstellt
+          // Dies ist normal und wird stillschweigend ignoriert
+          return null; // Markiere ungültiges Event
         }
       })
     );
 
-    return decryptedEvents;
+    // Filtere null-Werte (ungültige/alte Events)
+    const validEvents = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
+    
+    console.log(`  ✅ ${validEvents.length}/${events.length} Events erfolgreich entschlüsselt`);
+
+    return validEvents;
   } catch (error) {
     console.error('Fehler beim Abrufen von Gruppen-Nachrichten:', error);
     return [];
@@ -329,12 +335,17 @@ export async function fetchMarketplaceOffers(
           const decrypted = await decryptForGroup(event.content, groupKey);
           return { ...event, decrypted };
         } catch (error) {
-          return event;
+          // ⚠️ Entschlüsselung fehlgeschlagen - ignoriere ungültige Events
+          return null;
         }
       })
     );
 
-    return decryptedEvents;
+    // Filtere ungültige Events
+    const validEvents = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
+    console.log(`  🔍 Marketplace: ${validEvents.length}/${events.length} Events erfolgreich entschlüsselt`);
+
+    return validEvents;
   } catch (error) {
     console.error('Fehler beim Abrufen von Angeboten:', error);
     return [];
