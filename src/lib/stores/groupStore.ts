@@ -74,9 +74,9 @@ function createGroupStore() {
       }
 
       try {
-        // Beim ersten Laden oder wenn explizit gewünscht, lade alle Nachrichten
-        // Ziehe 10 Sekunden ab um sicherzustellen dass keine Events verloren gehen (Timing-Issues)
-        const since = loadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 10 : undefined);
+        // Beim ersten Laden (lastFetch === 0) oder wenn explizit gewünscht: Lade ALLE Nachrichten
+        // Bei Updates: Nutze lastFetch mit 60 Sekunden Buffer (statt 10) wegen Relay-Delays
+        const since = loadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 60 : undefined);
         
         const events = await fetchGroupMessages(
           state.channelId,

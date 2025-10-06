@@ -229,7 +229,10 @@ export async function fetchGroupMessages(
     console.log('  📡 Relays:', relays);
     console.log('  🏷️ Filter: #t=bitcoin-group');
     if (since) {
-      console.log('  ⏰ Since:', new Date(since * 1000).toLocaleString());
+      console.log('  ⏰ Since:', new Date(since * 1000).toLocaleString(), `(${since})`);
+      console.log('  ⚠️ Nur Events NACH diesem Zeitpunkt werden geladen!');
+    } else {
+      console.log('  📦 Lade ALLE Events (kein since-Filter)');
     }
     console.log('  📊 Limit:', limit);
     
