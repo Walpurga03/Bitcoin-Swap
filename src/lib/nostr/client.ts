@@ -233,17 +233,25 @@ export async function fetchGroupMessages(
     }
     console.log('  📊 Limit:', limit);
     
+    // ⚠️ Viele Relays unterstützen #t Filter nicht (NIP-12)
+    // Daher: Lade ALLE Events und filtere clientseitig
     const filter = {
       kinds: [1],
-      '#t': ['bitcoin-group'],  // Filter nach Hashtag statt e-Tag!
-      limit
+      limit: limit * 2  // Mehr laden weil wir clientseitig filtern
     } as NostrFilter;
 
     if (since) {
       filter.since = since;
     }
 
-    const events = await fetchEvents(relays, filter);
+    const allEvents = await fetchEvents(relays, filter);
+    
+    // Clientseitige Filterung nach #t=bitcoin-group Tag
+    const events = allEvents.filter(event => 
+      event.tags.some(tag => tag[0] === 't' && tag[1] === 'bitcoin-group')
+    );
+    
+    console.log(`  🔍 Clientseitige Filterung: ${allEvents.length} → ${events.length} Events (mit #t=bitcoin-group)`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
@@ -309,13 +317,21 @@ export async function fetchMarketplaceOffers(
   relays: string[]
 ): Promise<Array<NostrEvent & { decrypted?: string }>> {
   try {
+    // ⚠️ Viele Relays unterstützen #t Filter nicht
+    // Lade alle Marketplace-Events und filtere clientseitig
     const filter = {
       kinds: [30000],
-      '#t': ['bitcoin-group'],  // Filter nach Hashtag für Marketplace
-      limit: 50
+      limit: 100
     } as NostrFilter;
 
-    const events = await fetchEvents(relays, filter);
+    const allEvents = await fetchEvents(relays, filter);
+    
+    // Clientseitige Filterung nach #t=bitcoin-group
+    const events = allEvents.filter(event => 
+      event.tags.some(tag => tag[0] === 't' && tag[1] === 'bitcoin-group')
+    );
+    
+    console.log(`  🔍 Marketplace: ${allEvents.length} → ${events.length} Events (mit #t=bitcoin-group)`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
