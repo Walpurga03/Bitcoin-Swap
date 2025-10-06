@@ -67,16 +67,26 @@ function createGroupStore() {
      * Lade Nachrichten
      */
     loadMessages: async (loadAll: boolean = false) => {
+      console.log('🔄 [STORE] loadMessages() aufgerufen:', { loadAll });
       const state = get({ subscribe });
       
       if (!state.channelId || !state.groupKey || !state.relay) {
+        console.error('❌ [STORE] Gruppe nicht initialisiert!', { state });
         throw new Error('Gruppe nicht initialisiert');
       }
+
+      console.log('✅ [STORE] Gruppe initialisiert:', { 
+        channelId: state.channelId?.substring(0, 16) + '...', 
+        relay: state.relay,
+        lastFetch: state.lastFetch 
+      });
 
       try {
         // Beim ersten Laden (lastFetch === 0) oder wenn explizit gewünscht: Lade ALLE Nachrichten
         // Bei Updates: Nutze lastFetch mit 60 Sekunden Buffer (statt 10) wegen Relay-Delays
         const since = loadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 60 : undefined);
+        
+        console.log('📊 [STORE] Fetch-Parameter:', { loadAll, since, lastFetch: state.lastFetch });
         
         const events = await fetchGroupMessages(
           state.channelId,
@@ -117,9 +127,10 @@ function createGroupStore() {
           }
         });
 
+        console.log('✅ [STORE] Nachrichten geladen:', messages.length);
         return messages;
       } catch (error) {
-        console.error('Fehler beim Laden der Nachrichten:', error);
+        console.error('❌ [STORE] Fehler beim Laden der Nachrichten:', error);
         throw error;
       }
     },
