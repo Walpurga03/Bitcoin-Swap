@@ -159,8 +159,13 @@ export async function sendGroupMessage(
     // Verschlüssele Content
     const encrypted = await encryptForGroup(content, groupKey);
 
-    // Erstelle Event mit Channel-Tag
-    const tags = [['e', channelId]];
+    // Erstelle Event mit vollständigen Tags für Gruppen-Kommunikation
+    const publicKey = getPublicKey(privateKey as any);
+    const tags = [
+      ['e', channelId, '', 'root'],     // Channel-ID als root event
+      ['p', publicKey],                  // Empfänger (für Gruppen: eigener pubkey)
+      ['t', 'bitcoin-group']             // Hashtag für Relay-Filter (WICHTIG!)
+    ];
     const event = await createEvent(1, encrypted, tags, privateKey);
 
     // Publiziere
@@ -231,9 +236,12 @@ export async function createMarketplaceOffer(
     const encrypted = await encryptForGroup(content, groupKey);
 
     // Erstelle Event (Kind 30000 für Marketplace)
+    const publicKey = getPublicKey(tempPrivateKey as any);
     const tags = [
-      ['e', channelId],
-      ['d', `offer-${Date.now()}`] // Replaceable event identifier
+      ['e', channelId, '', 'root'],      // Channel-ID als root event
+      ['p', publicKey],                   // Empfänger
+      ['t', 'bitcoin-group'],             // Hashtag für Relay-Filter
+      ['d', `offer-${Date.now()}`]        // Replaceable event identifier
     ];
     
     const event = await createEvent(30000, encrypted, tags, tempPrivateKey);
@@ -299,9 +307,10 @@ export async function sendOfferInterest(
     const encrypted = await encryptForGroup(message, groupKey);
 
     const tags = [
-      ['e', offerId], // Referenz zum Angebot
-      ['e', channelId], // Channel-Tag
-      ['p', getPublicKey(privateKey as any)] // Eigener Pubkey für Identifikation
+      ['e', offerId, '', 'reply'],                   // Referenz zum Angebot
+      ['e', channelId, '', 'root'],                  // Channel-Tag als root
+      ['p', getPublicKey(privateKey as any)],        // Eigener Pubkey für Identifikation
+      ['t', 'bitcoin-group']                         // Hashtag für Relay-Filter
     ];
 
     const event = await createEvent(1, encrypted, tags, privateKey);
