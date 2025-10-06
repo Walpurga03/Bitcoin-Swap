@@ -23,10 +23,12 @@ export function initPool(): SimplePool {
  * Verbinde zu einem Relay
  */
 export async function connectToRelay(relayUrl: string): Promise<RelayConnection> {
+  console.log('🔗 [RELAY] Verbinde zu:', relayUrl);
   const pool = initPool();
   
   try {
     // Pool verwaltet Verbindungen automatisch
+    console.log('  ✅ Relay-Verbindung hergestellt:', relayUrl);
     return {
       url: relayUrl,
       connected: true,
@@ -76,6 +78,10 @@ export async function publishEvent(
   event: NostrEvent,
   relays: string[]
 ): Promise<{ success: boolean; relays: string[] }> {
+  console.log('📡 [PUBLISH] Starte Event-Publishing...');
+  console.log('  🆔 Event-ID:', event.id);
+  console.log('  📡 Ziel-Relays:', relays);
+  
   const pool = initPool();
   const successfulRelays: string[] = [];
 
@@ -88,14 +94,20 @@ export async function publishEvent(
     // Publiziere zu allen Relays
     const promises = relays.map(async (relay) => {
       try {
+        console.log('  ⏳ Sende zu:', relay);
         await pool.publish([relay], event as Event);
         successfulRelays.push(relay);
+        console.log('  ✅ Erfolgreich:', relay);
       } catch (error) {
-        console.error(`Fehler beim Publizieren zu ${relay}:`, error);
+        console.error(`  ❌ Fehler bei ${relay}:`, error);
       }
     });
 
     await Promise.all(promises);
+
+    console.log('📊 [PUBLISH] Ergebnis:');
+    console.log('  ✅ Erfolgreich:', successfulRelays.length + '/' + relays.length);
+    console.log('  📡 Erfolgreiche Relays:', successfulRelays);
 
     return {
       success: successfulRelays.length > 0,
@@ -115,6 +127,11 @@ export async function fetchEvents(
   filter: NostrFilter,
   timeout: number = 5000
 ): Promise<NostrEvent[]> {
+  console.log('🔍 [FETCH] Starte Event-Abfrage...');
+  console.log('  📡 Relays:', relays);
+  console.log('  🔎 Filter:', JSON.stringify(filter, null, 2));
+  console.log('  ⏱️ Timeout:', timeout + 'ms');
+  
   const pool = initPool();
   const events: NostrEvent[] = [];
 
@@ -124,16 +141,19 @@ export async function fetchEvents(
       [filter] as any,
       {
         onevent(event) {
+          console.log('  📨 Event empfangen:', event.id.substring(0, 16) + '...');
           events.push(event as NostrEvent);
         },
         oneose() {
-          // End of stored events
+          console.log('  ✅ EOSE (End of Stored Events) empfangen');
         }
       }
     );
 
     // Warte auf Timeout
     await new Promise(resolve => setTimeout(resolve, timeout));
+    
+    console.log('📊 [FETCH] Ergebnis:', events.length + ' Events geladen');
     
     // Schließe Subscription
     sub.close();
@@ -156,8 +176,14 @@ export async function sendGroupMessage(
   relays: string[]
 ): Promise<NostrEvent> {
   try {
+    console.log('📤 [SEND] Sende Gruppennachricht...');
+    console.log('  📋 Channel-ID:', channelId);
+    console.log('  📡 Relays:', relays);
+    console.log('  📝 Content (Vorschau):', content.substring(0, 30) + '...');
+    
     // Verschlüssele Content
     const encrypted = await encryptForGroup(content, groupKey);
+    console.log('  🔐 Content verschlüsselt ✅');
 
     // Erstelle Event mit vollständigen Tags für Gruppen-Kommunikation
     const publicKey = getPublicKey(privateKey as any);
@@ -166,10 +192,19 @@ export async function sendGroupMessage(
       ['p', publicKey],                  // Empfänger (für Gruppen: eigener pubkey)
       ['t', 'bitcoin-group']             // Hashtag für Relay-Filter (WICHTIG!)
     ];
+    
+    console.log('  🏷️ Event-Tags erstellt:');
+    console.log('    ├─ e-Tag (root):', channelId.substring(0, 16) + '...');
+    console.log('    ├─ p-Tag:', publicKey.substring(0, 16) + '...');
+    console.log('    └─ t-Tag: bitcoin-group ✅');
+    
     const event = await createEvent(1, encrypted, tags, privateKey);
+    console.log('  ✅ Event erstellt:', event.id);
 
     // Publiziere
-    await publishEvent(event, relays);
+    console.log('  📡 Publiziere zu Relays...');
+    const result = await publishEvent(event, relays);
+    console.log('  ✅ Event published:', result.relays.length + '/' + relays.length + ' Relays');
 
     return event;
   } catch (error) {
@@ -189,6 +224,15 @@ export async function fetchGroupMessages(
   limit: number = 100
 ): Promise<Array<NostrEvent & { decrypted?: string }>> {
   try {
+    console.log('📥 [FETCH] Lade Gruppen-Nachrichten...');
+    console.log('  📋 Channel-ID:', channelId);
+    console.log('  📡 Relays:', relays);
+    console.log('  🏷️ Filter: #t=bitcoin-group');
+    if (since) {
+      console.log('  ⏰ Since:', new Date(since * 1000).toLocaleString());
+    }
+    console.log('  📊 Limit:', limit);
+    
     const filter: NostrFilter = {
       kinds: [1],
       '#e': [channelId],
