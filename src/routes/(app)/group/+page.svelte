@@ -13,9 +13,19 @@
   let loading = false;
   let error = '';
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
+  let expandedOffers: Set<string> = new Set();
 
   let messagesContainer: HTMLDivElement;
   let autoRefreshInterval: ReturnType<typeof setInterval>;
+
+  function toggleOfferExpand(offerId: string) {
+    if (expandedOffers.has(offerId)) {
+      expandedOffers.delete(offerId);
+    } else {
+      expandedOffers.add(offerId);
+    }
+    expandedOffers = expandedOffers; // Trigger reactivity
+  }
 
   $: if (!$isAuthenticated) {
     goto('/');
@@ -277,7 +287,18 @@
                 {offer.content}
               </div>
               <div class="offer-footer">
-                <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
+                <div class="offer-info">
+                  <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
+                  {#if offer.replies.length > 0}
+                    <button 
+                      class="interest-badge"
+                      on:click={() => toggleOfferExpand(offer.id)}
+                    >
+                      💌 {offer.replies.length} {offer.replies.length === 1 ? 'Interessent' : 'Interessenten'}
+                      <span class="expand-icon">{expandedOffers.has(offer.id) ? '▼' : '▶'}</span>
+                    </button>
+                  {/if}
+                </div>
                 <div class="offer-actions">
                   {#if offer.tempPubkey === tempKeypair?.publicKey}
                     <button 
@@ -298,6 +319,29 @@
                   {/if}
                 </div>
               </div>
+
+              {#if expandedOffers.has(offer.id) && offer.replies.length > 0}
+                <div class="interest-list">
+                  <div class="interest-header">
+                    <strong>Interessenten:</strong>
+                  </div>
+                  {#each offer.replies as reply (reply.id)}
+                    <div class="interest-item">
+                      <div class="interest-meta">
+                        <span class="interest-pubkey">
+                          👤 {truncatePubkey(reply.pubkey)}
+                        </span>
+                        <span class="interest-time">
+                          {formatTimestamp(reply.created_at)}
+                        </span>
+                      </div>
+                      <div class="interest-message">
+                        {reply.content}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             </div>
           {/each}
         {/if}
@@ -556,10 +600,86 @@
     border-top: 1px solid var(--border-color);
   }
 
+  .offer-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
   .offer-id {
     font-size: 0.75rem;
     color: var(--text-muted);
     font-family: monospace;
+  }
+
+  .interest-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .interest-badge:hover {
+    background-color: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+
+  .expand-icon {
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+  .interest-list {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .interest-header {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .interest-item {
+    padding: 0.75rem;
+    background-color: rgba(16, 185, 129, 0.05);
+    border-left: 3px solid #10b981;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .interest-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .interest-pubkey {
+    font-weight: 600;
+    color: #10b981;
+    font-family: monospace;
+  }
+
+  .interest-time {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .interest-message {
+    font-size: 0.875rem;
+    color: var(--text-color);
+    line-height: 1.5;
   }
 
   .offer-actions {

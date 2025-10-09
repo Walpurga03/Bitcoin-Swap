@@ -364,22 +364,89 @@ export async function sendOfferInterest(
   relays: string[]
 ): Promise<NostrEvent> {
   try {
+    console.log('💌 [INTEREST] Sende Interesse an Angebot:', offerId.substring(0, 16) + '...');
+    
     const encrypted = await encryptForGroup(message, groupKey);
 
+    const publicKey = getPublicKey(privateKey as any);
     const tags = [
       ['e', offerId, '', 'reply'],                   // Referenz zum Angebot
       ['e', channelId, '', 'root'],                  // Channel-Tag als root
-      ['p', getPublicKey(privateKey as any)],        // Eigener Pubkey für Identifikation
+      ['p', publicKey],                              // Eigener Pubkey für Identifikation
       ['t', 'bitcoin-group']                         // Hashtag für Relay-Filter
     ];
 
+    console.log('  📋 Tags:', tags.map(t => t[0] + '=' + t[1].substring(0, 8) + '...'));
+
     const event = await createEvent(1, encrypted, tags, privateKey);
-    await publishEvent(event, relays);
+    const result = await publishEvent(event, relays);
+    
+    console.log('  ✅ Interesse gesendet:', result.relays.length + '/' + relays.length + ' Relays');
 
     return event;
   } catch (error) {
-    console.error('Fehler beim Senden des Interesses:', error);
+    console.error('❌ [INTEREST] Fehler beim Senden des Interesses:', error);
     throw error;
+  }
+}
+
+/**
+ * Hole Interesse-Antworten für Marketplace-Angebote
+ */
+export async function fetchOfferInterests(
+  offerIds: string[],
+  groupKey: string,
+  relays: string[]
+): Promise<Array<NostrEvent & { decrypted?: string; offerId?: string }>> {
+  try {
+    console.log('💌 [INTERESTS] Lade Interesse-Events für', offerIds.length, 'Angebote...');
+    
+    if (offerIds.length === 0) {
+      return [];
+    }
+
+    // Filter für alle Interesse-Events (kind:1 mit 'e' Tag reply zu den Angeboten)
+    const filter = {
+      kinds: [1],
+      '#t': ['bitcoin-group'],
+      '#e': offerIds,  // Alle Events die auf unsere Angebote referenzieren
+      limit: 500
+    } as NostrFilter;
+
+    console.log('  🔍 Filter:', JSON.stringify(filter, null, 2));
+
+    const events = await fetchEvents(relays, filter);
+    
+    console.log('  📦 Gefundene Events:', events.length);
+
+    // Entschlüssele und mappe zu Angebots-IDs
+    const decryptedEvents = await Promise.all(
+      events.map(async (event) => {
+        try {
+          // Finde welches Angebot referenziert wird
+          const replyTag = event.tags.find((t: string[]) => t[0] === 'e' && t[3] === 'reply');
+          const offerId = replyTag ? replyTag[1] : null;
+
+          if (!offerId) {
+            return null; // Kein gültiges reply
+          }
+
+          const decrypted = await decryptForGroup(event.content, groupKey);
+          return { ...event, decrypted, offerId };
+        } catch (error) {
+          return null;
+        }
+      })
+    );
+
+    const validInterests = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string; offerId?: string }>;
+    
+    console.log('  ✅ Entschlüsselte Interessen:', validInterests.length);
+
+    return validInterests;
+  } catch (error) {
+    console.error('❌ [INTERESTS] Fehler beim Laden:', error);
+    return [];
   }
 }
 

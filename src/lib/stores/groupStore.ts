@@ -4,6 +4,7 @@ import { deriveChannelId, deriveKeyFromSecret } from '$lib/nostr/crypto';
 import { 
   fetchGroupMessages, 
   fetchMarketplaceOffers,
+  fetchOfferInterests,
   sendGroupMessage,
   createMarketplaceOffer,
   sendOfferInterest,
@@ -200,13 +201,14 @@ function createGroupStore() {
       });
 
       try {
+        // 1. Lade Angebote
         const events = await fetchMarketplaceOffers(
           state.channelId,
           state.groupKey,
           [state.relay]
         );
 
-        console.log('📦 [STORE] Events geladen:', events.length);
+        console.log('📦 [STORE] Angebote geladen:', events.length);
 
         const offers: MarketplaceOffer[] = events
           .filter((e: any) => e.decrypted)
@@ -219,7 +221,40 @@ function createGroupStore() {
             status: 'active' as const
           }));
 
-        console.log('✅ [STORE] Marketplace-Angebote verarbeitet:', offers.length);
+        // 2. Lade Interesse-Events für alle Angebote
+        if (offers.length > 0) {
+          const offerIds = offers.map(o => o.id);
+          const interests = await fetchOfferInterests(
+            offerIds,
+            state.groupKey,
+            [state.relay]
+          );
+
+          console.log('💌 [STORE] Interesse-Events geladen:', interests.length);
+
+          // 3. Ordne Interessen den Angeboten zu
+          interests.forEach((interest: any) => {
+            const offer = offers.find(o => o.id === interest.offerId);
+            if (offer && interest.decrypted) {
+              offer.replies.push({
+                id: interest.id,
+                offerId: interest.offerId,
+                pubkey: interest.pubkey,
+                content: interest.decrypted,
+                created_at: interest.created_at
+              });
+            }
+          });
+
+          // Sortiere replies nach Zeit
+          offers.forEach(offer => {
+            offer.replies.sort((a, b) => a.created_at - b.created_at);
+          });
+
+          console.log('✅ [STORE] Angebote mit Interessen:', 
+            offers.filter(o => o.replies.length > 0).length + '/' + offers.length
+          );
+        }
 
         update(state => ({
           ...state,
