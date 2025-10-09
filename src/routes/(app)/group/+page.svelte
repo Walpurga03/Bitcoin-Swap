@@ -22,6 +22,13 @@
   // Prüfe ob ich bei einem Angebot Interesse gezeigt habe
   function hasMyInterest(offer: any): boolean {
     if (!$userStore.pubkey) return false;
+    
+    // 1. Prüfe lokalen State (für sofortige UI-Reaktion)
+    if (myInterests.has(offer.id)) {
+      return true;
+    }
+    
+    // 2. Prüfe in den geladenen Replies vom Server
     return offer.replies.some((r: any) => r.pubkey === $userStore.pubkey);
   }
 
@@ -135,21 +142,36 @@
       loading = true;
       error = '';
 
+      console.log('✋ [UI] Sende Interesse für Angebot:', offerId.substring(0, 16) + '...');
+
       await groupStore.sendInterest(
         offerId,
         'Ich habe Interesse an deinem Angebot!',
         $userStore.privateKey
       );
 
+      console.log('✅ [UI] Interesse gesendet, lade Angebote neu...');
+
+      // Markiere lokal (für sofortige UI-Reaktion)
       myInterests.add(offerId);
-      myInterests = myInterests; // Trigger reactivity
+      myInterests = myInterests;
+
+      // Warte kurz damit das Event im Relay gespeichert ist
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Reload Angebote um die neue Antwort zu sehen
       await groupStore.loadOffers();
 
+      console.log('✅ [UI] Angebote neu geladen');
+
       alert('✅ Interesse gesendet! Der Anbieter kann jetzt deinen Public Key sehen.');
     } catch (e: any) {
+      console.error('❌ [UI] Fehler beim Senden des Interesses:', e);
       error = e.message || 'Fehler beim Senden des Interesses';
+      
+      // Entferne aus myInterests bei Fehler
+      myInterests.delete(offerId);
+      myInterests = myInterests;
     } finally {
       loading = false;
     }
@@ -164,17 +186,30 @@
       loading = true;
       error = '';
 
+      console.log('🗑️ [UI] Ziehe Interesse zurück für Angebot:', offerId.substring(0, 16) + '...');
+
       await groupStore.deleteInterest(interestId, $userStore.privateKey);
 
+      // Entferne lokal (für sofortige UI-Reaktion)
       myInterests.delete(offerId);
       myInterests = myInterests;
+
+      // Warte kurz damit das Delete-Event im Relay verarbeitet ist
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Reload Angebote
       await groupStore.loadOffers();
 
+      console.log('✅ [UI] Interesse zurückgezogen, Angebote neu geladen');
+
       alert('✅ Interesse zurückgezogen.');
     } catch (e: any) {
+      console.error('❌ [UI] Fehler beim Zurückziehen:', e);
       error = e.message || 'Fehler beim Zurückziehen des Interesses';
+      
+      // Füge zurück zu myInterests bei Fehler
+      myInterests.add(offerId);
+      myInterests = myInterests;
     } finally {
       loading = false;
     }
