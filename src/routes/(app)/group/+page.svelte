@@ -14,9 +14,22 @@
   let error = '';
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
   let expandedOffers: Set<string> = new Set();
+  let myInterests: Set<string> = new Set(); // Angebote für die ich Interesse gezeigt habe
 
   let messagesContainer: HTMLDivElement;
   let autoRefreshInterval: ReturnType<typeof setInterval>;
+
+  // Prüfe ob ich bei einem Angebot Interesse gezeigt habe
+  function hasMyInterest(offer: any): boolean {
+    if (!$userStore.pubkey) return false;
+    return offer.replies.some((r: any) => r.pubkey === $userStore.pubkey);
+  }
+
+  // Finde mein Interesse-Event für ein Angebot
+  function getMyInterest(offer: any): any | null {
+    if (!$userStore.pubkey) return null;
+    return offer.replies.find((r: any) => r.pubkey === $userStore.pubkey) || null;
+  }
 
   function toggleOfferExpand(offerId: string) {
     if (expandedOffers.has(offerId)) {
@@ -128,9 +141,40 @@
         $userStore.privateKey
       );
 
-      alert('Interesse gesendet! Der Anbieter wird sich bei dir melden.');
+      myInterests.add(offerId);
+      myInterests = myInterests; // Trigger reactivity
+
+      // Reload Angebote um die neue Antwort zu sehen
+      await groupStore.loadOffers();
+
+      alert('✅ Interesse gesendet! Der Anbieter kann jetzt deinen Public Key sehen.');
     } catch (e: any) {
       error = e.message || 'Fehler beim Senden des Interesses';
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function withdrawInterest(offerId: string, interestId: string) {
+    if (!$userStore.privateKey) return;
+
+    if (!confirm('Möchtest du dein Interesse wirklich zurückziehen?')) return;
+
+    try {
+      loading = true;
+      error = '';
+
+      await groupStore.deleteInterest(interestId, $userStore.privateKey);
+
+      myInterests.delete(offerId);
+      myInterests = myInterests;
+
+      // Reload Angebote
+      await groupStore.loadOffers();
+
+      alert('✅ Interesse zurückgezogen.');
+    } catch (e: any) {
+      error = e.message || 'Fehler beim Zurückziehen des Interesses';
     } finally {
       loading = false;
     }
@@ -307,6 +351,16 @@
                       disabled={loading}
                     >
                       🗑️ Löschen
+                    </button>
+                  {:else if hasMyInterest(offer)}
+                    {@const myInterest = getMyInterest(offer)}
+                    <button 
+                      class="btn btn-warning btn-sm" 
+                      on:click={() => withdrawInterest(offer.id, myInterest.id)}
+                      disabled={loading}
+                      title="Interesse zurückziehen"
+                    >
+                      ✅ Interesse gezeigt
                     </button>
                   {:else}
                     <button 
@@ -708,5 +762,30 @@
 
   .btn-danger:hover:not(:disabled) {
     background-color: #dc2626;
+  }
+
+  .btn-warning {
+    background-color: #f59e0b;
+    color: white;
+    position: relative;
+  }
+
+  .btn-warning:hover:not(:disabled) {
+    background-color: #d97706;
+  }
+
+  .btn-warning:hover:not(:disabled)::after {
+    content: "Zurückziehen?";
+    position: absolute;
+    top: -2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 10;
   }
 </style>

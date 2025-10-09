@@ -357,6 +357,37 @@ function createGroupStore() {
     },
 
     /**
+     * Lösche Interesse (zurückziehen)
+     */
+    deleteInterest: async (interestId: string, privateKey: string) => {
+      const state = get({ subscribe });
+      
+      if (!state.relay) {
+        throw new Error('Gruppe nicht initialisiert');
+      }
+
+      try {
+        console.log('🗑️ [STORE] Ziehe Interesse zurück:', interestId.substring(0, 16) + '...');
+        
+        await deleteEvent(interestId, privateKey, [state.relay], 'Interesse zurückgezogen');
+
+        // Entferne aus lokalem State
+        update(state => {
+          const offers = state.offers.map(offer => ({
+            ...offer,
+            replies: offer.replies.filter(r => r.id !== interestId)
+          }));
+          return { ...state, offers };
+        });
+
+        console.log('✅ [STORE] Interesse erfolgreich zurückgezogen');
+      } catch (error) {
+        console.error('❌ [STORE] Fehler beim Zurückziehen des Interesses:', error);
+        throw error;
+      }
+    },
+
+    /**
      * Füge Nachricht hinzu (für Echtzeit-Updates)
      */
     addMessage: (message: GroupMessage) => {
