@@ -186,11 +186,18 @@ function createGroupStore() {
      * Lade Marketplace-Angebote
      */
     loadOffers: async () => {
+      console.log('🛒 [STORE] loadOffers() aufgerufen');
       const state = get({ subscribe });
       
       if (!state.channelId || !state.groupKey || !state.relay) {
+        console.error('❌ [STORE] Gruppe nicht initialisiert für Offers!');
         throw new Error('Gruppe nicht initialisiert');
       }
+
+      console.log('✅ [STORE] Gruppe initialisiert für Offers:', { 
+        channelId: state.channelId?.substring(0, 16) + '...', 
+        relay: state.relay
+      });
 
       try {
         const events = await fetchMarketplaceOffers(
@@ -198,6 +205,8 @@ function createGroupStore() {
           state.groupKey,
           [state.relay]
         );
+
+        console.log('📦 [STORE] Events geladen:', events.length);
 
         const offers: MarketplaceOffer[] = events
           .filter((e: any) => e.decrypted)
@@ -210,6 +219,8 @@ function createGroupStore() {
             status: 'active' as const
           }));
 
+        console.log('✅ [STORE] Marketplace-Angebote verarbeitet:', offers.length);
+
         update(state => ({
           ...state,
           offers
@@ -217,7 +228,7 @@ function createGroupStore() {
 
         return offers;
       } catch (error) {
-        console.error('Fehler beim Laden der Angebote:', error);
+        console.error('❌ [STORE] Fehler beim Laden der Angebote:', error);
         throw error;
       }
     },

@@ -23,11 +23,16 @@
 
   onMount(async () => {
     try {
+      console.log('🚀 [PAGE] onMount - Lade Daten...');
+      
       // Lade initiale Nachrichten (alle beim ersten Mal)
       await groupStore.loadMessages(true);
+      console.log('✅ [PAGE] Nachrichten geladen');
+      
       await groupStore.loadOffers();
+      console.log('✅ [PAGE] Marketplace-Angebote geladen');
 
-      // Auto-Refresh alle 10 Sekunden (nur neue Nachrichten)
+      // Auto-Refresh alle 15 Sekunden (nur neue Nachrichten)
       autoRefreshInterval = setInterval(async () => {
         try {
           await groupStore.loadMessages(false);
@@ -35,11 +40,12 @@
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
-      }, 10000);
+      }, 15000);
 
       // Scroll zu neuesten Nachrichten
       scrollToBottom();
     } catch (e: any) {
+      console.error('❌ [PAGE] Fehler beim Laden:', e);
       error = e.message || 'Fehler beim Laden der Daten';
     }
   });
@@ -209,65 +215,88 @@
     <div class="marketplace-section">
       <div class="marketplace-header">
         <h2>🛒 Marketplace</h2>
-        <button class="btn btn-primary" on:click={() => showOfferForm = !showOfferForm}>
-          {showOfferForm ? 'Abbrechen' : '+ Neues Angebot'}
+        <button class="btn btn-primary btn-sm" on:click={() => showOfferForm = !showOfferForm}>
+          {showOfferForm ? '✕ Abbrechen' : '+ Neues Angebot'}
         </button>
       </div>
 
       {#if showOfferForm}
         <form class="offer-form card" on:submit|preventDefault={createOffer}>
-          <h3>Neues Angebot erstellen</h3>
+          <h3>📝 Neues Angebot erstellen</h3>
           <textarea
             class="input"
             bind:value={offerInput}
-            placeholder="Beschreibe dein Angebot..."
-            rows="4"
+            placeholder="z.B. Verkaufe 0.01 BTC gegen EUR-Bargeld in Berlin..."
+            rows="5"
             disabled={loading}
           ></textarea>
-          <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
-            Angebot veröffentlichen
-          </button>
-          <small>Dein Angebot wird anonym mit einem temporären Key veröffentlicht.</small>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
+              {loading ? '⏳ Wird veröffentlicht...' : '🚀 Angebot veröffentlichen'}
+            </button>
+          </div>
+          <small class="hint">
+            💡 <strong>Hinweis:</strong> Dein Angebot wird anonym mit einem temporären Key veröffentlicht.
+            Andere Nutzer können Interesse zeigen und du siehst deren Public Keys.
+          </small>
         </form>
       {/if}
 
       <div class="offers-list">
-        {#if $marketplaceOffers.length === 0}
+        {#if loading && $marketplaceOffers.length === 0}
+          <div class="loading-state">
+            <p>⏳ Lade Angebote...</p>
+          </div>
+        {:else if $marketplaceOffers.length === 0}
           <div class="empty-state">
-            <p>Noch keine Angebote vorhanden.</p>
+            <div class="empty-icon">🛒</div>
+            <p><strong>Noch keine Angebote vorhanden</strong></p>
+            <p class="text-muted">Sei der Erste und erstelle ein Bitcoin-Tauschangebot!</p>
           </div>
         {:else}
+          <div class="offers-count">
+            {$marketplaceOffers.length} {$marketplaceOffers.length === 1 ? 'Angebot' : 'Angebote'}
+          </div>
           {#each $marketplaceOffers as offer (offer.id)}
-            <div class="offer-card card">
+            <div class="offer-card card" class:own-offer={offer.tempPubkey === tempKeypair?.publicKey}>
               <div class="offer-header">
-                <span class="offer-author">
-                  Anonym ({truncatePubkey(offer.tempPubkey)})
-                </span>
-                <span class="offer-time">
-                  {formatTimestamp(offer.created_at)}
-                </span>
+                <div class="offer-meta">
+                  <span class="offer-author">
+                    {#if offer.tempPubkey === tempKeypair?.publicKey}
+                      <span class="badge badge-primary">Dein Angebot</span>
+                    {:else}
+                      <span class="badge badge-secondary">Anonym</span>
+                    {/if}
+                  </span>
+                  <span class="offer-time">
+                    {formatTimestamp(offer.created_at)}
+                  </span>
+                </div>
               </div>
               <div class="offer-content">
                 {offer.content}
               </div>
-              <div class="offer-actions">
-                {#if offer.tempPubkey === tempKeypair?.publicKey}
-                  <button 
-                    class="btn btn-secondary" 
-                    on:click={() => deleteOffer(offer.id)}
-                    disabled={loading}
-                  >
-                    Löschen
-                  </button>
-                {:else}
-                  <button 
-                    class="btn btn-primary" 
-                    on:click={() => sendInterest(offer.id)}
-                    disabled={loading}
-                  >
-                    Interesse zeigen
-                  </button>
-                {/if}
+              <div class="offer-footer">
+                <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
+                <div class="offer-actions">
+                  {#if offer.tempPubkey === tempKeypair?.publicKey}
+                    <button 
+                      class="btn btn-danger btn-sm" 
+                      on:click={() => deleteOffer(offer.id)}
+                      disabled={loading}
+                    >
+                      🗑️ Löschen
+                    </button>
+                  {:else}
+                    <button 
+                      class="btn btn-success btn-sm" 
+                      on:click={() => sendInterest(offer.id)}
+                      disabled={loading}
+                    >
+                      ✋ Interesse zeigen
+                    </button>
+                  {/if}
+                </div>
               </div>
             </div>
           {/each}
@@ -400,22 +429,38 @@
 
   .offer-form {
     margin-bottom: 1rem;
+    padding: 1.5rem;
   }
 
   .offer-form h3 {
-    font-size: 1rem;
+    font-size: 1.125rem;
     margin-bottom: 1rem;
+    font-weight: 600;
   }
 
   .offer-form textarea {
     margin-bottom: 1rem;
     resize: vertical;
+    font-size: 0.9375rem;
+    line-height: 1.5;
   }
 
-  .offer-form small {
+  .form-actions {
+    margin-bottom: 1rem;
+  }
+
+  .hint {
     display: block;
-    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background-color: rgba(var(--primary-rgb), 0.1);
+    border-radius: 0.5rem;
     color: var(--text-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .hint strong {
+    color: var(--text-color);
   }
 
   .offers-list {
@@ -423,29 +468,98 @@
     overflow-y: auto;
   }
 
-  .offer-card {
+  .offers-count {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+  }
+
+  .loading-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 3rem 1rem;
+  }
+
+  .empty-icon {
+    font-size: 3rem;
     margin-bottom: 1rem;
   }
 
-  .offer-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
+  .text-muted {
+    color: var(--text-muted);
     font-size: 0.875rem;
   }
 
-  .offer-author {
-    font-weight: 500;
-    color: var(--primary-color);
+  .offer-card {
+    margin-bottom: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .offer-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .offer-card.own-offer {
+    border-left: 3px solid var(--primary-color);
+  }
+
+  .offer-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .offer-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-primary {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .badge-secondary {
+    background-color: var(--surface-color);
+    color: var(--text-muted);
   }
 
   .offer-time {
     color: var(--text-muted);
+    font-size: 0.8125rem;
   }
 
   .offer-content {
     margin-bottom: 1rem;
     white-space: pre-wrap;
+    line-height: 1.6;
+    color: var(--text-color);
+  }
+
+  .offer-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .offer-id {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
   }
 
   .offer-actions {
@@ -453,7 +567,26 @@
     gap: 0.5rem;
   }
 
-  .offer-actions button {
-    flex: 1;
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .btn-success {
+    background-color: #10b981;
+    color: white;
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background-color: #059669;
+  }
+
+  .btn-danger {
+    background-color: #ef4444;
+    color: white;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
   }
 </style>

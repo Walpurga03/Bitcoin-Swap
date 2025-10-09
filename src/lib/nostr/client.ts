@@ -343,7 +343,7 @@ export async function fetchMarketplaceOffers(
 
     // Filtere ungültige Events
     const validEvents = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
-    console.log(`  🔍 Marketplace: ${validEvents.length}/${events.length} Events erfolgreich entschlüsselt`);
+    console.log(`  � Marketplace: ${validEvents.length}/${events.length} Angebote erfolgreich entschlüsselt`);
 
     return validEvents;
   } catch (error) {
