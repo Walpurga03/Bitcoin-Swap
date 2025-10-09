@@ -61,8 +61,13 @@
         throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
       }
 
+      // Validiere Name
+      if (!nameInput.trim() || nameInput.trim().length < 2) {
+        throw new Error('Bitte gib einen Namen mit mindestens 2 Zeichen ein');
+      }
+
       // Setze User
-      userStore.setUserFromNsec(nsecInput, nameInput || undefined);
+      userStore.setUserFromNsec(nsecInput, nameInput.trim());
 
       // Initialisiere Gruppe
       await groupStore.initialize(inviteData.secret, inviteData.relay);
@@ -98,15 +103,19 @@
 
     <form on:submit|preventDefault={handleLogin}>
       <div class="form-group">
-        <label for="name">Name (optional)</label>
+        <label for="name">Name *</label>
         <input
           id="name"
           type="text"
           class="input"
           bind:value={nameInput}
-          placeholder="Dein Anzeigename"
+          placeholder="Dein Anzeigename (z.B. Max Mustermann)"
+          required
+          minlength="2"
+          maxlength="50"
           disabled={loading}
         />
+        <small>Dieser Name wird angezeigt, wenn du Interesse an Angeboten zeigst.</small>
       </div>
 
       <div class="form-group">

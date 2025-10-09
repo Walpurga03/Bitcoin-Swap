@@ -371,6 +371,7 @@ export async function fetchMarketplaceOffers(
 export async function sendOfferInterest(
   offerId: string,
   message: string,
+  userName: string,
   channelId: string,
   groupKey: string,
   privateKey: string,
@@ -378,18 +379,22 @@ export async function sendOfferInterest(
 ): Promise<NostrEvent> {
   try {
     console.log('💌 [INTEREST] Sende Interesse an Angebot:', offerId.substring(0, 16) + '...');
+    console.log('  👤 Name:', userName);
     
-    const encrypted = await encryptForGroup(message, groupKey);
+    // Füge Name zur Nachricht hinzu
+    const messageWithName = `${userName}: ${message}`;
+    const encrypted = await encryptForGroup(messageWithName, groupKey);
 
     const publicKey = getPublicKey(privateKey as any);
     const tags = [
       ['e', offerId, '', 'reply'],                   // Referenz zum Angebot
       ['e', channelId, '', 'root'],                  // Channel-Tag als root
       ['p', publicKey],                              // Eigener Pubkey für Identifikation
+      ['name', userName],                            // Name als eigener Tag
       ['t', 'bitcoin-group']                         // Hashtag für Relay-Filter
     ];
 
-    console.log('  📋 Tags:', tags.map(t => t[0] + '=' + t[1].substring(0, 8) + '...'));
+    console.log('  📋 Tags:', tags.map(t => t[0] + '=' + t[1].substring(0, 16) + '...'));
 
     const event = await createEvent(1, encrypted, tags, privateKey);
     const result = await publishEvent(event, relays);

@@ -155,9 +155,12 @@
 
       console.log('✋ [UI] Sende Interesse für Angebot:', offerId.substring(0, 16) + '...');
 
+      const userName = $userStore.name || 'Unbekannt';
+      
       await groupStore.sendInterest(
         offerId,
         'Ich habe Interesse an deinem Angebot!',
+        userName,
         $userStore.privateKey
       );
 
@@ -424,26 +427,37 @@
                 <div class="interest-list">
                   <div class="interest-header">
                     <strong>Interessenten:</strong>
-                    <small class="hint-text">💡 Klicke auf Public Key zum Kopieren</small>
+                    <small class="hint-text">💡 Klicke auf Name oder Public Key zum Kopieren</small>
                   </div>
                   {#each offer.replies as reply (reply.id)}
+                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
+                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
                     <div class="interest-item">
                       <div class="interest-meta">
                         <button 
-                          class="interest-pubkey clickable"
+                          class="interest-name clickable"
                           on:click={() => copyToClipboard(reply.pubkey)}
-                          title="Klicke zum Kopieren: {reply.pubkey}"
+                          title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
                         >
-                          👤 {truncatePubkey(reply.pubkey)}
+                          👤 <strong>{userName}</strong>
                           <span class="copy-icon">📋</span>
                         </button>
                         <span class="interest-time">
                           {formatTimestamp(reply.created_at)}
                         </span>
                       </div>
-                      <div class="interest-message">
-                        {reply.content}
-                      </div>
+                      <button 
+                        class="interest-pubkey-detail clickable"
+                        on:click={() => copyToClipboard(reply.pubkey)}
+                        title="Klicke zum Kopieren: {reply.pubkey}"
+                      >
+                        🔑 {truncatePubkey(reply.pubkey)}
+                      </button>
+                      {#if message !== userName}
+                        <div class="interest-message">
+                          {message}
+                        </div>
+                      {/if}
                     </div>
                   {/each}
                 </div>
@@ -780,31 +794,50 @@
     font-size: 0.8125rem;
   }
 
-  .interest-pubkey {
+  .interest-name {
     font-weight: 600;
     color: #10b981;
-    font-family: monospace;
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-  }
-
-  .interest-pubkey.clickable {
     background: none;
     border: none;
     padding: 0.375rem 0.5rem;
     border-radius: 0.375rem;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 0.9375rem;
   }
 
-  .interest-pubkey.clickable:hover {
+  .interest-name:hover {
     background-color: rgba(16, 185, 129, 0.1);
     transform: translateY(-1px);
   }
 
-  .interest-pubkey.clickable:active {
+  .interest-name:active {
     transform: translateY(0);
+  }
+
+  .interest-pubkey-detail {
+    font-weight: 500;
+    color: var(--text-muted);
+    font-family: monospace;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: none;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.8125rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .interest-pubkey-detail:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--text-color);
   }
 
   .copy-icon {
@@ -813,7 +846,8 @@
     font-size: 0.875rem;
   }
 
-  .interest-pubkey.clickable:hover .copy-icon {
+  .interest-name:hover .copy-icon,
+  .interest-pubkey-detail:hover .copy-icon {
     opacity: 1;
   }
 

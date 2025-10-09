@@ -311,7 +311,7 @@ function createGroupStore() {
     /**
      * Sende Interesse an Angebot
      */
-    sendInterest: async (offerId: string, message: string, privateKey: string) => {
+    sendInterest: async (offerId: string, message: string, userName: string, privateKey: string) => {
       const state = get({ subscribe });
       
       if (!state.channelId || !state.groupKey || !state.relay) {
@@ -322,6 +322,7 @@ function createGroupStore() {
         await sendOfferInterest(
           offerId,
           message,
+          userName,
           state.channelId,
           state.groupKey,
           privateKey,
