@@ -245,11 +245,24 @@ export async function fetchGroupMessages(
     console.log('  🎯 Verwende #t Filter direkt (Relay unterstützt NIP-12)');
     const events = await fetchEvents(relays, filter);
     
-    console.log(`  � ${events.length} Events mit #t=bitcoin-group geladen`);
+    console.log(`  📦 ${events.length} Events mit #t=bitcoin-group geladen`);
+
+    // Filtere Interesse-Events aus (die haben 'reply' als 4. Element im e-Tag)
+    const chatEvents = events.filter((event: any) => {
+      // Prüfe ob es ein Interesse-Event ist (hat e-Tag mit 'reply')
+      const hasReplyTag = event.tags.some((tag: string[]) => 
+        tag[0] === 'e' && tag[3] === 'reply'
+      );
+      
+      // Nur Events OHNE reply-Tag sind Chat-Nachrichten
+      return !hasReplyTag;
+    });
+
+    console.log(`  💬 ${chatEvents.length} Chat-Nachrichten (ohne Interesse-Events)`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
-      events.map(async (event) => {
+      chatEvents.map(async (event) => {
         try {
           const decrypted = await decryptForGroup(event.content, groupKey);
           return { ...event, decrypted };
@@ -264,7 +277,7 @@ export async function fetchGroupMessages(
     // Filtere null-Werte (ungültige/alte Events)
     const validEvents = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
     
-    console.log(`  ✅ ${validEvents.length}/${events.length} Events erfolgreich entschlüsselt`);
+    console.log(`  ✅ ${validEvents.length}/${chatEvents.length} Nachrichten erfolgreich entschlüsselt`);
 
     return validEvents;
   } catch (error) {

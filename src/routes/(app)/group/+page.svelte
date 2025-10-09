@@ -47,6 +47,17 @@
     expandedOffers = expandedOffers; // Trigger reactivity
   }
 
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`✅ Public Key kopiert!\n\n${text}\n\nDu kannst den User nun außerhalb der App kontaktieren.`);
+    } catch (err) {
+      console.error('Fehler beim Kopieren:', err);
+      // Fallback: Zeige den Key in einem Prompt zum manuellen Kopieren
+      prompt('Public Key (kopiere ihn manuell):', text);
+    }
+  }
+
   $: if (!$isAuthenticated) {
     goto('/');
   }
@@ -413,13 +424,19 @@
                 <div class="interest-list">
                   <div class="interest-header">
                     <strong>Interessenten:</strong>
+                    <small class="hint-text">💡 Klicke auf Public Key zum Kopieren</small>
                   </div>
                   {#each offer.replies as reply (reply.id)}
                     <div class="interest-item">
                       <div class="interest-meta">
-                        <span class="interest-pubkey">
+                        <button 
+                          class="interest-pubkey clickable"
+                          on:click={() => copyToClipboard(reply.pubkey)}
+                          title="Klicke zum Kopieren: {reply.pubkey}"
+                        >
                           👤 {truncatePubkey(reply.pubkey)}
-                        </span>
+                          <span class="copy-icon">📋</span>
+                        </button>
                         <span class="interest-time">
                           {formatTimestamp(reply.created_at)}
                         </span>
@@ -733,9 +750,18 @@
   }
 
   .interest-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     font-size: 0.875rem;
     margin-bottom: 0.75rem;
     color: var(--text-muted);
+  }
+
+  .hint-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: normal;
   }
 
   .interest-item {
@@ -758,6 +784,37 @@
     font-weight: 600;
     color: #10b981;
     font-family: monospace;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .interest-pubkey.clickable {
+    background: none;
+    border: none;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .interest-pubkey.clickable:hover {
+    background-color: rgba(16, 185, 129, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .interest-pubkey.clickable:active {
+    transform: translateY(0);
+  }
+
+  .copy-icon {
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-size: 0.875rem;
+  }
+
+  .interest-pubkey.clickable:hover .copy-icon {
+    opacity: 1;
   }
 
   .interest-time {
