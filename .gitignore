@@ -15,7 +15,7 @@ dist
 .env
 .env.*
 !.env.example
-!.env.production
+# Note: .env.production should NOT be in Git - use Vercel Environment Variables instead
 
 # Vercel
 .vercel
