@@ -79,24 +79,24 @@ https://deine-domain.com/?relay=RELAY_URL&secret=GRUPPEN_SECRET
 ### 🌐 Live-Beispiel (Bitcoin-Swap)
 
 ```
-https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group12345
+https://ihre-domain.vercel.app/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-group12345
 ```
 
 **Aufschlüsselung:**
-- **App-URL**: `https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app`
-- **Relay**: `wss://nostr-relay.online` (URL-encoded als `wss%3A%2F%2Fnostr-relay.online`)
+- **App-URL**: `https://ihre-domain.vercel.app`
+- **Relay**: `wss://relay.example.com` (URL-encoded als `wss%3A%2F%2Frelay.example.com`)
 - **Secret**: `premium-group123`
 
 ### 🏠 Lokales Beispiel (Development)
 
 ```
-http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+http://localhost:5173/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-group123
 ```
 
 ### ⚠️ Wichtige Hinweise
 
 1. **URL-Encoding**: Die Relay-URL muss URL-encoded sein!
-   - `wss://nostr-relay.online` → `wss%3A%2F%2Fnostr-relay.online`
+   - `wss://relay.example.com` → `wss%3A%2F%2Frelay.example.com`
    - `:` wird zu `%3A`
    - `/` wird zu `%2F`
 
@@ -114,41 +114,41 @@ http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group
 
 ```javascript
 // In der Browser-Console
-const relay = 'wss://nostr-relay.online';
+const relay = 'wss://relay.example.com';
 const secret = 'premium-group123';
-const domain = 'https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app';
+const domain = 'https://ihre-domain.vercel.app';
 
 const encodedRelay = encodeURIComponent(relay);
 const encodedSecret = encodeURIComponent(secret);
 const link = `${domain}/?relay=${encodedRelay}&secret=${encodedSecret}`;
 
 console.log(link);
-// Ausgabe: https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+// Ausgabe: https://ihre-domain.vercel.app/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-group123
 ```
 
 ## 🚀 Deployment
 
-### ✅ Erfolgreich deployed auf Vercel!
+### ✅ Deployment auf Vercel
 
-**Live URL:** `https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app`
+**Live URL:** `https://ihre-domain.vercel.app`
 
-**Repository:** `git@github.com:Walpurga03/Bitcoin-Swap.git`
+**Repository:** Ihr GitHub Repository
 
 ### 🎛️ Vercel Dashboard
 
-- **Projekt:** https://vercel.com/walpurga03s-projects/bitcoin-swap
-- **Settings:** https://vercel.com/walpurga03s-projects/bitcoin-swap/settings
-- **Deployments:** https://vercel.com/walpurga03s-projects/bitcoin-swap/deployments
+- **Projekt:** https://vercel.com/ihr-account/ihr-projekt
+- **Settings:** https://vercel.com/ihr-account/ihr-projekt/settings
+- **Deployments:** https://vercel.com/ihr-account/ihr-projekt/deployments
 
 ### 🔐 Environment Variables
 
 Konfiguriert in Vercel:
 - ✅ `PUBLIC_ALLOWED_PUBKEYS` - Whitelist mit 3 autorisierten Public Keys
 
-### Test-Einladungslink (Live)
+### Test-Einladungslink (Beispiel)
 
 ```
-https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://ihre-domain.vercel.app/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-group123
 ```
 
 ### 🔄 Updates Deployen
@@ -171,13 +171,11 @@ npx vercel --prod
 
 **Empfohlen:** Eigener Relay für maximale Privatsphäre und Kontrolle!
 
-Aktuell verwendet:
-- ✅ `wss://nostr-relay.online` - Eigener nostr-rs-relay Server
-
-Alternative öffentliche Relays:
+Öffentliche Relays (Beispiele):
 - `wss://relay.damus.io`
 - `wss://relay.nostr.info`
 - `wss://nos.lol`
+- `wss://relay.example.com` (Platzhalter)
 
 **Vorteile eigener Relay:**
 - 🔒 Volle Datenkontrolle

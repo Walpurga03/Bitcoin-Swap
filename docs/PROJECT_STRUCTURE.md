@@ -101,7 +101,7 @@ NostrGroupChat/
 #### `src/lib/security/validation.ts` (237 Zeilen)
 - **validatePrivateKey()**: NSEC/Hex Validierung
 - **validatePublicKey()**: NPUB/Hex Validierung
-- **validateRelayUrl()**: Relay-URL Validierung (wss://)
+- **validateRelayUrl()**: Relay-URL Validierung (`wss://` Protokoll)
 - **validateGroupSecret()**: Secret Validierung
 - **isInWhitelist()**: Whitelist-Prüfung
 - **validateEventSignature()**: Event-Signatur prüfen
@@ -265,7 +265,7 @@ deleteEvent(offerId) → NIP-09 Delete
 ### Layer 1: Input-Validierung
 - `validatePrivateKey()` - NSEC/Hex Format
 - `validatePublicKey()` - NPUB/Hex Format
-- `validateRelayUrl()` - wss:// Protokoll
+- `validateRelayUrl()` - `wss://` Protokoll
 - `validateGroupSecret()` - Länge & Zeichen
 
 ### Layer 2: Authentifizierung

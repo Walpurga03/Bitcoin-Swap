@@ -28,7 +28,7 @@ Das Bitcoin-Tausch-Netzwerk implementiert mehrere Sicherheitsebenen zum Schutz d
 
 ### 5. Input-Validierung
 - Validierung aller Private/Public Keys (NSEC/NPUB/Hex)
-- Relay-URL Validierung (nur wss:// oder ws://)
+- Relay-URL Validierung (nur `wss://` oder `ws://` Protokoll)
 - Secret-Validierung (Länge, erlaubte Zeichen)
 - Schutz vor Injection-Angriffen
 

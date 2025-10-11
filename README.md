@@ -144,7 +144,7 @@ Format: `https://ihre-domain.com/?relay=wss%3A%2F%2Frelay-url&secret=gruppen-sec
 
 **Beispiel:**
 ```
-https://bitcoin-swap.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://ihre-domain.com/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-group123
 ```
 
 **Wichtig:** Die Relay-URL muss URL-encoded sein:
@@ -155,12 +155,11 @@ https://bitcoin-swap.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=pre
 
 **Empfohlen:** Eigener Relay für maximale Privatsphäre und Kontrolle!
 
-Aktuell verwendet: `wss://nostr-relay.online`
-
-Alternative öffentliche Relays:
+Öffentliche Relays (Beispiele):
 - `wss://relay.damus.io`
 - `wss://relay.nostr.info`
 - `wss://nos.lol`
+- `wss://relay.example.com` (Platzhalter - verwenden Sie Ihren eigenen Relay)
 
 ---
 
