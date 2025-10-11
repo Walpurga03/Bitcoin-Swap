@@ -1,15 +1,80 @@
-# NostrGroupChat
+# NostrGroupChat (Bitcoin-Swap)
 
-Ein sicherer, dezentraler Gruppen-Chat mit integriertem anonymen Marketplace, gebaut mit Svelte, TypeScript und dem Nostr-Protokoll.
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-5.4-FF3E00?logo=svelte)](https://kit.svelte.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Nostr](https://img.shields.io/badge/Nostr-Protocol-purple)](https://github.com/nostr-protocol/nostr)
+
+Ein sicherer, dezentraler Gruppen-Chat mit integriertem anonymen Marketplace, gebaut mit **SvelteKit**, **TypeScript** und dem **Nostr-Protokoll**.
+
+---
+
+## � Um was geht es?
+
+Stell dir eine WhatsApp-Gruppe vor, aber **ohne WhatsApp**. Niemand kann mitlesen, niemand kontrolliert die Nachrichten, und es gibt keinen Firmen-Server der deine Daten speichert. Stattdessen:
+
+- 📱 **Jeder hat seinen eigenen digitalen Schlüssel** (wie ein Passwort, nur sicherer)
+- 🔐 **Nachrichten sind verschlüsselt** - nur Gruppenmitglieder können sie lesen
+- 🌐 **Dezentral** - keine Firma kann die App abschalten oder Daten sammeln
+- 🛒 **Integrierter Marktplatz** - Biete Dinge an (Bitcoin-Tausch) ohne deine Identität preiszugeben
+
+**Beispiel:** Du möchtest Bitcoin gegen Euro tauschen, aber anonym bleiben. Du erstellst ein Angebot im Marketplace. Interessenten können dir ihr Interesse zeigen (mit ihrem Namen), und du siehst deren Kontakt-Schlüssel. Dann könnt ihr euch außerhalb der App einigen.
+
+**Perfekt für:** Private Tauschgruppen, vertrauliche Kommunikation, anonyme Marktplätze.
+
+---
+
+## �📸 Screenshots
+
+> *Screenshots folgen in Kürze*
+
+---
+
+## ⚡ Quick Start
+
+```bash
+# 1. Klone das Repository
+git clone https://github.com/Walpurga03/Bitcoin-Swap.git
+cd Bitcoin-Swap
+
+# 2. Installiere Dependencies
+npm install
+
+# 3. Starte Development Server
+npm run dev
+
+# 4. Öffne Browser
+# http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+```
+
+**Live Demo**: [bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123)
+
+---
 
 ## 🚀 Features
 
-- **Dezentraler Gruppen-Chat**: Kommunikation über Nostr-Relays ohne zentrale Server
-- **Zwei-Faktor-Authentifizierung**: Einladungslink + NSEC Private Key mit Whitelist
-- **Ende-zu-Ende-Verschlüsselung**: NIP-44 für sichere Gruppenkommunikation
-- **Anonymer Marketplace**: Erstelle Angebote mit temporären Keys
-- **Private DMs**: Sichere 1-zu-1-Kommunikation (NIP-17)
-- **Client-seitig**: Keine Server-Datenbank, alles läuft im Browser
+### 💬 Dezentraler Gruppen-Chat
+- **Nostr-Relays**: Keine zentralen Server, vollständig dezentral
+- **Echtzeit-Sync**: Alle Gruppenmitglieder sehen Nachrichten
+- **Verschlüsselt**: AES-GCM Ende-zu-Ende-Verschlüsselung
+
+### 🔐 Sicherheit & Authentifizierung
+- **Zwei-Faktor**: Einladungslink + NSEC Private Key
+- **Whitelist**: Nur autorisierte Public Keys haben Zugriff
+- **Client-seitig**: Keys bleiben im Browser, keine Server-Übertragung
+- **Auto-Refresh**: Alle 15 Sekunden neue Nachrichten
+
+### 🛒 Anonymer Marketplace
+- **Temporäre Keys**: Angebote mit einmaligen Keypairs (anonym)
+- **Namen-Pflicht**: Interessenten zeigen ihren Namen beim Login
+- **Kopierbare Keys**: Ein Klick zum Kopieren für externe Kontakte
+- **Rückzug möglich**: Interesse via NIP-09 Delete Events zurückziehen
+
+### 🎯 Technische Highlights
+- **NIP-12**: Tag-Filter `#t=bitcoin-group` für schnelle Abfragen
+- **Hybrid Storage**: IndexedDB (Cache) + Nostr Relay (Persistence)
+- **Smart Filtering**: Interesse-Events getrennt vom Chat
+- **pool.querySync()**: Robuste Event-Retrieval statt subscribeMany
 
 ## 📋 Voraussetzungen
 
@@ -56,30 +121,28 @@ https://example.com/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group12
 ## 📖 Verwendung
 
 ### 1. Login
-
-- Öffne den Einladungslink
+- Öffne den Einladungslink (enthält Relay + Gruppen-Secret)
+- **Gib deinen Namen ein** (Pflichtfeld, min. 2 Zeichen)
 - Gib deinen NSEC Private Key ein (oder Hex-Format)
-- Optional: Gib einen Anzeigenamen ein
 - Klicke auf "Gruppe beitreten"
 
 ### 2. Gruppen-Chat
-
 - Sende Nachrichten an die Gruppe
-- Alle Nachrichten sind verschlüsselt
+- Alle Nachrichten sind **AES-GCM verschlüsselt**
 - Nur Mitglieder mit dem richtigen Secret können mitlesen
+- Automatischer Refresh alle 15 Sekunden
 
 ### 3. Marketplace
+- **Angebot erstellen**: Temporärer Keypair wird generiert (anonym)
+- **Interesse zeigen**: Dein Name + Public Key werden sichtbar
+- **Public Key kopieren**: Klicke auf Name oder Key zum Kopieren
+- **Interesse zurückziehen**: Möglich über orangenen Button
+- Lösche Angebote nach erfolgreicher Transaktion (NIP-09)
 
-- Erstelle anonyme Angebote mit einem temporären Key
-- Andere können Interesse zeigen
-- Starte private DM-Chats mit Interessenten
-- Lösche Angebote nach erfolgreicher Transaktion
-
-### 4. Private Chats
-
-- Klicke auf "Interesse zeigen" bei einem Angebot
-- Starte einen verschlüsselten 1-zu-1-Chat
-- Nur Sender und Empfänger können die Nachrichten lesen
+### 4. Kontaktaufnahme
+- Kopiere Public Keys der Interessenten
+- Kontaktiere sie extern (z.B. über andere Nostr-Clients)
+- Oder nutze die integrierte DM-Funktion (in Entwicklung)
 
 ## 🏗️ Projekt-Struktur
 
@@ -135,28 +198,37 @@ npm run dev
 
 ## 📦 Deployment
 
-### Vercel
+### Vercel (empfohlen)
 
 ```bash
-npm run deploy
+# Production Deployment
+npx vercel --prod
 ```
+
+**Wichtig**: Setze Environment Variable in Vercel Dashboard:
+```
+PUBLIC_ALLOWED_PUBKEYS=npub1...,npub2...,npub3...
+```
+
+**Live URL**: [https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
 
 ### Andere Plattformen
 
 ```bash
 npm run build
 # Deploy den 'build' Ordner
+# Adapter kann in svelte.config.js angepasst werden
 ```
 
 ## 🔄 Nostr NIPs
 
 Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
 
-- **NIP-01**: Basic protocol flow
-- **NIP-04**: Encrypted Direct Messages (vereinfacht)
-- **NIP-09**: Event Deletion
-- **NIP-17**: Private Direct Messages (geplant)
-- **NIP-44**: Encrypted Payloads (Versioned)
+- **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung)
+- **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
+- **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
+- **Custom Encryption**: AES-GCM für Gruppen (angelehnt an NIP-44 Konzept)
+- **NIP-17**: Private Direct Messages (geplant für v2.0)
 
 ## 🤝 Beitragen
 

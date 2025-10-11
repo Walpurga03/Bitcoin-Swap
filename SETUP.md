@@ -79,7 +79,7 @@ https://deine-domain.com/?relay=RELAY_URL&secret=GRUPPEN_SECRET
 ### 🌐 Live-Beispiel (Bitcoin-Swap)
 
 ```
-https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://bitcoin-swap-3ytrlr7ob-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group12345
 ```
 
 **Aufschlüsselung:**

@@ -846,8 +846,7 @@
     font-size: 0.875rem;
   }
 
-  .interest-name:hover .copy-icon,
-  .interest-pubkey-detail:hover .copy-icon {
+  .interest-name:hover .copy-icon {
     opacity: 1;
   }
 
