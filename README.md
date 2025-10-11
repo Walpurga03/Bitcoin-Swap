@@ -153,13 +153,16 @@ https://ihre-domain.com/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-grou
 
 ### Relay-Auswahl
 
+**⚠️ Wichtig:** Das Relay MUSS NIP-12 (Generic Tag Queries) unterstützen, insbesondere `#t` Filter!
+
+**📚 Detaillierte Relay-Anforderungen:** Siehe [`docs/RELAY-REQUIREMENTS.md`](docs/RELAY-REQUIREMENTS.md)
+
 **Empfohlen:** Eigener Relay für maximale Privatsphäre und Kontrolle!
 
-Öffentliche Relays (Beispiele):
-- `wss://relay.damus.io`
-- `wss://relay.nostr.info`
-- `wss://nos.lol`
-- `wss://relay.example.com` (Platzhalter - verwenden Sie Ihren eigenen Relay)
+Öffentliche Relays mit voller NIP-Unterstützung:
+- `wss://relay.damus.io` - Vollständige NIP-01, NIP-09, NIP-12 Unterstützung
+- `wss://relay.nostr.band` - Gute Performance, alle NIPs
+- `wss://nos.lol` - Zuverlässig, schnell
 
 ---
 

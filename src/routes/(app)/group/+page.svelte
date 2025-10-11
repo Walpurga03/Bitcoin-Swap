@@ -66,6 +66,16 @@
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       
+      // ✅ Restore tempKeypair aus userStore falls vorhanden
+      if ($userStore.tempPrivkey) {
+        const { getPublicKeyFromPrivate } = await import('$lib/nostr/crypto');
+        tempKeypair = {
+          privateKey: $userStore.tempPrivkey,
+          publicKey: getPublicKeyFromPrivate($userStore.tempPrivkey)
+        };
+        console.log('✅ [PAGE] tempKeypair aus localStorage wiederhergestellt');
+      }
+      
       // Lade initiale Nachrichten (alle beim ersten Mal)
       await groupStore.loadMessages(true);
       console.log('✅ [PAGE] Nachrichten geladen');
@@ -73,7 +83,7 @@
       await groupStore.loadOffers();
       console.log('✅ [PAGE] Marketplace-Angebote geladen');
 
-      // Auto-Refresh alle 15 Sekunden (nur neue Nachrichten)
+      // Auto-Refresh alle 5 Sekunden (nur neue Nachrichten)
       autoRefreshInterval = setInterval(async () => {
         try {
           await groupStore.loadMessages(false);
@@ -81,7 +91,7 @@
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
-      }, 15000);
+      }, 5000);
 
       // Scroll zu neuesten Nachrichten
       scrollToBottom();
@@ -129,6 +139,10 @@
       loading = true;
       error = '';
 
+      // Zeige sofortiges Feedback
+      const loadingToast = '⏳ Angebot wird erstellt...';
+      error = loadingToast;
+
       // Generiere temporäres Keypair falls noch nicht vorhanden
       if (!tempKeypair) {
         tempKeypair = generateTempKeypair();
@@ -136,11 +150,25 @@
       }
 
       await groupStore.createOffer(offerInput, tempKeypair.privateKey);
+      
+      // Erfolgs-Feedback
+      error = '✅ Angebot wird veröffentlicht...';
+      
+      // Warte kurz damit das Event im Relay gespeichert ist
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await groupStore.loadOffers();
+      
       offerInput = '';
       showOfferForm = false;
-      await groupStore.loadOffers();
+      error = ''; // Lösche Feedback nach Erfolg
+      
+      // Zeige kurze Erfolgs-Meldung
+      setTimeout(() => {
+        alert('✅ Angebot erfolgreich erstellt!');
+      }, 100);
     } catch (e: any) {
-      error = e.message || 'Fehler beim Erstellen des Angebots';
+      error = '❌ ' + (e.message || 'Fehler beim Erstellen des Angebots');
     } finally {
       loading = false;
     }
@@ -151,7 +179,7 @@
 
     try {
       loading = true;
-      error = '';
+      error = '⏳ Interesse wird gesendet...';
 
       console.log('✋ [UI] Sende Interesse für Angebot:', offerId.substring(0, 16) + '...');
 
@@ -178,10 +206,11 @@
 
       console.log('✅ [UI] Angebote neu geladen');
 
+      error = ''; // Lösche Lade-Feedback
       alert('✅ Interesse gesendet! Der Anbieter kann jetzt deinen Public Key sehen.');
     } catch (e: any) {
       console.error('❌ [UI] Fehler beim Senden des Interesses:', e);
-      error = e.message || 'Fehler beim Senden des Interesses';
+      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
       
       // Entferne aus myInterests bei Fehler
       myInterests.delete(offerId);
@@ -236,11 +265,19 @@
 
     try {
       loading = true;
-      error = '';
+      error = '⏳ Angebot wird gelöscht...';
 
       await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
+      
+      // Warte kurz damit das Delete-Event verarbeitet wird
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await groupStore.loadOffers();
+      
+      error = ''; // Lösche Lade-Feedback
+      alert('✅ Angebot erfolgreich gelöscht!');
     } catch (e: any) {
-      error = e.message || 'Fehler beim Löschen';
+      error = '❌ ' + (e.message || 'Fehler beim Löschen');
     } finally {
       loading = false;
     }
@@ -270,7 +307,9 @@
   </header>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="status-message" class:loading={error.includes('⏳')} class:success={error.includes('✅')} class:error={error.includes('❌')}>
+      {error}
+    </div>
   {/if}
 
   <div class="content-grid">
@@ -335,7 +374,12 @@
           ></textarea>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
-              {loading ? '⏳ Wird veröffentlicht...' : '🚀 Angebot veröffentlichen'}
+              {#if loading}
+                <span class="spinner"></span>
+                <span>Wird veröffentlicht...</span>
+              {:else}
+                🚀 Angebot veröffentlichen
+              {/if}
             </button>
           </div>
           <small class="hint">
@@ -912,5 +956,61 @@
     font-size: 0.75rem;
     white-space: nowrap;
     z-index: 10;
+  }
+
+  /* Status-Nachrichten */
+  .status-message {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .status-message.loading {
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #3b82f6;
+  }
+
+  .status-message.success {
+    background-color: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+  }
+
+  .status-message.error {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+
+  /* Spinner Animation */
+  .spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Button mit Spinner */
+  .btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .btn .spinner {
+    margin-right: 0.5rem;
   }
 </style>

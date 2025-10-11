@@ -49,10 +49,32 @@ function createUserStore() {
 
       // Speichere in localStorage (optional, für Session-Persistenz)
       if (typeof window !== 'undefined') {
+        const existingSession = localStorage.getItem('nostr_session');
+        let tempPrivkey = null;
+        
+        // Behalte existierenden tempPrivkey beim erneuten Login
+        if (existingSession) {
+          try {
+            const data = JSON.parse(existingSession);
+            tempPrivkey = data.tempPrivkey || null;
+          } catch (e) {
+            console.error('Fehler beim Parsen der Session:', e);
+          }
+        }
+        
         localStorage.setItem('nostr_session', JSON.stringify({
           pubkey,
-          name: name || null
+          name: name || null,
+          tempPrivkey
         }));
+        
+        // Setze tempPrivkey im State wenn vorhanden
+        if (tempPrivkey) {
+          update(state => ({
+            ...state,
+            tempPrivkey
+          }));
+        }
       }
     },
 
@@ -64,6 +86,22 @@ function createUserStore() {
         ...state,
         tempPrivkey
       }));
+      
+      // Speichere tempPrivkey in localStorage für Persistenz
+      if (typeof window !== 'undefined') {
+        const session = localStorage.getItem('nostr_session');
+        if (session) {
+          try {
+            const data = JSON.parse(session);
+            localStorage.setItem('nostr_session', JSON.stringify({
+              ...data,
+              tempPrivkey
+            }));
+          } catch (e) {
+            console.error('Fehler beim Speichern des tempPrivkey:', e);
+          }
+        }
+      }
     },
 
     /**
@@ -113,6 +151,7 @@ function createUserStore() {
               ...state,
               pubkey: data.pubkey,
               name: data.name,
+              tempPrivkey: data.tempPrivkey || null, // ✅ Restore tempPrivkey
               isAuthenticated: false // Benötigt erneute NSEC-Eingabe
             }));
           } catch (error) {
