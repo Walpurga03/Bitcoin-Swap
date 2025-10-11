@@ -1,182 +1,327 @@
-# NostrGroupChat (Bitcoin-Swap)
+# Bitcoin-Tausch-Netzwerk
 
 [![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-5.4-FF3E00?logo=svelte)](https://kit.svelte.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Nostr](https://img.shields.io/badge/Nostr-Protocol-purple)](https://github.com/nostr-protocol/nostr)
 
-Ein sicherer, dezentraler Gruppen-Chat mit integriertem anonymen Marketplace, gebaut mit **SvelteKit**, **TypeScript** und dem **Nostr-Protokoll**.
+Ein sicherer, dezentraler Gruppen-Chat mit integriertem anonymen Marketplace für Bitcoin-Tauschgeschäfte, gebaut mit **SvelteKit**, **TypeScript** und dem **Nostr-Protokoll**.
 
 ---
 
-## � Um was geht es?
+## 📖 Inhaltsverzeichnis
 
-Stell dir eine WhatsApp-Gruppe vor, aber **ohne WhatsApp**. Niemand kann mitlesen, niemand kontrolliert die Nachrichten, und es gibt keinen Firmen-Server der deine Daten speichert. Stattdessen:
-
-- 📱 **Jeder hat seinen eigenen digitalen Schlüssel** (wie ein Passwort, nur sicherer)
-- 🔐 **Nachrichten sind verschlüsselt** - nur Gruppenmitglieder können sie lesen
-- 🌐 **Dezentral** - keine Firma kann die App abschalten oder Daten sammeln
-- 🛒 **Integrierter Marktplatz** - Biete Dinge an (Bitcoin-Tausch) ohne deine Identität preiszugeben
-
-**Beispiel:** Du möchtest Bitcoin gegen Euro tauschen, aber anonym bleiben. Du erstellst ein Angebot im Marketplace. Interessenten können dir ihr Interesse zeigen (mit ihrem Namen), und du siehst deren Kontakt-Schlüssel. Dann könnt ihr euch außerhalb der App einigen.
-
-**Perfekt für:** Private Tauschgruppen, vertrauliche Kommunikation, anonyme Marktplätze.
-
----
-
-## �📸 Screenshots
-
-> *Screenshots folgen in Kürze*
+- [Überblick](#überblick)
+- [Features](#features)
+- [Voraussetzungen](#voraussetzungen)
+- [Installation](#installation)
+- [Konfiguration](#konfiguration)
+- [Verwendung](#verwendung)
+- [Projekt-Struktur](#projekt-struktur)
+- [Sicherheit](#sicherheit)
+- [Deployment](#deployment)
+- [Technologie-Stack](#technologie-stack)
+- [Lizenz](#lizenz)
 
 ---
 
-## ⚡ Quick Start
+## 🎯 Überblick
 
-```bash
-# 1. Klone das Repository
-git clone https://github.com/Walpurga03/Bitcoin-Swap.git
-cd Bitcoin-Swap
+Das Bitcoin-Tausch-Netzwerk ist eine dezentrale Kommunikationsplattform, die es ermöglicht:
 
-# 2. Installiere Dependencies
-npm install
+- 💬 **Verschlüsselte Gruppenchats** ohne zentrale Server
+- 🛒 **Anonyme Marktplatz-Angebote** für Bitcoin-Tauschgeschäfte
+- 🔐 **Ende-zu-Ende-Verschlüsselung** mit AES-GCM
+- 🌐 **Dezentrale Architektur** über Nostr-Relays
+- 🔑 **Whitelist-basierte Zugriffskontrolle**
 
-# 3. Starte Development Server
-npm run dev
+**Beispiel-Anwendungsfall:**
 
-# 4. Öffne Browser
-# http://localhost:5173/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
-```
+Sie möchten Bitcoin gegen Euro tauschen, aber anonym bleiben:
 
-**Live Demo**: [bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123)
+1. **Sie erstellen ein Angebot** im Marketplace mit einem temporären Schlüssel (vollständig anonym)
+2. **Interessenten zeigen Interesse** - dabei wird ihr Name und Public Key sichtbar
+3. **Sie wählen einen Interessenten aus** - Sie sehen alle Interessenten und deren Public Keys
+4. **Kontaktaufnahme außerhalb der App** - Sie kopieren den Public Key des gewählten Interessenten und kontaktieren ihn über andere Nostr-Clients (z.B. Damus, Amethyst, Snort) oder andere sichere Kanäle
+5. **Transaktion abwickeln** - Die eigentliche Transaktion findet außerhalb der App statt
+
+**Wichtig:** Die App dient nur zur **Anbahnung** des Kontakts. Die eigentliche Kommunikation und Transaktion erfolgt über externe, sichere Kanäle Ihrer Wahl.
 
 ---
 
-## 🚀 Features
+## ⚡ Features
 
 ### 💬 Dezentraler Gruppen-Chat
-- **Nostr-Relays**: Keine zentralen Server, vollständig dezentral
-- **Echtzeit-Sync**: Alle Gruppenmitglieder sehen Nachrichten
-- **Verschlüsselt**: AES-GCM Ende-zu-Ende-Verschlüsselung
+- **Nostr-Relays**: Vollständig dezentral, keine zentralen Server
+- **Echtzeit-Synchronisation**: Alle Gruppenmitglieder sehen Nachrichten sofort
+- **AES-GCM Verschlüsselung**: Ende-zu-Ende verschlüsselte Kommunikation
+- **Auto-Refresh**: Automatische Aktualisierung alle 15 Sekunden
 
 ### 🔐 Sicherheit & Authentifizierung
-- **Zwei-Faktor**: Einladungslink + NSEC Private Key
-- **Whitelist**: Nur autorisierte Public Keys haben Zugriff
-- **Client-seitig**: Keys bleiben im Browser, keine Server-Übertragung
-- **Auto-Refresh**: Alle 15 Sekunden neue Nachrichten
+- **Zwei-Faktor-Authentifizierung**: Einladungslink + NSEC Private Key
+- **Whitelist-System**: Nur autorisierte Public Keys haben Zugriff
+- **Client-seitige Verschlüsselung**: Keys bleiben im Browser
+- **Rate-Limiting**: Schutz vor Spam und Missbrauch
 
-### 🛒 Anonymer Marketplace
-- **Temporäre Keys**: Angebote mit einmaligen Keypairs (anonym)
-- **Namen-Pflicht**: Interessenten zeigen ihren Namen beim Login
-- **Kopierbare Keys**: Ein Klick zum Kopieren für externe Kontakte
-- **Rückzug möglich**: Interesse via NIP-09 Delete Events zurückziehen
+### 🛒 Anonymer Marketplace (Kontaktanbahnung)
+- **Temporäre Schlüssel**: Angebote mit einmaligen Keypairs (vollständig anonym)
+- **Interessenten-Liste**: Angebotsgeber sehen alle Interessenten mit Namen und Public Keys
+- **Auswahl-Freiheit**: Angebotsgeber wählen aus, mit wem sie Kontakt aufnehmen möchten
+- **Kopierbare Keys**: Ein Klick zum Kopieren der Public Keys für externe Kontaktaufnahme
+- **Externe Kommunikation**: Kontaktaufnahme erfolgt außerhalb der App (z.B. über andere Nostr-Clients)
+- **Rückzug möglich**: Interessenten können ihr Interesse via NIP-09 Delete Events zurückziehen
 
 ### 🎯 Technische Highlights
-- **NIP-12**: Tag-Filter `#t=bitcoin-group` für schnelle Abfragen
-- **Hybrid Storage**: IndexedDB (Cache) + Nostr Relay (Persistence)
+- **NIP-12 Tag-Filter**: `#t=bitcoin-group` für effiziente Abfragen
+- **Hybrid Storage**: IndexedDB (Cache) + Nostr Relay (Persistenz)
 - **Smart Filtering**: Interesse-Events getrennt vom Chat
-- **pool.querySync()**: Robuste Event-Retrieval statt subscribeMany
+- **pool.querySync()**: Robuste Event-Retrieval-Strategie
+
+---
 
 ## 📋 Voraussetzungen
 
-- Node.js 18+ 
-- npm oder yarn
+- **Node.js** 18 oder höher
+- **npm** oder **yarn**
+- Ein **Nostr-Relay** (empfohlen: eigener Relay für maximale Privatsphäre)
+
+---
 
 ## 🛠️ Installation
 
+### 1. Repository klonen
+
 ```bash
-# Dependencies installieren
-npm install
-
-# Development Server starten
-npm run dev
-
-# Production Build
-npm run build
-
-# Preview Production Build
-npm run preview
+git clone https://github.com/Walpurga03/Bitcoin-Swap.git
+cd Bitcoin-Swap
 ```
 
-## 🔧 Konfiguration
+### 2. Dependencies installieren
 
-### Whitelist einrichten
+```bash
+npm install
+```
 
-Bearbeite `.env` oder `.env.production`:
+### 3. Environment-Variablen konfigurieren
+
+Erstellen Sie eine `.env` Datei basierend auf `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Bearbeiten Sie `.env` und fügen Sie die erlaubten Public Keys hinzu:
 
 ```env
 PUBLIC_ALLOWED_PUBKEYS=npub1abc...,npub1def...,npub1xyz...
 ```
 
-Du kannst sowohl NPUB- als auch Hex-Format verwenden, komma-separiert.
+**Hinweis:** Sie können sowohl NPUB- als auch Hex-Format verwenden, komma-separiert.
+
+### 4. Development Server starten
+
+```bash
+npm run dev
+```
+
+Die App läuft nun auf `http://localhost:5173`
+
+---
+
+## 🔧 Konfiguration
+
+### Whitelist einrichten
+
+Bearbeiten Sie `.env` oder `.env.production`:
+
+```env
+PUBLIC_ALLOWED_PUBKEYS=npub1abc...,npub1def...,npub1xyz...
+```
 
 ### Einladungslink erstellen
 
-Format: `https://deine-domain.com/?relay=wss%3A%2F%2Frelay-url&secret=gruppen-secret`
+Format: `https://ihre-domain.com/?relay=wss%3A%2F%2Frelay-url&secret=gruppen-secret`
 
-Beispiel:
+**Beispiel:**
 ```
-https://example.com/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
+https://bitcoin-swap.vercel.app/?relay=wss%3A%2F%2Fnostr-relay.online&secret=premium-group123
 ```
+
+**Wichtig:** Die Relay-URL muss URL-encoded sein:
+- `:` wird zu `%3A`
+- `/` wird zu `%2F`
+
+### Relay-Auswahl
+
+**Empfohlen:** Eigener Relay für maximale Privatsphäre und Kontrolle!
+
+Aktuell verwendet: `wss://nostr-relay.online`
+
+Alternative öffentliche Relays:
+- `wss://relay.damus.io`
+- `wss://relay.nostr.info`
+- `wss://nos.lol`
+
+---
 
 ## 📖 Verwendung
 
 ### 1. Login
-- Öffne den Einladungslink (enthält Relay + Gruppen-Secret)
-- **Gib deinen Namen ein** (Pflichtfeld, min. 2 Zeichen)
-- Gib deinen NSEC Private Key ein (oder Hex-Format)
-- Klicke auf "Gruppe beitreten"
+
+1. Öffnen Sie den Einladungslink (enthält Relay + Gruppen-Secret)
+2. Geben Sie Ihren **Namen** ein (Pflichtfeld, min. 2 Zeichen)
+3. Geben Sie Ihren **NSEC Private Key** ein (oder Hex-Format)
+4. Klicken Sie auf "Gruppe beitreten"
 
 ### 2. Gruppen-Chat
-- Sende Nachrichten an die Gruppe
+
+- Senden Sie Nachrichten an die Gruppe
 - Alle Nachrichten sind **AES-GCM verschlüsselt**
 - Nur Mitglieder mit dem richtigen Secret können mitlesen
 - Automatischer Refresh alle 15 Sekunden
 
-### 3. Marketplace
-- **Angebot erstellen**: Temporärer Keypair wird generiert (anonym)
-- **Interesse zeigen**: Dein Name + Public Key werden sichtbar
-- **Public Key kopieren**: Klicke auf Name oder Key zum Kopieren
-- **Interesse zurückziehen**: Möglich über orangenen Button
-- Lösche Angebote nach erfolgreicher Transaktion (NIP-09)
+### 3. Marketplace (Kontaktanbahnung)
 
-### 4. Kontaktaufnahme
-- Kopiere Public Keys der Interessenten
-- Kontaktiere sie extern (z.B. über andere Nostr-Clients)
-- Oder nutze die integrierte DM-Funktion (in Entwicklung)
+**Als Angebotsgeber:**
+1. **Angebot erstellen** - Ein temporärer Keypair wird automatisch generiert (Sie bleiben anonym)
+2. **Interessenten sehen** - Alle Interessenten werden mit Namen und Public Key angezeigt
+3. **Interessenten auswählen** - Sie entscheiden, mit wem Sie Kontakt aufnehmen möchten
+4. **Public Key kopieren** - Klicken Sie auf den Namen oder Public Key eines Interessenten zum Kopieren
+5. **Externe Kontaktaufnahme** - Kontaktieren Sie den gewählten Interessenten über:
+   - Andere Nostr-Clients (Damus, Amethyst, Snort, etc.)
+   - Andere sichere Kommunikationskanäle Ihrer Wahl
+6. **Angebot löschen** - Nach erfolgreicher Kontaktaufnahme können Sie das Angebot löschen
+
+**Als Interessent:**
+1. **Interesse zeigen** - Ihr Name und Public Key werden dem Angebotsgeber angezeigt
+2. **Warten auf Kontakt** - Der Angebotsgeber entscheidet, ob er Sie kontaktiert
+3. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
+
+**Wichtig:** Die App dient nur zur **Kontaktanbahnung**. Die eigentliche Kommunikation und Transaktion erfolgt **außerhalb der App** über sichere Kanäle Ihrer Wahl.
+
+### 4. Externe Kommunikation
+
+Nach der Kontaktanbahnung in der App:
+
+1. **Public Key kopiert** - Sie haben den Public Key des Interessenten kopiert
+2. **Nostr-Client verwenden** - Öffnen Sie einen Nostr-Client Ihrer Wahl:
+   - [Damus](https://damus.io/) (iOS)
+   - [Amethyst](https://github.com/vitorpamplona/amethyst) (Android)
+   - [Snort](https://snort.social/) (Web)
+   - [Iris](https://iris.to/) (Web)
+3. **Direktnachricht senden** - Kontaktieren Sie den Interessenten direkt
+4. **Transaktion abwickeln** - Vereinbaren Sie die Details der Transaktion sicher
+
+---
 
 ## 🏗️ Projekt-Struktur
 
 ```
-src/
-├── lib/
-│   ├── nostr/
-│   │   ├── types.ts          # TypeScript Interfaces
-│   │   ├── client.ts         # Nostr Client & Event-Handling
-│   │   └── crypto.ts         # Verschlüsselung & Key-Management
-│   ├── security/
-│   │   └── validation.ts     # Input-Validierung & Rate-Limiting
-│   ├── stores/
-│   │   ├── userStore.ts      # User State Management
-│   │   └── groupStore.ts     # Group & Messages State
-│   └── utils/
-│       └── index.ts          # Utility-Funktionen
-├── routes/
-│   ├── +page.svelte          # Login-Seite
-│   ├── (app)/
-│   │   ├── group/+page.svelte    # Gruppen-Chat
-│   │   └── dm/[pubkey]/+page.svelte  # Private Chats
-│   ├── debug-secret/+page.svelte     # Debug-Tools
-│   └── test-login/+page.svelte       # Test-Seite
-└── app.html                  # HTML Template
+Bitcoin-Tausch-Netzwerk/
+├── src/
+│   ├── lib/
+│   │   ├── nostr/
+│   │   │   ├── types.ts          # TypeScript Interfaces
+│   │   │   ├── client.ts         # Nostr Client & Event-Handling
+│   │   │   └── crypto.ts         # Verschlüsselung & Key-Management
+│   │   ├── security/
+│   │   │   └── validation.ts     # Input-Validierung & Rate-Limiting
+│   │   ├── stores/
+│   │   │   ├── userStore.ts      # User State Management
+│   │   │   └── groupStore.ts     # Group & Messages State
+│   │   └── utils/
+│   │       └── index.ts          # Utility-Funktionen
+│   ├── routes/
+│   │   ├── +page.svelte          # Login-Seite
+│   │   ├── (app)/
+│   │   │   ├── group/+page.svelte    # Gruppen-Chat & Marketplace
+│   │   │   └── dm/[pubkey]/+page.svelte  # Private Chats
+│   │   ├── debug-secret/+page.svelte     # Debug-Tools
+│   │   └── test-login/+page.svelte       # Test-Seite
+│   └── app.html                  # HTML Template
+├── docs/                         # Dokumentation
+│   ├── SETUP.md                  # Detaillierte Setup-Anleitung
+│   └── PROJECT_STRUCTURE.md      # Projekt-Struktur Details
+├── package.json                  # Dependencies & Scripts
+├── vite.config.ts                # Vite Konfiguration
+├── svelte.config.js              # SvelteKit Konfiguration
+├── tsconfig.json                 # TypeScript Konfiguration
+├── vercel.json                   # Vercel Deployment Config
+├── .env.example                  # Beispiel Environment Variables
+├── .gitignore                    # Git Ignore Rules
+└── README.md                     # Diese Datei
 ```
+
+---
 
 ## 🔐 Sicherheit
 
-- **Client-seitig**: Private Keys verlassen niemals den Browser
-- **Verschlüsselung**: NIP-44 für Gruppen, NIP-17 für DMs
-- **Whitelist**: Nur autorisierte Public Keys haben Zugriff
-- **Rate-Limiting**: Schutz vor Spam und Missbrauch
+### Implementierte Sicherheitsmaßnahmen
+
+- **Client-seitige Verschlüsselung**: Private Keys verlassen niemals den Browser
+- **AES-GCM Verschlüsselung**: Für Gruppen-Nachrichten
+- **NIP-44 Verschlüsselung**: Für private Direktnachrichten (geplant)
+- **Whitelist-System**: Nur autorisierte Public Keys haben Zugriff
+- **Rate-Limiting**: Schutz vor Spam (20 Requests/Minute)
 - **Signatur-Validierung**: Alle Events werden validiert
+- **Input-Validierung**: Schutz vor Injection-Angriffen
+
+### Best Practices
+
+1. **Private Keys**: Niemals in Git committen, nur lokal im Browser speichern
+2. **Whitelist**: Regelmäßig überprüfen und inaktive Keys entfernen
+3. **Relays**: Verwenden Sie vertrauenswürdige Relays oder betreiben Sie eigene
+4. **Secrets**: Lange, zufällige Strings verwenden und nicht wiederverwenden
+
+---
+
+## 📦 Deployment
+
+### Vercel (empfohlen)
+
+1. **Vercel CLI installieren** (falls noch nicht vorhanden):
+```bash
+npm install -g vercel
+```
+
+2. **Login bei Vercel**:
+```bash
+vercel login
+```
+
+3. **Deployment**:
+```bash
+vercel --prod
+```
+
+4. **Environment Variables setzen** im Vercel Dashboard:
+```
+PUBLIC_ALLOWED_PUBKEYS=npub1...,npub2...,npub3...
+```
+
+**Live URL**: [https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
+
+### Andere Plattformen
+
+```bash
+npm run build
+# Deploy den 'build' Ordner
+# Adapter kann in svelte.config.js angepasst werden
+```
+
+---
+
+## 🔄 Nostr NIPs
+
+Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
+
+- **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung)
+- **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
+- **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
+- **Custom Encryption**: AES-GCM für Gruppen (angelehnt an NIP-44 Konzept)
+- **NIP-17**: Private Direct Messages (geplant für v2.0)
+
+---
 
 ## 🧪 Testing
 
@@ -196,54 +341,46 @@ npm run dev
 # http://localhost:5173/test-login
 ```
 
-## 📦 Deployment
+---
 
-### Vercel (empfohlen)
+## 🛠️ Technologie-Stack
 
-```bash
-# Production Deployment
-npx vercel --prod
-```
+- **Frontend**: SvelteKit 2.15, Svelte 4.2
+- **Sprache**: TypeScript 5.7
+- **Protokoll**: Nostr (nostr-tools 2.10)
+- **Verschlüsselung**: AES-GCM (Web Crypto API)
+- **Build-Tool**: Vite 5.4
+- **Deployment**: Vercel (Adapter: @sveltejs/adapter-vercel)
+- **Styling**: Custom CSS mit CSS Variables
 
-**Wichtig**: Setze Environment Variable in Vercel Dashboard:
-```
-PUBLIC_ALLOWED_PUBKEYS=npub1...,npub2...,npub3...
-```
-
-**Live URL**: [https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
-
-### Andere Plattformen
-
-```bash
-npm run build
-# Deploy den 'build' Ordner
-# Adapter kann in svelte.config.js angepasst werden
-```
-
-## 🔄 Nostr NIPs
-
-Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
-
-- **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung)
-- **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
-- **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
-- **Custom Encryption**: AES-GCM für Gruppen (angelehnt an NIP-44 Konzept)
-- **NIP-17**: Private Direct Messages (geplant für v2.0)
+---
 
 ## 🤝 Beitragen
 
-Contributions sind willkommen! Bitte erstelle einen Pull Request oder öffne ein Issue.
+Contributions sind willkommen! Bitte:
+
+1. Forken Sie das Repository
+2. Erstellen Sie einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
+3. Committen Sie Ihre Änderungen (`git commit -m 'Add some AmazingFeature'`)
+4. Pushen Sie zum Branch (`git push origin feature/AmazingFeature`)
+5. Öffnen Sie einen Pull Request
+
+---
 
 ## 📄 Lizenz
 
-MIT License - siehe LICENSE Datei
+MIT License - siehe [LICENSE](LICENSE) Datei für Details
+
+---
 
 ## ⚠️ Hinweise
 
 - Dies ist eine Proof-of-Concept-Implementation
 - Für Production-Einsatz sollten zusätzliche Sicherheitsaudits durchgeführt werden
 - Private Keys sollten sicher gespeichert werden (z.B. mit Browser-Extension)
-- Teste die Whitelist-Funktionalität gründlich vor dem Deployment
+- Testen Sie die Whitelist-Funktionalität gründlich vor dem Deployment
+
+---
 
 ## 🔗 Links
 
@@ -251,3 +388,17 @@ MIT License - siehe LICENSE Datei
 - [nostr-tools](https://github.com/nbd-wtf/nostr-tools)
 - [SvelteKit](https://kit.svelte.dev/)
 - [Vercel](https://vercel.com/)
+
+---
+
+## 📞 Support
+
+Bei Fragen oder Problemen:
+
+1. Prüfen Sie die [SETUP.md](docs/SETUP.md) für detaillierte Anweisungen
+2. Öffnen Sie ein Issue auf GitHub
+3. Prüfen Sie die Browser-Console (F12) für Debug-Informationen
+
+---
+
+**Entwickelt mit ❤️ für die dezentrale Zukunft**
