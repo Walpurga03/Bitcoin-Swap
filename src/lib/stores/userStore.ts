@@ -57,6 +57,9 @@ function createUserStore() {
           try {
             const data = JSON.parse(existingSession);
             tempPrivkey = data.tempPrivkey || null;
+            if (tempPrivkey) {
+              console.log('✅ [LOGIN] tempPrivkey aus localStorage geladen');
+            }
           } catch (e) {
             console.error('Fehler beim Parsen der Session:', e);
           }
@@ -74,6 +77,7 @@ function createUserStore() {
             ...state,
             tempPrivkey
           }));
+          console.log('✅ [LOGIN] tempPrivkey in State gesetzt');
         }
       }
     },
@@ -130,10 +134,30 @@ function createUserStore() {
      * Logout
      */
     logout: () => {
+      // Speichere tempPrivkey vor dem Logout
+      let savedTempPrivkey: string | null = null;
+      if (typeof window !== 'undefined') {
+        const session = localStorage.getItem('nostr_session');
+        if (session) {
+          try {
+            const data = JSON.parse(session);
+            savedTempPrivkey = data.tempPrivkey || null;
+          } catch (e) {
+            console.error('Fehler beim Lesen des tempPrivkey:', e);
+          }
+        }
+      }
+      
+      // Reset State
       set(initialState);
       
-      // Lösche localStorage
-      if (typeof window !== 'undefined') {
+      // Speichere nur tempPrivkey zurück in localStorage (ohne andere Session-Daten)
+      if (typeof window !== 'undefined' && savedTempPrivkey) {
+        localStorage.setItem('nostr_session', JSON.stringify({
+          tempPrivkey: savedTempPrivkey
+        }));
+        console.log('✅ [LOGOUT] tempPrivkey wurde für nächsten Login gespeichert');
+      } else if (typeof window !== 'undefined') {
         localStorage.removeItem('nostr_session');
       }
     },

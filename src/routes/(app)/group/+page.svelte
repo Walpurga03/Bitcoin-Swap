@@ -65,6 +65,7 @@
   onMount(async () => {
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
+      console.log('📊 [PAGE] userStore.tempPrivkey:', $userStore.tempPrivkey ? 'vorhanden' : 'nicht vorhanden');
       
       // ✅ Restore tempKeypair aus userStore falls vorhanden
       if ($userStore.tempPrivkey) {
@@ -73,7 +74,11 @@
           privateKey: $userStore.tempPrivkey,
           publicKey: getPublicKeyFromPrivate($userStore.tempPrivkey)
         };
-        console.log('✅ [PAGE] tempKeypair aus localStorage wiederhergestellt');
+        console.log('✅ [PAGE] tempKeypair wiederhergestellt:');
+        console.log('  - Private Key:', tempKeypair.privateKey.substring(0, 16) + '...');
+        console.log('  - Public Key:', tempKeypair.publicKey.substring(0, 16) + '...');
+      } else {
+        console.log('⚠️ [PAGE] Kein tempPrivkey gefunden - Angebote werden als anonym angezeigt');
       }
       
       // Lade initiale Nachrichten (alle beim ersten Mal)
@@ -413,6 +418,13 @@
                       <span class="badge badge-primary">Dein Angebot</span>
                     {:else}
                       <span class="badge badge-secondary">Anonym</span>
+                    {/if}
+                    <!-- Debug Info (nur in Entwicklung sichtbar) -->
+                    {#if false}
+                      <small style="font-size: 0.6rem; opacity: 0.5;">
+                        Offer: {offer.tempPubkey.substring(0, 8)}... |
+                        Temp: {tempKeypair?.publicKey?.substring(0, 8) || 'none'}...
+                      </small>
                     {/if}
                   </span>
                   <span class="offer-time">
