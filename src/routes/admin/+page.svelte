@@ -9,7 +9,9 @@
   // @ts-ignore
   import { env } from '$env/dynamic/public';
 
-  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1s98sys9c58fy2xn62wp8cy5ke2rak3hjdd3z7ahc4jm5tck4fadqrfd9f5';
+  // Admin Public Key wird aus .env.production geladen
+  // Fallback nur für lokale Entwicklung ohne .env
+  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
 
   let whitelist: WhitelistData | null = null;
   let loading = false;
@@ -61,7 +63,7 @@
       error = '';
       
       const group = $groupStore;
-      if (!group || !group.relay) {
+      if (!group || !group.relay || !group.channelId) {
         error = 'Gruppe nicht initialisiert';
         return;
       }
@@ -75,16 +77,18 @@
         }
       }
 
-      whitelist = await loadWhitelist([group.relay], adminHex);
+      console.log('📋 Lade Whitelist für Gruppe:', group.channelId.substring(0, 16) + '...');
+      whitelist = await loadWhitelist([group.relay], adminHex, group.channelId);
       
       if (!whitelist) {
-        // Erstelle neue leere Whitelist
+        // Erstelle neue leere Whitelist für diese Gruppe
         whitelist = {
           pubkeys: [],
           updated_at: Math.floor(Date.now() / 1000),
-          admin_pubkey: adminHex
+          admin_pubkey: adminHex,
+          channel_id: group.channelId
         };
-        success = 'Neue Whitelist erstellt';
+        success = 'Neue Whitelist für diese Gruppe erstellt';
       } else {
         success = `Whitelist geladen: ${whitelist.pubkeys.length} Einträge`;
       }
@@ -126,7 +130,7 @@
         return;
       }
 
-      if (!group || !group.relay) {
+      if (!group || !group.relay || !group.channelId) {
         error = 'Gruppe nicht initialisiert';
         return;
       }
@@ -139,8 +143,8 @@
 
       saving = true;
 
-      // Füge hinzu und speichere
-      const result = await addToWhitelist(validation.hex!, user.privateKey, [group.relay]);
+      // Füge hinzu und speichere (mit channelId)
+      const result = await addToWhitelist(validation.hex!, user.privateKey, [group.relay], group.channelId);
 
       if (result) {
         // Lade Whitelist neu
@@ -176,15 +180,15 @@
         return;
       }
 
-      if (!group || !group.relay) {
+      if (!group || !group.relay || !group.channelId) {
         error = 'Gruppe nicht initialisiert';
         return;
       }
 
       saving = true;
 
-      // Entferne und speichere
-      const result = await removeFromWhitelist(pubkey, user.privateKey, [group.relay]);
+      // Entferne und speichere (mit channelId)
+      const result = await removeFromWhitelist(pubkey, user.privateKey, [group.relay], group.channelId);
 
       if (result) {
         // Lade Whitelist neu
@@ -227,6 +231,15 @@
       ← Zurück zur Gruppe
     </button>
   </div>
+
+  {#if $groupStore && $groupStore.channelId}
+    <div class="group-info">
+      <h3>📍 Aktuelle Gruppe</h3>
+      <p><strong>Channel ID:</strong> <code>{$groupStore.channelId.substring(0, 16)}...{$groupStore.channelId.substring($groupStore.channelId.length - 8)}</code></p>
+      <p><strong>Relay:</strong> {$groupStore.relay}</p>
+      <p class="hint">Diese Whitelist gilt nur für diese Gruppe. Andere Gruppen haben separate Whitelists.</p>
+    </div>
+  {/if}
 
   {#if error}
     <div class="alert alert-error">{error}</div>
@@ -282,9 +295,14 @@
             {#each whitelist.pubkeys as pubkey}
               <div class="pubkey-item">
                 <div class="pubkey-info">
-                  <code class="pubkey-hex" on:click={() => copyToClipboard(pubkey)}>
+                  <button
+                    class="pubkey-hex"
+                    on:click={() => copyToClipboard(pubkey)}
+                    type="button"
+                    title="In Zwischenablage kopieren"
+                  >
                     {formatPubkey(pubkey)}
-                  </code>
+                  </button>
                   <span class="copy-hint">Klicken zum Kopieren</span>
                 </div>
                 <button
@@ -326,7 +344,42 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .group-info {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .group-info h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.125rem;
+    color: var(--primary-color);
+  }
+
+  .group-info p {
+    margin: 0.5rem 0;
+    font-size: 0.875rem;
+  }
+
+  .group-info code {
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .group-info .hint {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(59, 130, 246, 0.2);
+    color: var(--text-muted);
+    font-style: italic;
   }
 
   .admin-header h1 {
@@ -415,12 +468,19 @@
     cursor: pointer;
     padding: 0.25rem 0.5rem;
     background: var(--bg-secondary);
+    border: 1px solid transparent;
     border-radius: 0.25rem;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
+    color: inherit;
   }
 
   .pubkey-hex:hover {
     background: var(--border-color);
+  }
+
+  .pubkey-hex:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .copy-hint {

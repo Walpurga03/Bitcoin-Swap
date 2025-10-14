@@ -1,6 +1,7 @@
 /**
- * Whitelist Management auf Nostr Relay
- * 
+ * Whitelist Management auf Nostr Relay (Pro Gruppe)
+ *
+ * Jede Gruppe hat ihre eigene Whitelist basierend auf der channelId.
  * Die Whitelist wird als Replaceable Event (Kind 30000) auf dem Relay gespeichert.
  * Format: JSON-Array mit Public Keys (hex oder npub)
  */
@@ -10,34 +11,45 @@ import { nip19 } from 'nostr-tools';
 
 // Event Kind für Whitelist (Replaceable Event)
 const WHITELIST_KIND = 30000;
-const WHITELIST_D_TAG = 'bitcoin-group-whitelist';
+
+/**
+ * Generiere d-Tag für Whitelist basierend auf channelId
+ */
+function getWhitelistDTag(channelId: string): string {
+  return `whitelist-${channelId}`;
+}
 
 export interface WhitelistData {
   pubkeys: string[]; // Array von hex pubkeys
   updated_at: number;
   admin_pubkey: string;
+  channel_id: string; // Gruppen-ID für diese Whitelist
 }
 
 /**
- * Lade Whitelist vom Relay
+ * Lade Whitelist vom Relay für eine spezifische Gruppe
  */
 export async function loadWhitelist(
   relays: string[],
-  adminPubkey: string
+  adminPubkey: string,
+  channelId: string
 ): Promise<WhitelistData | null> {
   try {
+    const dTag = getWhitelistDTag(channelId);
     console.log('📋 [WHITELIST] Lade Whitelist vom Relay...');
     console.log('  Admin Pubkey:', adminPubkey.substring(0, 16) + '...');
+    console.log('  Channel ID:', channelId.substring(0, 16) + '...');
+    console.log('  d-Tag:', dTag);
     
     const events = await fetchEvents(relays, {
       kinds: [WHITELIST_KIND],
       authors: [adminPubkey],
-      '#d': [WHITELIST_D_TAG],
+      '#d': [dTag],
       limit: 1
     });
 
     if (events.length === 0) {
-      console.log('⚠️ [WHITELIST] Keine Whitelist gefunden');
+      console.log('⚠️ [WHITELIST] Keine Whitelist für diese Gruppe gefunden');
       return null;
     }
 
@@ -54,15 +66,19 @@ export async function loadWhitelist(
 }
 
 /**
- * Speichere Whitelist auf Relay (nur für Admin)
+ * Speichere Whitelist auf Relay für eine spezifische Gruppe (nur für Admin)
  */
 export async function saveWhitelist(
   pubkeys: string[],
   adminPrivateKey: string,
-  relays: string[]
+  relays: string[],
+  channelId: string
 ): Promise<boolean> {
   try {
+    const dTag = getWhitelistDTag(channelId);
     console.log('💾 [WHITELIST] Speichere Whitelist auf Relay...');
+    console.log('  Channel ID:', channelId.substring(0, 16) + '...');
+    console.log('  d-Tag:', dTag);
     
     const { getPublicKey } = await import('nostr-tools');
     const adminPubkey = getPublicKey(adminPrivateKey as any);
@@ -70,15 +86,17 @@ export async function saveWhitelist(
     const data: WhitelistData = {
       pubkeys: pubkeys.map(normalizePublicKey),
       updated_at: Math.floor(Date.now() / 1000),
-      admin_pubkey: adminPubkey
+      admin_pubkey: adminPubkey,
+      channel_id: channelId
     };
 
     const event = await createEvent(
       WHITELIST_KIND,
       JSON.stringify(data),
       [
-        ['d', WHITELIST_D_TAG],
-        ['t', 'bitcoin-group']
+        ['d', dTag],
+        ['t', 'bitcoin-group'],
+        ['channel', channelId] // Zusätzlicher Tag für einfacheres Filtern
       ],
       adminPrivateKey
     );
@@ -86,7 +104,7 @@ export async function saveWhitelist(
     const result = await publishEvent(event, relays);
     
     if (result.success) {
-      console.log('✅ [WHITELIST] Whitelist gespeichert');
+      console.log('✅ [WHITELIST] Whitelist für Gruppe gespeichert');
       return true;
     } else {
       console.error('❌ [WHITELIST] Fehler beim Speichern');
@@ -146,21 +164,22 @@ function normalizePublicKey(pubkey: string): string {
 export async function addToWhitelist(
   pubkey: string,
   adminPrivateKey: string,
-  relays: string[]
+  relays: string[],
+  channelId: string
 ): Promise<boolean> {
   try {
     const { getPublicKey } = await import('nostr-tools');
     const adminPubkey = getPublicKey(adminPrivateKey as any);
     
-    // Lade aktuelle Whitelist
-    const currentWhitelist = await loadWhitelist(relays, adminPubkey);
+    // Lade aktuelle Whitelist für diese Gruppe
+    const currentWhitelist = await loadWhitelist(relays, adminPubkey, channelId);
     const pubkeys = currentWhitelist ? [...currentWhitelist.pubkeys] : [];
     
     // Füge neuen Key hinzu (wenn nicht schon vorhanden)
     const normalizedPubkey = normalizePublicKey(pubkey);
     if (!pubkeys.includes(normalizedPubkey)) {
       pubkeys.push(normalizedPubkey);
-      return await saveWhitelist(pubkeys, adminPrivateKey, relays);
+      return await saveWhitelist(pubkeys, adminPrivateKey, relays, channelId);
     }
     
     return true; // Bereits vorhanden
@@ -176,14 +195,15 @@ export async function addToWhitelist(
 export async function removeFromWhitelist(
   pubkey: string,
   adminPrivateKey: string,
-  relays: string[]
+  relays: string[],
+  channelId: string
 ): Promise<boolean> {
   try {
     const { getPublicKey } = await import('nostr-tools');
     const adminPubkey = getPublicKey(adminPrivateKey as any);
     
-    // Lade aktuelle Whitelist
-    const currentWhitelist = await loadWhitelist(relays, adminPubkey);
+    // Lade aktuelle Whitelist für diese Gruppe
+    const currentWhitelist = await loadWhitelist(relays, adminPubkey, channelId);
     if (!currentWhitelist) return false;
     
     // Entferne Key
@@ -192,7 +212,7 @@ export async function removeFromWhitelist(
       pk => normalizePublicKey(pk) !== normalizedPubkey
     );
     
-    return await saveWhitelist(pubkeys, adminPrivateKey, relays);
+    return await saveWhitelist(pubkeys, adminPrivateKey, relays, channelId);
   } catch (error) {
     console.error('Fehler beim Entfernen aus Whitelist:', error);
     return false;
