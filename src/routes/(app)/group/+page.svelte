@@ -563,50 +563,80 @@
 
               {#if expandedOffers.has(offer.id) && offer.replies.length > 0}
                 <div class="interest-list">
-                  <div class="interest-header">
-                    <strong>Interessenten:</strong>
-                    <small class="hint-text">💡 Klicke auf Name oder Public Key zum Kopieren</small>
-                  </div>
-                  {#each offer.replies as reply (reply.id)}
-                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
-                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
-                    <div class="interest-item">
-                      <div class="interest-meta">
-                        <button
-                          class="interest-name clickable"
-                          on:click={() => copyToClipboard(reply.pubkey)}
-                          title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
-                        >
-                          👤 <strong>{userName}</strong>
-                          <span class="copy-icon">📋</span>
-                        </button>
-                        <span class="interest-time">
-                          {formatTimestamp(reply.created_at)}
-                        </span>
-                      </div>
-                      <div class="interest-actions">
-                        <button
-                          class="interest-pubkey-detail clickable"
-                          on:click={() => copyToClipboard(reply.pubkey)}
-                          title="Klicke zum Kopieren: {reply.pubkey}"
-                        >
-                          🔑 {truncatePubkey(reply.pubkey)}
-                        </button>
-                        <button
-                          class="btn btn-chat btn-sm"
-                          on:click={() => startChatAndDeleteOffer(offer.id, reply.pubkey)}
-                          title="Privaten Chat mit {userName} starten"
-                        >
-                          💬 Chat starten
-                        </button>
-                      </div>
-                      {#if message !== userName}
-                        <div class="interest-message">
-                          {message}
-                        </div>
-                      {/if}
+                  {#if offer.tempPubkey === tempKeypair?.publicKey}
+                    <!-- Angebotsgeber sieht alle Interessenten mit Details -->
+                    <div class="interest-header">
+                      <strong>Interessenten:</strong>
+                      <small class="hint-text">💡 Klicke auf Name oder Public Key zum Kopieren</small>
                     </div>
-                  {/each}
+                    {#each offer.replies as reply (reply.id)}
+                      {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
+                      {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
+                      <div class="interest-item">
+                        <div class="interest-meta">
+                          <button
+                            class="interest-name clickable"
+                            on:click={() => copyToClipboard(reply.pubkey)}
+                            title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
+                          >
+                            👤 <strong>{userName}</strong>
+                            <span class="copy-icon">📋</span>
+                          </button>
+                          <span class="interest-time">
+                            {formatTimestamp(reply.created_at)}
+                          </span>
+                        </div>
+                        <div class="interest-actions">
+                          <button
+                            class="interest-pubkey-detail clickable"
+                            on:click={() => copyToClipboard(reply.pubkey)}
+                            title="Klicke zum Kopieren: {reply.pubkey}"
+                          >
+                            🔑 {truncatePubkey(reply.pubkey)}
+                          </button>
+                          <button
+                            class="btn btn-chat btn-sm"
+                            on:click={() => startChatAndDeleteOffer(offer.id, reply.pubkey)}
+                            title="Privaten Chat mit {userName} starten"
+                          >
+                            💬 Chat starten
+                          </button>
+                        </div>
+                        {#if message !== userName}
+                          <div class="interest-message">
+                            {message}
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  {:else}
+                    <!-- Interessenten sehen nur ihr eigenes Interesse -->
+                    <div class="interest-header">
+                      <strong>Dein Interesse:</strong>
+                    </div>
+                    {#each offer.replies.filter(r => r.pubkey === $userStore.pubkey) as reply (reply.id)}
+                      {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
+                      {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
+                      <div class="interest-item own-interest">
+                        <div class="interest-meta">
+                          <span class="interest-name">
+                            👤 <strong>{userName}</strong>
+                          </span>
+                          <span class="interest-time">
+                            {formatTimestamp(reply.created_at)}
+                          </span>
+                        </div>
+                        {#if message !== userName}
+                          <div class="interest-message">
+                            {message}
+                          </div>
+                        {/if}
+                        <div class="interest-status">
+                          ⏳ Warte auf Kontakt vom Anbieter...
+                        </div>
+                      </div>
+                    {/each}
+                  {/if}
                 </div>
               {/if}
             </div>
@@ -1074,6 +1104,22 @@
     font-size: 0.875rem;
     color: var(--text-color);
     line-height: 1.5;
+  }
+
+  .own-interest {
+    background-color: rgba(59, 130, 246, 0.05);
+    border-left-color: #3b82f6;
+  }
+
+  .interest-status {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: rgba(59, 130, 246, 0.1);
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    color: #3b82f6;
+    text-align: center;
+    font-weight: 500;
   }
 
   .offer-actions {
