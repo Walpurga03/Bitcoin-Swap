@@ -64,11 +64,12 @@
     }
   }
 
-  $: if (!$isAuthenticated) {
-    goto('/');
-  }
-
   onMount(async () => {
+    // Prüfe Authentication
+    if (!$isAuthenticated) {
+      goto('/');
+      return;
+    }
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       console.log('📊 [PAGE] userStore.tempPrivkey:', $userStore.tempPrivkey ? 'vorhanden' : 'nicht vorhanden');
