@@ -5,9 +5,9 @@
   // @ts-ignore
   import { goto } from '$app/navigation';
   import { userStore } from '$lib/stores/userStore';
+  import { groupStore } from '$lib/stores/groupStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
-  import { nip44Encrypt, nip44Decrypt } from '$lib/nostr/crypto';
-  import { createEvent, publishEvent, fetchEvents } from '$lib/nostr/client';
+  import { sendNIP17Message, fetchNIP17Conversation } from '$lib/nostr/nip17';
   import type { DMMessage } from '$lib/nostr/types';
 
   let recipientPubkey = '';
@@ -54,61 +54,37 @@
     if (!$userStore.pubkey || !$userStore.privateKey) return;
 
     try {
-      // Hole gesendete Nachrichten (von mir an Empfänger)
-      const sentEvents = await fetchEvents(
-        [$page.data.relay || 'wss://relay.damus.io'],
-        {
-          kinds: [4], // NIP-04 DMs (vereinfacht, sollte NIP-17 sein)
-          authors: [$userStore.pubkey],
-          '#p': [recipientPubkey],
-          limit: 50
-        }
+      console.log('💬 [DM] Lade NIP-17 Konversation...');
+      console.log('  Mein Pubkey:', $userStore.pubkey.substring(0, 16) + '...');
+      console.log('  Empfänger:', recipientPubkey.substring(0, 16) + '...');
+      
+      const relay = $groupStore.relay || 'wss://relay.damus.io';
+      
+      // Lade NIP-17 Konversation
+      // fetchNIP17Conversation(userPubkey, userPrivateKey, otherPubkey, relays, limit)
+      const conversation = await fetchNIP17Conversation(
+        $userStore.pubkey,
+        $userStore.privateKey,
+        recipientPubkey,
+        [relay],
+        50
       );
 
-      // Hole empfangene Nachrichten (von Empfänger an mich)
-      const receivedEvents = await fetchEvents(
-        [$page.data.relay || 'wss://relay.damus.io'],
-        {
-          kinds: [4],
-          authors: [recipientPubkey],
-          '#p': [$userStore.pubkey],
-          limit: 50
-        }
-      );
+      console.log('✅ [DM] Konversation geladen:', conversation.length, 'Nachrichten');
 
-      // Kombiniere und sortiere
-      const allEvents = [...sentEvents, ...receivedEvents];
-      
-      const decryptedMessages: DMMessage[] = [];
-      
-      for (const event of allEvents) {
-        try {
-          const isSent = event.pubkey === $userStore.pubkey;
-          const otherPubkey = isSent ? recipientPubkey : event.pubkey;
-          
-          const decrypted = nip44Decrypt(
-            event.content,
-            $userStore.privateKey,
-            otherPubkey
-          );
+      // Konvertiere zu DMMessage Format
+      messages = conversation.map(msg => ({
+        id: msg.id,
+        content: msg.content, // Bereits entschlüsselt
+        sender: msg.senderPubkey,
+        recipient: msg.recipientPubkey,
+        created_at: msg.timestamp,
+        decrypted: msg.content
+      })).sort((a, b) => a.created_at - b.created_at);
 
-          decryptedMessages.push({
-            id: event.id,
-            content: event.content,
-            sender: event.pubkey,
-            recipient: isSent ? recipientPubkey : $userStore.pubkey,
-            created_at: event.created_at,
-            decrypted
-          });
-        } catch (e) {
-          console.error('Entschlüsselung fehlgeschlagen:', e);
-        }
-      }
-
-      // Sortiere nach Zeitstempel
-      messages = decryptedMessages.sort((a, b) => a.created_at - b.created_at);
     } catch (e: any) {
-      console.error('Fehler beim Laden der Nachrichten:', e);
+      console.error('❌ [DM] Fehler beim Laden der Nachrichten:', e);
+      error = e.message || 'Fehler beim Laden der Nachrichten';
     }
   }
 
@@ -119,37 +95,40 @@
       loading = true;
       error = '';
 
-      // Verschlüssele Nachricht
-      const encrypted = nip44Encrypt(
-        messageInput,
+      console.log('📤 [DM] Sende NIP-17 Nachricht...');
+      
+      const relay = $groupStore.relay || 'wss://relay.damus.io';
+      const content = messageInput;
+
+      // Sende NIP-17 Gift-Wrapped Message
+      // sendNIP17Message(content, recipientPubkey, senderPrivateKey, relays)
+      const giftWrap = await sendNIP17Message(
+        content,
+        recipientPubkey,
         $userStore.privateKey,
-        recipientPubkey
+        [relay]
       );
 
-      // Erstelle Event
-      const event = await createEvent(
-        4, // DM Kind
-        encrypted,
-        [['p', recipientPubkey]],
-        $userStore.privateKey
-      );
+      console.log('✅ [DM] Nachricht gesendet:', giftWrap.id.substring(0, 16) + '...');
 
-      // Publiziere
-      await publishEvent(event, [$page.data.relay || 'wss://relay.damus.io']);
-
-      // Füge lokal hinzu
+      // Füge lokal hinzu (optimistisch)
       messages = [...messages, {
-        id: event.id,
-        content: encrypted,
+        id: giftWrap.id,
+        content: content,
         sender: $userStore.pubkey!,
         recipient: recipientPubkey,
-        created_at: event.created_at,
-        decrypted: messageInput
+        created_at: Math.floor(Date.now() / 1000),
+        decrypted: content
       }];
 
       messageInput = '';
       scrollToBottom();
+
+      // Lade Nachrichten neu nach kurzer Verzögerung
+      setTimeout(() => loadMessages(), 1000);
+
     } catch (e: any) {
+      console.error('❌ [DM] Fehler beim Senden:', e);
       error = e.message || 'Fehler beim Senden';
     } finally {
       loading = false;
@@ -175,10 +154,11 @@
       ← Zurück
     </button>
     <div>
-      <h1>💬 Privater Chat</h1>
+      <h1>💬 Privater Chat (NIP-17)</h1>
       <p class="recipient-info">
         Mit: <strong>{truncatePubkey(recipientPubkey)}</strong>
       </p>
+      <p class="nip17-badge">🔒 Ende-zu-Ende verschlüsselt (Gift-Wrapped)</p>
     </div>
   </header>
 
@@ -251,6 +231,13 @@
     font-size: 0.875rem;
     color: var(--text-muted);
     margin: 0.25rem 0 0 0;
+  }
+
+  .nip17-badge {
+    font-size: 0.75rem;
+    color: #10b981;
+    margin: 0.25rem 0 0 0;
+    font-weight: 500;
   }
 
   .messages-container {

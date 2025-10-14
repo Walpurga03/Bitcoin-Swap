@@ -55,20 +55,21 @@ Sie möchten Bitcoin gegen Euro tauschen, aber anonym bleiben:
 - **Nostr-Relays**: Vollständig dezentral, keine zentralen Server
 - **Echtzeit-Synchronisation**: Alle Gruppenmitglieder sehen Nachrichten sofort
 - **AES-GCM Verschlüsselung**: Ende-zu-Ende verschlüsselte Kommunikation
-- **Auto-Refresh**: Automatische Aktualisierung alle 15 Sekunden
+- **Auto-Refresh**: Automatische Aktualisierung alle 5 Sekunden
 
 ### 🔐 Sicherheit & Authentifizierung
 - **Zwei-Faktor-Authentifizierung**: Einladungslink + NSEC Private Key
-- **Whitelist-System**: Nur autorisierte Public Keys haben Zugriff
+- **Gruppenbasierte Whitelist**: Jede Gruppe hat ihre eigene Whitelist auf dem Relay
+- **Admin-Verwaltung**: Whitelist-Verwaltung direkt im Gruppen-Chat
 - **Client-seitige Verschlüsselung**: Keys bleiben im Browser
 - **Rate-Limiting**: Schutz vor Spam und Missbrauch
 
-### 🛒 Anonymer Marketplace (Kontaktanbahnung)
+### 🛒 Anonymer Marketplace mit NIP-17 Chat
 - **Temporäre Schlüssel**: Angebote mit einmaligen Keypairs (vollständig anonym)
 - **Interessenten-Liste**: Angebotsgeber sehen alle Interessenten mit Namen und Public Keys
-- **Auswahl-Freiheit**: Angebotsgeber wählen aus, mit wem sie Kontakt aufnehmen möchten
-- **Kopierbare Keys**: Ein Klick zum Kopieren der Public Keys für externe Kontaktaufnahme
-- **Externe Kommunikation**: Kontaktaufnahme erfolgt außerhalb der App (z.B. über andere Nostr-Clients)
+- **NIP-17 Private Chat**: Ende-zu-Ende verschlüsselte Direktnachrichten mit Gift-Wrapping
+- **Auto-Delete**: Angebot wird automatisch gelöscht beim Chat-Start
+- **Metadaten-Schutz**: Sender und Empfänger sind nicht öffentlich sichtbar
 - **Rückzug möglich**: Interessenten können ihr Interesse via NIP-09 Delete Events zurückziehen
 
 ### 🎯 Technische Highlights
@@ -182,37 +183,40 @@ https://ihre-domain.com/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-grou
 - Nur Mitglieder mit dem richtigen Secret können mitlesen
 - Automatischer Refresh alle 15 Sekunden
 
-### 3. Marketplace (Kontaktanbahnung)
+### 3. Marketplace mit NIP-17 Chat
 
 **Als Angebotsgeber:**
 1. **Angebot erstellen** - Ein temporärer Keypair wird automatisch generiert (Sie bleiben anonym)
 2. **Interessenten sehen** - Alle Interessenten werden mit Namen und Public Key angezeigt
-3. **Interessenten auswählen** - Sie entscheiden, mit wem Sie Kontakt aufnehmen möchten
-4. **Public Key kopieren** - Klicken Sie auf den Namen oder Public Key eines Interessenten zum Kopieren
-5. **Externe Kontaktaufnahme** - Kontaktieren Sie den gewählten Interessenten über:
-   - Andere Nostr-Clients (Damus, Amethyst, Snort, etc.)
-   - Andere sichere Kommunikationskanäle Ihrer Wahl
-6. **Angebot löschen** - Nach erfolgreicher Kontaktaufnahme können Sie das Angebot löschen
+3. **Chat starten** - Klicken Sie auf "💬 Chat starten" bei einem Interessenten
+4. **Auto-Delete** - Ihr Angebot wird automatisch gelöscht (Sie werden gefragt)
+5. **Private Kommunikation** - Chatten Sie direkt in der App mit NIP-17 Verschlüsselung
+6. **Transaktion abwickeln** - Vereinbaren Sie die Details sicher im privaten Chat
 
 **Als Interessent:**
 1. **Interesse zeigen** - Ihr Name und Public Key werden dem Angebotsgeber angezeigt
-2. **Warten auf Kontakt** - Der Angebotsgeber entscheidet, ob er Sie kontaktiert
-3. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
+2. **Warten auf Chat** - Der Angebotsgeber kann einen Chat mit Ihnen starten
+3. **Private Kommunikation** - Chatten Sie direkt in der App
+4. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
 
-**Wichtig:** Die App dient nur zur **Kontaktanbahnung**. Die eigentliche Kommunikation und Transaktion erfolgt **außerhalb der App** über sichere Kanäle Ihrer Wahl.
+**NIP-17 Vorteile:**
+- **Gift-Wrapping**: Dreifache Verschlüsselung (Rumor → Seal → Gift Wrap)
+- **Metadaten-Schutz**: Sender und Empfänger sind nicht öffentlich sichtbar
+- **Zeitstempel-Randomisierung**: Erschwert Timing-Analysen
+- **Zufällige Pubkeys**: Keine Verknüpfung zur echten Identität
 
-### 4. Externe Kommunikation
+📚 **Detaillierte Anleitung**: Siehe [`docs/NIP17-CHAT-ANLEITUNG.md`](docs/NIP17-CHAT-ANLEITUNG.md)
 
-Nach der Kontaktanbahnung in der App:
+### 4. Whitelist-Verwaltung (Admin)
 
-1. **Public Key kopiert** - Sie haben den Public Key des Interessenten kopiert
-2. **Nostr-Client verwenden** - Öffnen Sie einen Nostr-Client Ihrer Wahl:
-   - [Damus](https://damus.io/) (iOS)
-   - [Amethyst](https://github.com/vitorpamplona/amethyst) (Android)
-   - [Snort](https://snort.social/) (Web)
-   - [Iris](https://iris.to/) (Web)
-3. **Direktnachricht senden** - Kontaktieren Sie den Interessenten direkt
-4. **Transaktion abwickeln** - Vereinbaren Sie die Details der Transaktion sicher
+**Als Admin:**
+1. **Admin-Button** - Im Gruppen-Chat Header: "🔐 Whitelist verwalten"
+2. **Gruppenspezifisch** - Jede Gruppe hat ihre eigene Whitelist
+3. **Pubkeys hinzufügen** - Neue Nutzer zur aktuellen Gruppe hinzufügen
+4. **Pubkeys entfernen** - Nutzer aus der Gruppe entfernen
+5. **Relay-basiert** - Whitelist wird auf dem Relay gespeichert (NIP-01 Replaceable Events)
+
+📚 **Detaillierte Anleitung**: Siehe [`docs/WHITELIST-ANLEITUNG.md`](docs/WHITELIST-ANLEITUNG.md)
 
 ---
 
@@ -225,7 +229,9 @@ Bitcoin-Tausch-Netzwerk/
 │   │   ├── nostr/
 │   │   │   ├── types.ts          # TypeScript Interfaces
 │   │   │   ├── client.ts         # Nostr Client & Event-Handling
-│   │   │   └── crypto.ts         # Verschlüsselung & Key-Management
+│   │   │   ├── crypto.ts         # Verschlüsselung & Key-Management
+│   │   │   ├── nip17.ts          # NIP-17 Gift-Wrapped Messages
+│   │   │   └── whitelist.ts      # Gruppenbasierte Whitelist
 │   │   ├── security/
 │   │   │   └── validation.ts     # Input-Validierung & Rate-Limiting
 │   │   ├── stores/
@@ -237,13 +243,16 @@ Bitcoin-Tausch-Netzwerk/
 │   │   ├── +page.svelte          # Login-Seite
 │   │   ├── (app)/
 │   │   │   ├── group/+page.svelte    # Gruppen-Chat & Marketplace
-│   │   │   └── dm/[pubkey]/+page.svelte  # Private Chats
+│   │   │   └── dm/[pubkey]/+page.svelte  # NIP-17 Private Chats
+│   │   ├── admin/+page.svelte    # Whitelist-Verwaltung
 │   │   ├── debug-secret/+page.svelte     # Debug-Tools
 │   │   └── test-login/+page.svelte       # Test-Seite
 │   └── app.html                  # HTML Template
 ├── docs/                         # Dokumentation
 │   ├── SETUP.md                  # Detaillierte Setup-Anleitung
-│   └── PROJECT_STRUCTURE.md      # Projekt-Struktur Details
+│   ├── PROJECT_STRUCTURE.md      # Projekt-Struktur Details
+│   ├── WHITELIST-ANLEITUNG.md    # Gruppenbasierte Whitelist
+│   └── NIP17-CHAT-ANLEITUNG.md   # NIP-17 Private Chat
 ├── package.json                  # Dependencies & Scripts
 ├── vite.config.ts                # Vite Konfiguration
 ├── svelte.config.js              # SvelteKit Konfiguration
@@ -262,11 +271,14 @@ Bitcoin-Tausch-Netzwerk/
 
 - **Client-seitige Verschlüsselung**: Private Keys verlassen niemals den Browser
 - **AES-GCM Verschlüsselung**: Für Gruppen-Nachrichten
-- **NIP-44 Verschlüsselung**: Für private Direktnachrichten (geplant)
-- **Whitelist-System**: Nur autorisierte Public Keys haben Zugriff
+- **NIP-17 Gift-Wrapping**: Dreifache Verschlüsselung für private Chats
+- **NIP-44 Verschlüsselung**: Für Seal und Gift Wrap Verschlüsselung
+- **Gruppenbasierte Whitelist**: Jede Gruppe hat separate Zugriffskontrolle
+- **Relay-basierte Whitelist**: Dezentrale Speicherung auf Nostr-Relays
 - **Rate-Limiting**: Schutz vor Spam (20 Requests/Minute)
 - **Signatur-Validierung**: Alle Events werden validiert
 - **Input-Validierung**: Schutz vor Injection-Angriffen
+- **Metadaten-Schutz**: NIP-17 versteckt Sender/Empfänger-Informationen
 
 ### Best Practices
 
@@ -317,11 +329,12 @@ npm run build
 
 Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
 
-- **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung)
+- **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung, Replaceable Events)
 - **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
 - **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
-- **Custom Encryption**: AES-GCM für Gruppen (angelehnt an NIP-44 Konzept)
-- **NIP-17**: Private Direct Messages (geplant für v2.0)
+- **NIP-17**: Gift-Wrapped Private Direct Messages (Rumor, Seal, Gift Wrap)
+- **NIP-44**: Verschlüsselung für NIP-17 (Seal und Gift Wrap)
+- **Custom Encryption**: AES-GCM für Gruppen-Nachrichten
 
 ---
 

@@ -7,30 +7,78 @@
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
   import { parseInviteLink } from '$lib/utils';
-  import { validatePrivateKey, validateRelayUrl, isInWhitelist } from '$lib/security/validation';
+  import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
+  import { loadWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
   // @ts-ignore
   import { env } from '$env/dynamic/public';
   
-  // Fallback für Environment Variable
-  const PUBLIC_ALLOWED_PUBKEYS = env.PUBLIC_ALLOWED_PUBKEYS || 'npub1s98sys9c58fy2xn62wp8cy5ke2rak3hjdd3z7ahc4jm5tck4fadqrfd9f5,npub1vj0rae3fxgx5k7uluvgg2fk2hzagaqpqqdxxtt9lrmuqgzwspv6qw5vdam,npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
+  // Admin Public Key (für Whitelist-Verwaltung)
+  // Wird aus .env.production geladen, Fallback nur für lokale Entwicklung
+  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
 
   let nsecInput = '';
   let nameInput = '';
   let error = '';
   let loading = false;
   let inviteData: { relay: string; secret: string } | null = null;
+  let whitelist: WhitelistData | null = null;
+  let whitelistLoading = false;
 
-  onMount(() => {
+  onMount(async () => {
     // Parse URL-Parameter
     const url = window.location.href;
     const parsed = parseInviteLink(url);
     
     if (parsed) {
       inviteData = parsed;
+      
+      // Lade Whitelist vom Relay
+      await loadWhitelistFromRelay(parsed.relay);
     } else {
       error = 'Ungültiger Einladungslink. Bitte verwende einen gültigen Link.';
     }
   });
+
+  async function loadWhitelistFromRelay(relay: string) {
+    try {
+      whitelistLoading = true;
+      console.log('📋 Lade Whitelist vom Relay:', relay);
+      
+      if (!inviteData) {
+        console.error('❌ Keine Einladungsdaten vorhanden');
+        return;
+      }
+      
+      // Leite channelId aus Secret ab
+      const { deriveChannelId } = await import('$lib/nostr/crypto');
+      const channelId = await deriveChannelId(inviteData.secret);
+      console.log('🔑 Channel ID abgeleitet:', channelId.substring(0, 16) + '...');
+      
+      // Konvertiere Admin NPUB zu Hex
+      const { nip19 } = await import('nostr-tools');
+      let adminPubkeyHex = ADMIN_PUBKEY;
+      
+      if (ADMIN_PUBKEY.startsWith('npub1')) {
+        const decoded = nip19.decode(ADMIN_PUBKEY as any);
+        if ((decoded as any).type === 'npub') {
+          adminPubkeyHex = (decoded as any).data as string;
+        }
+      }
+      
+      // Lade Whitelist für diese Gruppe
+      whitelist = await loadWhitelist([relay], adminPubkeyHex, channelId);
+      
+      if (whitelist) {
+        console.log('✅ Whitelist für Gruppe geladen:', whitelist.pubkeys.length, 'Einträge');
+      } else {
+        console.warn('⚠️ Keine Whitelist für diese Gruppe gefunden');
+      }
+    } catch (e) {
+      console.error('❌ Fehler beim Laden der Whitelist:', e);
+    } finally {
+      whitelistLoading = false;
+    }
+  }
 
   async function handleLogin() {
     error = '';
@@ -54,11 +102,37 @@
       }
 
       // Prüfe Whitelist
-      const { getPublicKey } = await import('nostr-tools');
+      const { getPublicKey, nip19 } = await import('nostr-tools');
       const pubkey = getPublicKey(keyValidation.hex! as any);
       
-      if (!isInWhitelist(pubkey, PUBLIC_ALLOWED_PUBKEYS)) {
-        throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
+      // Konvertiere Admin NPUB zu Hex für Vergleich
+      let adminPubkeyHex = ADMIN_PUBKEY;
+      if (ADMIN_PUBKEY.startsWith('npub1')) {
+        const decoded = nip19.decode(ADMIN_PUBKEY as any);
+        if ((decoded as any).type === 'npub') {
+          adminPubkeyHex = (decoded as any).data as string;
+        }
+      }
+      
+      // Admin darf sich IMMER einloggen (auch wenn Whitelist leer ist)
+      const isAdmin = pubkey.toLowerCase() === adminPubkeyHex.toLowerCase();
+      
+      if (isAdmin) {
+        console.log('✅ Admin-Login erkannt - Whitelist-Prüfung übersprungen');
+      } else {
+        // Normale Benutzer: Prüfe Whitelist
+        if (!whitelist || whitelist.pubkeys.length === 0) {
+          throw new Error('Whitelist ist leer. Bitte kontaktiere den Administrator.');
+        }
+        
+        // Prüfe ob Pubkey in Whitelist
+        const isInWhitelist = whitelist.pubkeys.some(
+          allowed => allowed.toLowerCase() === pubkey.toLowerCase()
+        );
+        
+        if (!isInWhitelist) {
+          throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
+        }
       }
 
       // Validiere Name
@@ -98,6 +172,13 @@
       <div class="invite-info">
         <p><strong>Relay:</strong> {inviteData.relay}</p>
         <p><strong>Gruppe:</strong> {inviteData.secret}</p>
+        {#if whitelistLoading}
+          <p class="whitelist-status loading">⏳ Lade Whitelist...</p>
+        {:else if whitelist}
+          <p class="whitelist-status success">✅ Whitelist geladen ({whitelist.pubkeys.length} Einträge)</p>
+        {:else}
+          <p class="whitelist-status warning">⚠️ Keine Whitelist gefunden</p>
+        {/if}
       </div>
     {/if}
 
@@ -235,5 +316,28 @@
     margin: 0.5rem 0;
     font-size: 0.875rem;
     color: var(--text-muted);
+  }
+
+  .whitelist-status {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .whitelist-status.loading {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+  }
+
+  .whitelist-status.success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+  }
+
+  .whitelist-status.warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
   }
 </style>
