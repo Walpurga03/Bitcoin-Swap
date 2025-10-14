@@ -190,7 +190,7 @@ export async function sendNIP17Message(
 export async function unwrapGiftWrap(
   giftWrap: NostrEvent,
   recipientPrivateKey: string
-): Promise<{ content: string; senderPubkey: string; timestamp: number } | null> {
+): Promise<{ content: string; senderPubkey: string; recipientPubkey: string; timestamp: number } | null> {
   try {
     // 1. Entschlüssele Gift Wrap → Seal
     const sealJson = nip44Decrypt(giftWrap.content, recipientPrivateKey, giftWrap.pubkey);
@@ -200,13 +200,17 @@ export async function unwrapGiftWrap(
     const rumorJson = nip44Decrypt(seal.content, recipientPrivateKey, seal.pubkey);
     const rumor = JSON.parse(rumorJson) as Rumor;
 
-    // 3. Extrahiere Sender aus Rumor Tags
+    // 3. Extrahiere Sender und Empfänger aus Rumor Tags
     const fromTag = rumor.tags.find(t => t[0] === 'from');
     const senderPubkey = fromTag ? fromTag[1] : 'unknown';
+    
+    const pTag = rumor.tags.find(t => t[0] === 'p');
+    const recipientPubkey = pTag ? pTag[1] : 'unknown';
 
     return {
       content: rumor.content,
       senderPubkey,
+      recipientPubkey,
       timestamp: rumor.created_at
     };
   } catch (error) {
@@ -252,7 +256,7 @@ export async function fetchNIP17Messages(
           id: giftWrap.id,
           content: unwrapped.content,
           senderPubkey: unwrapped.senderPubkey,
-          recipientPubkey: userPubkey,
+          recipientPubkey: unwrapped.recipientPubkey, // Verwende echten Empfänger aus Rumor
           timestamp: unwrapped.timestamp
         });
       }
