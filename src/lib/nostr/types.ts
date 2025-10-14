@@ -85,6 +85,7 @@ export interface NostrFilter {
   '#e'?: string[];
   '#p'?: string[];
   '#t'?: string[];
+  '#d'?: string[];
   since?: number;
   until?: number;
   limit?: number;

@@ -1,4 +1,5 @@
 import { nip19 } from 'nostr-tools';
+import type { WhitelistData } from '$lib/nostr/whitelist';
 
 /**
  * Validiere einen Private Key (NSEC oder Hex)
@@ -118,12 +119,10 @@ export function validateGroupSecret(secret: string): { valid: boolean; error?: s
 
 /**
  * Prüfe ob ein Public Key in der Whitelist ist
+ * Unterstützt sowohl WhitelistData-Objekt als auch String (Fallback)
  */
-export function isInWhitelist(pubkey: string, whitelist: string): boolean {
+export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): boolean {
   try {
-    // Parse Whitelist (komma-separiert)
-    const allowedKeys = whitelist.split(',').map(k => k.trim());
-
     // Konvertiere pubkey zu hex falls npub
     let hexPubkey = pubkey;
     if (pubkey.startsWith('npub1')) {
@@ -133,22 +132,14 @@ export function isInWhitelist(pubkey: string, whitelist: string): boolean {
       }
     }
 
-    // Prüfe gegen alle Whitelist-Einträge
-    for (const allowedKey of allowedKeys) {
-      let allowedHex = allowedKey;
-      
-      // Konvertiere zu hex falls npub
-      if (allowedKey.startsWith('npub1')) {
-        try {
-          const decoded = nip19.decode(allowedKey as any);
-          if ((decoded as any).type === 'npub' && typeof (decoded as any).data === 'string') {
-            allowedHex = (decoded as any).data;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
+    // Wenn keine Whitelist vorhanden, verweigere Zugriff
+    if (!whitelist) {
+      console.warn('⚠️ Keine Whitelist verfügbar - Zugriff verweigert');
+      return false;
+    }
 
+    // Prüfe gegen alle Whitelist-Einträge (bereits in hex)
+    for (const allowedHex of whitelist.pubkeys) {
       // Vergleiche (case-insensitive)
       if (hexPubkey.toLowerCase() === allowedHex.toLowerCase()) {
         return true;
@@ -157,7 +148,7 @@ export function isInWhitelist(pubkey: string, whitelist: string): boolean {
 
     return false;
   } catch (error) {
-    console.error('Fehler bei Whitelist-Prüfung:', error);
+    console.error('❌ Fehler bei Whitelist-Prüfung:', error);
     return false;
   }
 }
