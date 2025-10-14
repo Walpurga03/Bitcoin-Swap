@@ -8,6 +8,7 @@
   import { groupStore, groupMessages, marketplaceOffers } from '$lib/stores/groupStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
+  import { createChatInvitation, fetchChatInvitations } from '$lib/nostr/chatInvitation';
 
   // Admin Public Key
   const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
@@ -21,6 +22,8 @@
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
   let expandedOffers: Set<string> = new Set();
   let myInterests: Set<string> = new Set(); // Angebote für die ich Interesse gezeigt habe
+  let chatInvitations: Map<string, any> = new Map(); // offerId -> ChatInvitation
+  let pendingInvitations: Set<string> = new Set(); // offerIds mit ausstehenden Einladungen
 
   let messagesContainer: HTMLDivElement;
   let autoRefreshInterval: ReturnType<typeof setInterval>;
@@ -107,11 +110,19 @@
       await groupStore.loadOffers();
       console.log('✅ [PAGE] Marketplace-Angebote geladen');
 
+      // Lade Chat-Einladungen
+      if ($userStore.pubkey) {
+        await loadChatInvitations();
+      }
+
       // Auto-Refresh alle 5 Sekunden (nur neue Nachrichten)
       autoRefreshInterval = setInterval(async () => {
         try {
           await groupStore.loadMessages(false);
           await groupStore.loadOffers();
+          if ($userStore.pubkey) {
+            await loadChatInvitations();
+          }
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
@@ -307,10 +318,83 @@
     }
   }
 
-  async function startChatAndDeleteOffer(offerId: string, recipientPubkey: string) {
+  async function loadChatInvitations() {
+    try {
+      if (!$userStore.pubkey || !$groupStore.relay) return;
+      
+      const relay = $groupStore.relay;
+      const invitations = await fetchChatInvitations($userStore.pubkey, [relay]);
+      
+      // Speichere Einladungen nach offerId
+      chatInvitations.clear();
+      invitations.forEach(inv => {
+        // ChatInvitation hat bereits offerId als Property
+        chatInvitations.set(inv.offerId, inv);
+      });
+      chatInvitations = chatInvitations;
+      
+      console.log('✅ [INVITATIONS] Geladen:', chatInvitations.size, 'Einladungen');
+
+      // Prüfe ob Anbieter: Suche nach akzeptierten Einladungen
+      if (tempKeypair?.publicKey) {
+        await checkForAcceptedInvitations();
+      }
+    } catch (e) {
+      console.error('❌ [INVITATIONS] Fehler beim Laden:', e);
+    }
+  }
+
+  async function checkForAcceptedInvitations() {
+    try {
+      if (!tempKeypair?.publicKey || !$groupStore.relay) return;
+
+      const relay = $groupStore.relay;
+      
+      // Hole alle meine Angebote
+      const myOffers = $marketplaceOffers.filter(o => o.tempPubkey === tempKeypair.publicKey);
+      
+      for (const offer of myOffers) {
+        // Prüfe ob für dieses Angebot eine Einladung existiert und akzeptiert wurde
+        const { fetchEvents } = await import('$lib/nostr/client');
+        
+        // Suche nach Akzeptierungs-Events für dieses Angebot
+        const acceptanceEvents = await fetchEvents([relay], {
+          kinds: [30078],
+          '#e': [offer.id]
+        });
+
+        // Filtere nach type=chat-acceptance
+        const accepted = acceptanceEvents.filter(event => {
+          const typeTag = event.tags.find((t: string[]) => t[0] === 'type');
+          return typeTag && typeTag[1] === 'chat-acceptance';
+        });
+
+        if (accepted.length > 0) {
+          // Einladung wurde akzeptiert!
+          const acceptedBy = accepted[0].pubkey;
+          console.log('🎉 [ACCEPTANCE] Einladung akzeptiert von:', acceptedBy.substring(0, 16) + '...');
+          
+          // Lösche Angebot
+          console.log('🗑️ [ACCEPTANCE] Lösche Angebot:', offer.id.substring(0, 16) + '...');
+          await groupStore.deleteOffer(offer.id, tempKeypair.privateKey);
+          
+          // Zeige Benachrichtigung und öffne Chat
+          if (confirm('🎉 Ein Interessent hat deine Chat-Einladung angenommen!\n\nMöchtest du jetzt zum Chat wechseln?')) {
+            goto(`/dm/${acceptedBy}`);
+          }
+          
+          // Nur eine Akzeptierung auf einmal verarbeiten
+          break;
+        }
+      }
+    } catch (e) {
+      console.error('❌ [ACCEPTANCE] Fehler beim Prüfen:', e);
+    }
+  }
+
+  async function createChatInvitationForOffer(offerId: string, recipientPubkey: string) {
     if (!tempKeypair?.privateKey) {
-      // Wenn kein tempKeypair vorhanden, nur Chat öffnen
-      goto(`/dm/${recipientPubkey}`);
+      alert('❌ Fehler: Kein temporärer Key vorhanden');
       return;
     }
 
@@ -318,45 +402,102 @@
       // Prüfe ob dies mein eigenes Angebot ist
       const offer = $marketplaceOffers.find(o => o.id === offerId);
       if (!offer || offer.tempPubkey !== tempKeypair.publicKey) {
-        // Nicht mein Angebot, nur Chat öffnen
-        goto(`/dm/${recipientPubkey}`);
+        alert('❌ Fehler: Dies ist nicht dein Angebot');
         return;
       }
 
-      // Bestätige Auto-Delete
-      if (!confirm('💬 Chat wird gestartet.\n\n🗑️ Dein Angebot wird automatisch gelöscht, da du nun direkt mit einem Interessenten kommunizierst.\n\nFortfahren?')) {
+      // Bestätige Chat-Einladung
+      if (!confirm('💬 Möchtest du eine Chat-Einladung an diesen Interessenten senden?\n\nDer Interessent wird benachrichtigt und kann die Einladung annehmen.')) {
         return;
       }
 
       loading = true;
-      error = '⏳ Angebot wird gelöscht...';
-
-      console.log('🗑️ [AUTO-DELETE] Lösche Angebot vor Chat-Start:', offerId.substring(0, 16) + '...');
-
-      // Lösche Angebot
-      await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
+      error = '⏳ Chat-Einladung wird erstellt...';
       
-      // Warte kurz damit das Delete-Event verarbeitet wird
+      // Markiere als ausstehend
+      pendingInvitations.add(offerId);
+      pendingInvitations = pendingInvitations;
+
+      console.log('📨 [INVITATION] Erstelle Einladung für Angebot:', offerId.substring(0, 16) + '...');
+      console.log('📨 [INVITATION] Empfänger:', recipientPubkey.substring(0, 16) + '...');
+
+      const relay = $groupStore.relay;
+      if (!relay) {
+        throw new Error('Kein Relay verfügbar');
+      }
+      
+      await createChatInvitation(offerId, recipientPubkey, tempKeypair.privateKey, [relay]);
+      
+      // Warte kurz damit das Event im Relay gespeichert ist
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Reload Angebote
-      await groupStore.loadOffers();
-      
-      console.log('✅ [AUTO-DELETE] Angebot gelöscht, öffne Chat...');
+      console.log('✅ [INVITATION] Einladung erstellt');
 
-      error = '';
+      error = '✅ Chat-Einladung gesendet! Warte auf Annahme...';
       
-      // Öffne Chat
-      goto(`/dm/${recipientPubkey}`);
+      // Zeige Erfolgs-Meldung
+      setTimeout(() => {
+        error = '';
+      }, 3000);
     } catch (e: any) {
-      console.error('❌ [AUTO-DELETE] Fehler:', e);
-      error = '❌ ' + (e.message || 'Fehler beim Löschen');
-      loading = false;
+      console.error('❌ [INVITATION] Fehler:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Erstellen der Einladung');
       
-      // Öffne Chat trotzdem
-      if (confirm('Fehler beim Löschen des Angebots. Trotzdem Chat öffnen?')) {
-        goto(`/dm/${recipientPubkey}`);
+      // Entferne aus pending bei Fehler
+      pendingInvitations.delete(offerId);
+      pendingInvitations = pendingInvitations;
+    } finally {
+      loading = false;
+    }
+  }
+
+  // Prüfe ob für ein Angebot eine ausstehende Einladung existiert
+  function hasPendingInvitation(offerId: string): boolean {
+    return pendingInvitations.has(offerId);
+  }
+
+  async function acceptInvitationAndJoinChat(invitation: any, offerId: string) {
+    if (!$userStore.privateKey || !tempKeypair?.privateKey) {
+      alert('❌ Fehler: Keine Keys vorhanden');
+      return;
+    }
+
+    try {
+      loading = true;
+      error = '⏳ Trete Chat bei...';
+
+      console.log('✅ [JOIN-CHAT] Akzeptiere Einladung:', invitation.id.substring(0, 16) + '...');
+
+      const relay = $groupStore.relay;
+      if (!relay) {
+        throw new Error('Kein Relay verfügbar');
       }
+
+      // 1. Akzeptiere Einladung
+      const { acceptChatInvitation } = await import('$lib/nostr/chatInvitation');
+      await acceptChatInvitation(invitation.id, offerId, $userStore.privateKey, [relay]);
+
+      console.log('✅ [JOIN-CHAT] Einladung akzeptiert');
+
+      // 2. Lösche Angebot (mit tempKeypair des Angebots)
+      // WICHTIG: Wir müssen das Angebot mit dem tempKeypair des Angebotgebers löschen
+      // Da wir das nicht haben, muss der Angebotgeber das Angebot löschen
+      // Wir zeigen nur eine Meldung
+      
+      error = '✅ Chat-Einladung akzeptiert!';
+
+      // Warte kurz
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 3. Öffne Chat mit Anbieter
+      const offerCreatorPubkey = invitation.offerCreatorPubkey;
+      console.log('✅ [JOIN-CHAT] Öffne Chat mit:', offerCreatorPubkey.substring(0, 16) + '...');
+      
+      goto(`/dm/${offerCreatorPubkey}`);
+    } catch (e: any) {
+      console.error('❌ [JOIN-CHAT] Fehler:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Beitreten');
+      loading = false;
     }
   }
 
@@ -594,13 +735,23 @@
                           >
                             🔑 {truncatePubkey(reply.pubkey)}
                           </button>
-                          <button
-                            class="btn btn-chat btn-sm"
-                            on:click={() => startChatAndDeleteOffer(offer.id, reply.pubkey)}
-                            title="Privaten Chat mit {userName} starten"
-                          >
-                            💬 Chat starten
-                          </button>
+                          {#if hasPendingInvitation(offer.id)}
+                            <button
+                              class="btn btn-chat btn-sm"
+                              disabled
+                              title="Warte auf Annahme der Chat-Einladung"
+                            >
+                              ⏳ Warte auf Annahme...
+                            </button>
+                          {:else}
+                            <button
+                              class="btn btn-chat btn-sm"
+                              on:click={() => createChatInvitationForOffer(offer.id, reply.pubkey)}
+                              title="Chat-Einladung an {userName} senden"
+                            >
+                              💬 Chat-Einladung senden
+                            </button>
+                          {/if}
                         </div>
                         {#if message !== userName}
                           <div class="interest-message">
@@ -617,6 +768,7 @@
                     {#each offer.replies.filter(r => r.pubkey === $userStore.pubkey) as reply (reply.id)}
                       {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
                       {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
+                      {@const invitation = chatInvitations.get(offer.id)}
                       <div class="interest-item own-interest">
                         <div class="interest-meta">
                           <span class="interest-name">
@@ -631,9 +783,27 @@
                             {message}
                           </div>
                         {/if}
-                        <div class="interest-status">
-                          ⏳ Warte auf Kontakt vom Anbieter...
-                        </div>
+                        
+                        {#if invitation}
+                          <!-- Chat-Einladung vorhanden -->
+                          <div class="chat-invitation">
+                            <div class="invitation-message">
+                              💬 Der Anbieter möchte mit dir chatten!
+                            </div>
+                            <button
+                              class="btn btn-join-chat btn-sm"
+                              on:click={() => acceptInvitationAndJoinChat(invitation, offer.id)}
+                              disabled={loading}
+                            >
+                              ✅ Chat beitreten
+                            </button>
+                          </div>
+                        {:else}
+                          <!-- Keine Einladung, warte auf Anbieter -->
+                          <div class="interest-status">
+                            ⏳ Warte auf Kontakt vom Anbieter...
+                          </div>
+                        {/if}
                       </div>
                     {/each}
                   {/if}
@@ -1120,6 +1290,44 @@
     color: #3b82f6;
     text-align: center;
     font-weight: 500;
+  }
+
+  .chat-invitation {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1));
+    border: 2px solid #3b82f6;
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .invitation-message {
+    font-size: 0.9375rem;
+    color: #3b82f6;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .btn-join-chat {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    font-weight: 600;
+    transition: all 0.2s;
+    width: 100%;
+    padding: 0.625rem;
+  }
+
+  .btn-join-chat:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  }
+
+  .btn-join-chat:active {
+    transform: translateY(0);
   }
 
   .offer-actions {
