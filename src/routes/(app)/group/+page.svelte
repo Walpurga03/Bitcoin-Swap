@@ -457,8 +457,20 @@
   }
 
   async function acceptInvitationAndJoinChat(invitation: any, offerId: string) {
-    if (!$userStore.privateKey || !tempKeypair?.privateKey) {
-      alert('❌ Fehler: Keine Keys vorhanden');
+    // Prüfe ob User eingeloggt ist (privateKey vorhanden)
+    if (!$userStore.privateKey) {
+      // Speichere Chat-Ziel im localStorage für Redirect nach Login
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pending_chat_redirect', invitation.offerCreatorPubkey);
+      }
+      
+      alert('⚠️ Aus Sicherheitsgründen musst du dich neu einloggen!\n\nDein Private Key wird nicht gespeichert und muss bei jedem Browser-Refresh neu eingegeben werden.\n\nNach dem Login wirst du automatisch zum Chat weitergeleitet.');
+      goto('/');
+      return;
+    }
+    
+    if (!tempKeypair?.privateKey) {
+      alert('❌ Fehler: Kein temporärer Key vorhanden');
       return;
     }
 

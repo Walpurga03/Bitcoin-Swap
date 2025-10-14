@@ -153,6 +153,15 @@
         console.warn('Nachrichten konnten nicht geladen werden:', e);
       }
 
+      // Prüfe ob ein Chat-Redirect ausstehend ist
+      const pendingChatRedirect = localStorage.getItem('pending_chat_redirect');
+      if (pendingChatRedirect) {
+        console.log('✅ Redirect zu ausstehenden Chat:', pendingChatRedirect.substring(0, 16) + '...');
+        localStorage.removeItem('pending_chat_redirect');
+        await goto(`/dm/${pendingChatRedirect}`);
+        return;
+      }
+
       // Weiterleitung zum Chat
       await goto('/group');
     } catch (e: any) {
