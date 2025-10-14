@@ -2,10 +2,16 @@
   import { onMount, onDestroy } from 'svelte';
   // @ts-ignore
   import { goto } from '$app/navigation';
+  // @ts-ignore
+  import { env } from '$env/dynamic/public';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore, groupMessages, marketplaceOffers } from '$lib/stores/groupStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
+
+  // Admin Public Key
+  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
+  let isAdmin = false;
 
   let messageInput = '';
   let offerInput = '';
@@ -66,6 +72,18 @@
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       console.log('📊 [PAGE] userStore.tempPrivkey:', $userStore.tempPrivkey ? 'vorhanden' : 'nicht vorhanden');
+      
+      // Prüfe ob User Admin ist
+      const { nip19 } = await import('nostr-tools');
+      let adminHex = ADMIN_PUBKEY;
+      if (ADMIN_PUBKEY.startsWith('npub1')) {
+        const decoded = nip19.decode(ADMIN_PUBKEY as any);
+        if ((decoded as any).type === 'npub') {
+          adminHex = (decoded as any).data as string;
+        }
+      }
+      isAdmin = $userStore.pubkey?.toLowerCase() === adminHex.toLowerCase();
+      console.log('🔐 [PAGE] Admin-Status:', isAdmin);
       
       // ✅ Restore tempKeypair aus userStore falls vorhanden
       if ($userStore.tempPrivkey) {
@@ -304,11 +322,21 @@
       <p class="user-info">
         Angemeldet als: <strong>{$userStore.name || 'Anonym'}</strong>
         ({truncatePubkey($userStore.pubkey || '')})
+        {#if isAdmin}
+          <span class="admin-badge">👑 Admin</span>
+        {/if}
       </p>
     </div>
-    <button class="btn btn-secondary" on:click={handleLogout}>
-      Abmelden
-    </button>
+    <div class="header-actions">
+      {#if isAdmin}
+        <button class="btn btn-admin" on:click={() => goto('/admin')}>
+          🔐 Whitelist verwalten
+        </button>
+      {/if}
+      <button class="btn btn-secondary" on:click={handleLogout}>
+        Abmelden
+      </button>
+    </div>
   </header>
 
   {#if error}
@@ -551,6 +579,49 @@
     font-size: 0.875rem;
     color: var(--text-muted);
     margin: 0.25rem 0 0 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .admin-badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .btn-admin {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+  }
+
+  .btn-admin:hover {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+
+  .btn-admin:active {
+    transform: translateY(0);
   }
 
   .content-grid {
