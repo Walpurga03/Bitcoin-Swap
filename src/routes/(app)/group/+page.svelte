@@ -307,6 +307,59 @@
     }
   }
 
+  async function startChatAndDeleteOffer(offerId: string, recipientPubkey: string) {
+    if (!tempKeypair?.privateKey) {
+      // Wenn kein tempKeypair vorhanden, nur Chat öffnen
+      goto(`/dm/${recipientPubkey}`);
+      return;
+    }
+
+    try {
+      // Prüfe ob dies mein eigenes Angebot ist
+      const offer = $marketplaceOffers.find(o => o.id === offerId);
+      if (!offer || offer.tempPubkey !== tempKeypair.publicKey) {
+        // Nicht mein Angebot, nur Chat öffnen
+        goto(`/dm/${recipientPubkey}`);
+        return;
+      }
+
+      // Bestätige Auto-Delete
+      if (!confirm('💬 Chat wird gestartet.\n\n🗑️ Dein Angebot wird automatisch gelöscht, da du nun direkt mit einem Interessenten kommunizierst.\n\nFortfahren?')) {
+        return;
+      }
+
+      loading = true;
+      error = '⏳ Angebot wird gelöscht...';
+
+      console.log('🗑️ [AUTO-DELETE] Lösche Angebot vor Chat-Start:', offerId.substring(0, 16) + '...');
+
+      // Lösche Angebot
+      await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
+      
+      // Warte kurz damit das Delete-Event verarbeitet wird
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Reload Angebote
+      await groupStore.loadOffers();
+      
+      console.log('✅ [AUTO-DELETE] Angebot gelöscht, öffne Chat...');
+
+      error = '';
+      
+      // Öffne Chat
+      goto(`/dm/${recipientPubkey}`);
+    } catch (e: any) {
+      console.error('❌ [AUTO-DELETE] Fehler:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Löschen');
+      loading = false;
+      
+      // Öffne Chat trotzdem
+      if (confirm('Fehler beim Löschen des Angebots. Trotzdem Chat öffnen?')) {
+        goto(`/dm/${recipientPubkey}`);
+      }
+    }
+  }
+
   function handleLogout() {
     if (confirm('Möchtest du dich wirklich abmelden?')) {
       userStore.logout();
@@ -519,7 +572,7 @@
                     {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
                     <div class="interest-item">
                       <div class="interest-meta">
-                        <button 
+                        <button
                           class="interest-name clickable"
                           on:click={() => copyToClipboard(reply.pubkey)}
                           title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
@@ -531,13 +584,22 @@
                           {formatTimestamp(reply.created_at)}
                         </span>
                       </div>
-                      <button 
-                        class="interest-pubkey-detail clickable"
-                        on:click={() => copyToClipboard(reply.pubkey)}
-                        title="Klicke zum Kopieren: {reply.pubkey}"
-                      >
-                        🔑 {truncatePubkey(reply.pubkey)}
-                      </button>
+                      <div class="interest-actions">
+                        <button
+                          class="interest-pubkey-detail clickable"
+                          on:click={() => copyToClipboard(reply.pubkey)}
+                          title="Klicke zum Kopieren: {reply.pubkey}"
+                        >
+                          🔑 {truncatePubkey(reply.pubkey)}
+                        </button>
+                        <button
+                          class="btn btn-chat btn-sm"
+                          on:click={() => startChatAndDeleteOffer(offer.id, reply.pubkey)}
+                          title="Privaten Chat mit {userName} starten"
+                        >
+                          💬 Chat starten
+                        </button>
+                      </div>
                       {#if message !== userName}
                         <div class="interest-message">
                           {message}
@@ -946,6 +1008,14 @@
     transform: translateY(0);
   }
 
+  .interest-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+  }
+
   .interest-pubkey-detail {
     font-weight: 500;
     color: var(--text-muted);
@@ -960,12 +1030,29 @@
     cursor: pointer;
     transition: all 0.2s;
     font-size: 0.8125rem;
-    margin-bottom: 0.5rem;
   }
 
   .interest-pubkey-detail:hover {
     background-color: rgba(0, 0, 0, 0.05);
     color: var(--text-color);
+  }
+
+  .btn-chat {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .btn-chat:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+
+  .btn-chat:active {
+    transform: translateY(0);
   }
 
   .copy-icon {
