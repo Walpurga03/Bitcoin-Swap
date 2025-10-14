@@ -153,19 +153,31 @@ export async function sendNIP17Message(
     const rumor = createRumor(content, recipientPubkey, senderPubkey);
     console.log('  📝 Rumor erstellt');
 
-    // 2. Erstelle Seal
-    const seal = await createSeal(rumor, senderPrivateKey, recipientPubkey);
-    console.log('  🔒 Seal erstellt');
+    // 2. Erstelle Seal für Empfänger
+    const sealForRecipient = await createSeal(rumor, senderPrivateKey, recipientPubkey);
+    console.log('  🔒 Seal für Empfänger erstellt');
 
-    // 3. Erstelle Gift Wrap
-    const giftWrap = await createGiftWrap(seal, recipientPubkey);
-    console.log('  🎁 Gift Wrap erstellt');
+    // 3. Erstelle Gift Wrap für Empfänger
+    const giftWrapForRecipient = await createGiftWrap(sealForRecipient, recipientPubkey);
+    console.log('  🎁 Gift Wrap für Empfänger erstellt');
 
-    // 4. Publiziere Gift Wrap
-    const result = await publishEvent(giftWrap, relays);
-    console.log('  ✅ Nachricht gesendet:', result.relays.length + '/' + relays.length + ' Relays');
+    // 4. Publiziere Gift Wrap für Empfänger
+    const resultRecipient = await publishEvent(giftWrapForRecipient, relays);
+    console.log('  ✅ An Empfänger gesendet:', resultRecipient.relays.length + '/' + relays.length + ' Relays');
 
-    return giftWrap;
+    // 5. Erstelle Seal für Sender (sich selbst)
+    const sealForSender = await createSeal(rumor, senderPrivateKey, senderPubkey);
+    console.log('  🔒 Seal für Sender erstellt');
+
+    // 6. Erstelle Gift Wrap für Sender
+    const giftWrapForSender = await createGiftWrap(sealForSender, senderPubkey);
+    console.log('  🎁 Gift Wrap für Sender erstellt');
+
+    // 7. Publiziere Gift Wrap für Sender
+    const resultSender = await publishEvent(giftWrapForSender, relays);
+    console.log('  ✅ An Sender (Kopie) gesendet:', resultSender.relays.length + '/' + relays.length + ' Relays');
+
+    return giftWrapForRecipient;
   } catch (error) {
     console.error('❌ [NIP-17] Fehler beim Senden:', error);
     throw error;
