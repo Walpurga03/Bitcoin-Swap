@@ -76,7 +76,10 @@ async function createSeal(
   recipientPubkey: string
 ): Promise<NostrEvent> {
   // Erstelle zufälligen Privkey für Seal
-  const randomPrivkey = Buffer.from(generateSecretKey()).toString('hex');
+  const randomSecretKey = generateSecretKey();
+  const randomPrivkey = Array.from(randomSecretKey)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
   const randomPubkey = getPublicKey(randomPrivkey as any);
 
   // Verschlüssele Rumor mit Empfänger-Pubkey
@@ -105,7 +108,10 @@ async function createGiftWrap(
   recipientPubkey: string
 ): Promise<NostrEvent> {
   // Erstelle zufälligen Privkey für Gift Wrap
-  const randomPrivkey = Buffer.from(generateSecretKey()).toString('hex');
+  const randomSecretKey = generateSecretKey();
+  const randomPrivkey = Array.from(randomSecretKey)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
   const randomPubkey = getPublicKey(randomPrivkey as any);
 
   // Verschlüssele Seal mit Empfänger-Pubkey
