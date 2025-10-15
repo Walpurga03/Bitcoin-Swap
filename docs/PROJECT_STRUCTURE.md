@@ -1,5 +1,7 @@
 # NostrGroupChat - Projekt-Struktur
 
+> **Hinweis:** Für Informationen über unsere Architektur-Entscheidungen (z.B. warum wir nicht NIP-29 verwenden), siehe [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
+
 ## 📁 Vollständige Dateistruktur
 
 ```

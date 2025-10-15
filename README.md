@@ -336,6 +336,19 @@ Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
 - **NIP-44**: Verschlüsselung für NIP-17 (Seal und Gift Wrap)
 - **Custom Encryption**: AES-GCM für Gruppen-Nachrichten
 
+### 🏗️ Warum nicht NIP-29?
+
+Wir haben uns bewusst **gegen NIP-29** (Relay-basierte Gruppen) entschieden und stattdessen eine eigene Lösung mit **client-seitiger AES-GCM-Verschlüsselung** entwickelt.
+
+**Hauptgründe:**
+- 🔐 **Maximale Privatsphäre**: Relay sieht nur verschlüsselte Events, keine Gruppenmitglieder
+- 🌐 **Relay-Unabhängigkeit**: Funktioniert mit jedem Standard-Relay (kein spezieller NIP-29 Relay nötig)
+- 🛡️ **Zensur-Resistenz**: Keine zentrale Kontrolle durch Relay-Admin
+- 🎭 **Anonyme Angebote**: Temporäre Keypairs für Marketplace
+- 🎯 **Einfachheit**: Client-seitige Logik statt komplexer Server-Verwaltung
+
+📚 **Detaillierte Architektur-Analyse**: Siehe [`docs/ARCHITECTURE-DECISIONS.md`](docs/ARCHITECTURE-DECISIONS.md)
+
 ---
 
 ## 🧪 Testing
