@@ -17,6 +17,7 @@
   let error = '';
   let messagesContainer: HTMLDivElement;
   let autoRefreshInterval: ReturnType<typeof setInterval>;
+  let offerText = ''; // Angebotstext aus localStorage
 
   $: recipientPubkey = $page.params.pubkey;
 
@@ -27,6 +28,15 @@
     }
 
     try {
+      // Lade Angebotstext aus localStorage falls vorhanden
+      const storedOffer = localStorage.getItem(`chat_offer_${recipientPubkey}`);
+      if (storedOffer) {
+        offerText = storedOffer;
+        console.log('📝 [DM] Angebotstext geladen:', offerText.substring(0, 50) + '...');
+        // Lösche nach dem Laden (wird nur einmal angezeigt)
+        localStorage.removeItem(`chat_offer_${recipientPubkey}`);
+      }
+
       await loadMessages();
 
       // Auto-Refresh alle 5 Sekunden
@@ -167,7 +177,19 @@
   {/if}
 
   <div class="messages-container" bind:this={messagesContainer}>
-    {#if messages.length === 0}
+    {#if offerText}
+      <!-- Angebotstext als erste System-Nachricht -->
+      <div class="message system-message">
+        <div class="message-header">
+          <span class="message-author">📋 Ursprüngliches Angebot</span>
+        </div>
+        <div class="message-content offer-content">
+          {offerText}
+        </div>
+      </div>
+    {/if}
+
+    {#if messages.length === 0 && !offerText}
       <div class="empty-state">
         <p>Noch keine Nachrichten. Starte die Konversation!</p>
       </div>
@@ -283,6 +305,24 @@
 
   .message-content {
     word-wrap: break-word;
+  }
+
+  .system-message {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1));
+    border-left: 3px solid #3b82f6;
+    margin-bottom: 1.5rem;
+    max-width: 100%;
+  }
+
+  .system-message .message-author {
+    color: #3b82f6;
+    font-weight: 600;
+  }
+
+  .offer-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 0.9375rem;
   }
 
   .message-form {

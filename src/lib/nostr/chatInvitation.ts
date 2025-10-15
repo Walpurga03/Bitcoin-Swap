@@ -19,6 +19,7 @@ export interface ChatInvitation {
   invitedPubkey: string;
   created_at: number;
   status: 'pending' | 'accepted' | 'declined';
+  offerContent?: string; // Angebotstext
 }
 
 /**
@@ -34,7 +35,8 @@ export async function createChatInvitation(
   offerId: string,
   invitedPubkey: string,
   offerCreatorPrivkey: string,
-  relays: string[]
+  relays: string[],
+  offerContent?: string
 ): Promise<NostrEvent> {
   try {
     console.log('💬 [CHAT-INVITE] Erstelle Einladung...');
@@ -58,6 +60,7 @@ export async function createChatInvitation(
       content: JSON.stringify({
         offerId,
         invitedPubkey,
+        offerContent: offerContent || '',
         message: 'Der Anbieter möchte mit dir chatten!'
       })
     };
@@ -113,7 +116,7 @@ export async function fetchChatInvitations(
           const statusTag = event.tags.find(t => t[0] === 'status');
           const offerTag = event.tags.find(t => t[0] === 'e');
 
-          return {
+          const invitation: ChatInvitation = {
             id: event.id,
             offerId: offerTag ? offerTag[1] : content.offerId,
             offerCreatorPubkey: event.pubkey,
@@ -121,6 +124,12 @@ export async function fetchChatInvitations(
             created_at: event.created_at,
             status: (statusTag ? statusTag[1] : 'pending') as 'pending' | 'accepted' | 'declined'
           };
+          
+          if (content.offerContent) {
+            invitation.offerContent = content.offerContent;
+          }
+          
+          return invitation;
         } catch (e) {
           console.error('❌ [CHAT-INVITE] Fehler beim Parsen:', e);
           return null;

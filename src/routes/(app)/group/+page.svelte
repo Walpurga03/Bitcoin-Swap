@@ -420,13 +420,15 @@
 
       console.log('📨 [INVITATION] Erstelle Einladung für Angebot:', offerId.substring(0, 16) + '...');
       console.log('📨 [INVITATION] Empfänger:', recipientPubkey.substring(0, 16) + '...');
+      console.log('📨 [INVITATION] Angebotstext:', offer.content.substring(0, 50) + '...');
 
       const relay = $groupStore.relay;
       if (!relay) {
         throw new Error('Kein Relay verfügbar');
       }
       
-      await createChatInvitation(offerId, recipientPubkey, tempKeypair.privateKey, [relay]);
+      // Erstelle Einladung MIT Angebotstext
+      await createChatInvitation(offerId, recipientPubkey, tempKeypair.privateKey, [relay], offer.content);
       
       // Warte kurz damit das Event im Relay gespeichert ist
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -459,9 +461,12 @@
   async function acceptInvitationAndJoinChat(invitation: any, offerId: string) {
     // Prüfe ob User eingeloggt ist (privateKey vorhanden)
     if (!$userStore.privateKey) {
-      // Speichere Chat-Ziel im localStorage für Redirect nach Login
+      // Speichere Chat-Ziel UND Angebotstext im localStorage für Redirect nach Login
       if (typeof window !== 'undefined') {
         localStorage.setItem('pending_chat_redirect', invitation.offerCreatorPubkey);
+        if (invitation.offerContent) {
+          localStorage.setItem('pending_chat_offer', invitation.offerContent);
+        }
       }
       
       alert('⚠️ Aus Sicherheitsgründen musst du dich neu einloggen!\n\nDein Private Key wird nicht gespeichert und muss bei jedem Browser-Refresh neu eingegeben werden.\n\nNach dem Login wirst du automatisch zum Chat weitergeleitet.');
@@ -501,7 +506,12 @@
       // Warte kurz
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 3. Öffne Chat mit Anbieter
+      // 3. Speichere Angebotstext im localStorage für Chat-Anzeige
+      if (typeof window !== 'undefined' && invitation.offerContent) {
+        localStorage.setItem(`chat_offer_${invitation.offerCreatorPubkey}`, invitation.offerContent);
+      }
+
+      // 4. Öffne Chat mit Anbieter
       const offerCreatorPubkey = invitation.offerCreatorPubkey;
       console.log('✅ [JOIN-CHAT] Öffne Chat mit:', offerCreatorPubkey.substring(0, 16) + '...');
       
@@ -901,7 +911,7 @@
 
   .content-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 2fr;
     gap: 1rem;
     padding: 1rem;
     flex: 1;

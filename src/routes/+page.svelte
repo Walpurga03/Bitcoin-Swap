@@ -156,6 +156,15 @@
       // Prüfe ob ein Chat-Redirect ausstehend ist
       const pendingChatRedirect = localStorage.getItem('pending_chat_redirect');
       if (pendingChatRedirect) {
+        // Hole auch den Angebotstext falls vorhanden
+        const pendingChatOffer = localStorage.getItem('pending_chat_offer');
+        
+        // Speichere Angebotstext für Chat-Anzeige
+        if (pendingChatOffer) {
+          localStorage.setItem(`chat_offer_${pendingChatRedirect}`, pendingChatOffer);
+          localStorage.removeItem('pending_chat_offer');
+        }
+        
         console.log('✅ Redirect zu ausstehenden Chat:', pendingChatRedirect.substring(0, 16) + '...');
         localStorage.removeItem('pending_chat_redirect');
         await goto(`/dm/${pendingChatRedirect}`);
