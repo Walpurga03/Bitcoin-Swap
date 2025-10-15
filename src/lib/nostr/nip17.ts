@@ -69,24 +69,29 @@ function createRumor(
 
 /**
  * Erstelle einen Seal (verschlüsselter Rumor)
+ *
+ * WICHTIG: Der Seal wird mit dem SENDER Private Key verschlüsselt,
+ * damit der Empfänger ihn mit dem Sender Public Key entschlüsseln kann.
+ * Der Seal selbst wird mit einem zufälligen Key signiert für Anonymität.
  */
 async function createSeal(
   rumor: Rumor,
   senderPrivateKey: string,
   recipientPubkey: string
 ): Promise<NostrEvent> {
-  // Erstelle zufälligen Privkey für Seal
+  // Erstelle zufälligen Privkey für Seal-Signatur
   const randomSecretKey = generateSecretKey();
   const randomPrivkey = Array.from(randomSecretKey)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
   const randomPubkey = getPublicKey(randomPrivkey as any);
 
-  // Verschlüssele Rumor mit Empfänger-Pubkey
+  // Verschlüssele Rumor: Sender verschlüsselt für Empfänger
+  // Der Empfänger kann mit seinem Private Key + Sender Public Key entschlüsseln
   const rumorJson = JSON.stringify(rumor);
   const encrypted = nip44Encrypt(rumorJson, senderPrivateKey, recipientPubkey);
 
-  // Erstelle Seal Event
+  // Erstelle Seal Event mit zufälligem Pubkey (für Anonymität)
   const seal = {
     kind: 13,
     pubkey: randomPubkey,
@@ -186,33 +191,60 @@ export async function sendNIP17Message(
 
 /**
  * Entpacke eine NIP-17 Gift-Wrapped Message
+ *
+ * WICHTIG: Der Seal wurde vom Sender mit seinem Private Key verschlüsselt.
+ * Zum Entschlüsseln brauchen wir den Sender Public Key.
+ *
+ * Problem: Wir kennen den Sender erst nach Entschlüsselung des Rumors.
+ * Lösung: Wir probieren verschiedene mögliche Sender durch:
+ * 1. Empfänger selbst (für Kopien an sich selbst)
+ * 2. Bekannte Sender aus dem Kontext (otherPubkey Parameter)
  */
 export async function unwrapGiftWrap(
   giftWrap: NostrEvent,
-  recipientPrivateKey: string
+  recipientPrivateKey: string,
+  otherPubkey?: string
 ): Promise<{ content: string; senderPubkey: string; recipientPubkey: string; timestamp: number } | null> {
   try {
     // 1. Entschlüssele Gift Wrap → Seal
     const sealJson = nip44Decrypt(giftWrap.content, recipientPrivateKey, giftWrap.pubkey);
     const seal = JSON.parse(sealJson) as NostrEvent;
 
-    // 2. Entschlüssele Seal → Rumor
-    const rumorJson = nip44Decrypt(seal.content, recipientPrivateKey, seal.pubkey);
-    const rumor = JSON.parse(rumorJson) as Rumor;
-
-    // 3. Extrahiere Sender und Empfänger aus Rumor Tags
-    const fromTag = rumor.tags.find(t => t[0] === 'from');
-    const senderPubkey = fromTag ? fromTag[1] : 'unknown';
+    // 2. Versuche Seal zu entschlüsseln mit verschiedenen möglichen Sendern
+    const recipientPubkey = getPublicKey(recipientPrivateKey as any);
+    const possibleSenders = [recipientPubkey]; // Zuerst: Kopie an sich selbst
     
-    const pTag = rumor.tags.find(t => t[0] === 'p');
-    const recipientPubkey = pTag ? pTag[1] : 'unknown';
+    if (otherPubkey && otherPubkey !== recipientPubkey) {
+      possibleSenders.push(otherPubkey); // Dann: Bekannter Gesprächspartner
+    }
 
-    return {
-      content: rumor.content,
-      senderPubkey,
-      recipientPubkey,
-      timestamp: rumor.created_at
-    };
+    for (const senderPubkey of possibleSenders) {
+      try {
+        // Versuche mit diesem Sender zu entschlüsseln
+        const rumorJson = nip44Decrypt(seal.content, recipientPrivateKey, senderPubkey);
+        const rumor = JSON.parse(rumorJson) as Rumor;
+
+        // Validiere: Extrahiere echten Sender aus Rumor
+        const fromTag = rumor.tags.find(t => t[0] === 'from');
+        const actualSender = fromTag ? fromTag[1] : senderPubkey;
+        
+        const pTag = rumor.tags.find(t => t[0] === 'p');
+        const actualRecipient = pTag ? pTag[1] : 'unknown';
+
+        return {
+          content: rumor.content,
+          senderPubkey: actualSender,
+          recipientPubkey: actualRecipient,
+          timestamp: rumor.created_at
+        };
+      } catch (e) {
+        // Dieser Sender war falsch, probiere nächsten
+        continue;
+      }
+    }
+
+    // Keiner der möglichen Sender hat funktioniert
+    throw new Error('Konnte Seal mit keinem bekannten Sender entschlüsseln');
   } catch (error) {
     console.error('❌ [NIP-17] Fehler beim Entpacken:', error);
     return null;
@@ -226,7 +258,8 @@ export async function fetchNIP17Messages(
   userPubkey: string,
   userPrivateKey: string,
   relays: string[],
-  limit: number = 50
+  limit: number = 50,
+  otherPubkey?: string
 ): Promise<Array<{
   id: string;
   content: string;
@@ -250,13 +283,13 @@ export async function fetchNIP17Messages(
     // Entpacke alle Messages
     const messages = [];
     for (const giftWrap of giftWraps) {
-      const unwrapped = await unwrapGiftWrap(giftWrap, userPrivateKey);
+      const unwrapped = await unwrapGiftWrap(giftWrap, userPrivateKey, otherPubkey);
       if (unwrapped) {
         messages.push({
           id: giftWrap.id,
           content: unwrapped.content,
           senderPubkey: unwrapped.senderPubkey,
-          recipientPubkey: unwrapped.recipientPubkey, // Verwende echten Empfänger aus Rumor
+          recipientPubkey: unwrapped.recipientPubkey,
           timestamp: unwrapped.timestamp
         });
       }
@@ -292,13 +325,13 @@ export async function fetchNIP17Conversation(
     console.log('  👤 User:', userPubkey.substring(0, 16) + '...');
     console.log('  👤 Other:', otherPubkey.substring(0, 16) + '...');
 
-    // Hole alle Messages für diesen User
-    const allMessages = await fetchNIP17Messages(userPubkey, userPrivateKey, relays, limit);
+    // Hole alle Messages für diesen User, mit otherPubkey für Entschlüsselung
+    const allMessages = await fetchNIP17Messages(userPubkey, userPrivateKey, relays, limit, otherPubkey);
 
     // Filtere nur Messages von/zu otherPubkey
     const conversation = allMessages
-      .filter(msg => 
-        msg.senderPubkey === otherPubkey || 
+      .filter(msg =>
+        msg.senderPubkey === otherPubkey ||
         (msg.senderPubkey === userPubkey && msg.recipientPubkey === otherPubkey)
       )
       .map(msg => ({
