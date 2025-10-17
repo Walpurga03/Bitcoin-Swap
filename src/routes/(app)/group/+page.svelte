@@ -8,7 +8,7 @@
   import { groupStore, groupMessages, marketplaceOffers } from '$lib/stores/groupStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
-  import { sendNIP17Message } from '$lib/nostr/nip17';
+  import { setPrivateChatWhitelist } from '$lib/nostr/whitelist';
 
   // Admin Public Key
   const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
@@ -314,6 +314,11 @@
       return;
     }
 
+    if (!$userStore.privateKey) {
+      alert('❌ Fehler: Kein Private Key vorhanden');
+      return;
+    }
+
     try {
       // Prüfe ob dies mein eigenes Angebot ist
       const offer = $marketplaceOffers.find(o => o.id === offerId);
@@ -323,43 +328,79 @@
       }
 
       // Bestätige Chat-Start
-      if (!confirm(`💬 Möchtest du einen privaten Chat mit ${recipientName} starten?\n\nDein Angebot wird automatisch gelöscht.`)) {
+      const confirmMessage = `💬 Möchtest du einen privaten Chat mit ${recipientName} starten?\n\n` +
+        `⚠️ WICHTIG:\n` +
+        `• Dein Angebot wird gelöscht\n` +
+        `• Alle anderen User werden aus der Gruppe entfernt\n` +
+        `• Nur du und ${recipientName} können dann noch im Gruppen-Chat kommunizieren\n` +
+        `• Der Angebotstext wird als erste Nachricht im Chat gesendet`;
+      
+      if (!confirm(confirmMessage)) {
         return;
       }
 
       loading = true;
       error = '⏳ Chat wird gestartet...';
 
-      console.log('💬 [CHAT] Starte direkten Chat...');
+      console.log('💬 [CHAT] Starte privaten Chat im Gruppen-Chat...');
       console.log('  📝 Angebot:', offerId.substring(0, 16) + '...');
-      console.log('  👤 Empfänger:', recipientPubkey.substring(0, 16) + '...');
-      console.log('  📋 Angebotstext:', offer.content.substring(0, 50) + '...');
+      console.log('  👤 Anbieter (du):', tempKeypair.publicKey.substring(0, 16) + '...');
+      console.log('  👤 Interessent:', recipientPubkey.substring(0, 16) + '...');
 
       const relay = $groupStore.relay;
-      if (!relay) {
-        throw new Error('Kein Relay verfügbar');
+      const channelId = $groupStore.channelId;
+      
+      if (!relay || !channelId) {
+        throw new Error('Kein Relay oder Channel-ID verfügbar');
       }
 
-      // 1. Sende Angebotstext als erste NIP-17 Nachricht
-      await sendNIP17Message(
-        `📋 Ursprüngliches Angebot:\n\n${offer.content}`,
-        recipientPubkey,
-        tempKeypair.privateKey,
-        [relay]
+      // 1. Setze Whitelist auf nur 2 User (Anbieter + Interessent)
+      console.log('🔒 [CHAT] Setze Whitelist auf nur 2 User...');
+      const whitelistSuccess = await setPrivateChatWhitelist(
+        tempKeypair.publicKey,  // Anbieter (temp key)
+        recipientPubkey,        // Interessent
+        $userStore.privateKey,  // Admin key (für Whitelist-Update)
+        [relay],
+        channelId
       );
 
-      console.log('✅ [CHAT] Angebotstext als NIP-17 Message gesendet');
+      if (!whitelistSuccess) {
+        throw new Error('Fehler beim Setzen der Whitelist');
+      }
 
-      // 2. Lösche Angebot
+      console.log('✅ [CHAT] Whitelist gesetzt - nur noch 2 User haben Zugriff');
+
+      // 2. Sende Angebotstext als erste Gruppen-Nachricht
+      console.log('📋 [CHAT] Sende Angebotstext als Gruppen-Nachricht...');
+      await groupStore.sendMessage(
+        `📋 Ursprüngliches Angebot:\n\n${offer.content}`,
+        $userStore.privateKey
+      );
+
+      console.log('✅ [CHAT] Angebotstext gesendet');
+
+      // 3. Lösche Angebot
       await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
       console.log('✅ [CHAT] Angebot gelöscht');
 
       // Warte kurz damit Events verarbeitet werden
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // 3. Öffne Chat
-      console.log('✅ [CHAT] Öffne Chat mit:', recipientPubkey.substring(0, 16) + '...');
-      goto(`/dm/${recipientPubkey}`);
+      // 4. Reload Messages um Angebotstext zu sehen
+      await groupStore.loadMessages(true);
+
+      error = '✅ Privater Chat gestartet! Nur du und ' + recipientName + ' können jetzt noch kommunizieren.';
+      loading = false;
+
+      // Zeige Erfolgs-Meldung
+      setTimeout(() => {
+        alert(`✅ Privater Chat erfolgreich gestartet!\n\n` +
+          `Nur du und ${recipientName} haben jetzt noch Zugriff auf diese Gruppe.\n` +
+          `Alle anderen User wurden von der Whitelist entfernt.\n\n` +
+          `Der Angebotstext wurde als erste Nachricht gesendet.`);
+        error = '';
+      }, 500);
+
     } catch (e: any) {
       console.error('❌ [CHAT] Fehler beim Chat-Start:', e);
       error = '❌ ' + (e.message || 'Fehler beim Chat-Start');

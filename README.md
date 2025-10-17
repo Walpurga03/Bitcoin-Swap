@@ -64,12 +64,12 @@ Sie möchten Bitcoin gegen Euro tauschen, aber anonym bleiben:
 - **Client-seitige Verschlüsselung**: Keys bleiben im Browser
 - **Rate-Limiting**: Schutz vor Spam und Missbrauch
 
-### 🛒 Anonymer Marketplace mit NIP-17 Chat
+### 🛒 Anonymer Marketplace mit Whitelist-basiertem privaten Chat
 - **Temporäre Schlüssel**: Angebote mit einmaligen Keypairs (vollständig anonym)
 - **Interessenten-Liste**: Angebotsgeber sehen alle Interessenten mit Namen und Public Keys
-- **NIP-17 Private Chat**: Ende-zu-Ende verschlüsselte Direktnachrichten mit Gift-Wrapping
+- **Whitelist-basierter Chat**: Privater Chat durch Entfernen aller anderen User von der Whitelist
 - **Auto-Delete**: Angebot wird automatisch gelöscht beim Chat-Start
-- **Metadaten-Schutz**: Sender und Empfänger sind nicht öffentlich sichtbar
+- **Gruppen-Chat-Infrastruktur**: Nutzt bestehenden verschlüsselten Gruppen-Chat
 - **Rückzug möglich**: Interessenten können ihr Interesse via NIP-09 Delete Events zurückziehen
 
 ### 🎯 Technische Highlights
@@ -159,33 +159,35 @@ https://ihre-domain.com/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-grou
 - Nur Mitglieder mit dem richtigen Secret können mitlesen
 - Automatischer Refresh alle 15 Sekunden
 
-### 3. Marketplace mit NIP-17 Chat
+### 3. Marketplace mit Whitelist-basiertem privaten Chat
 
 **Als Angebotsgeber:**
 1. **Angebot erstellen** - Ein temporärer Keypair wird automatisch generiert (Sie bleiben anonym)
 2. **Interessenten sehen** - Alle Interessenten werden mit Namen und Public Key angezeigt
 3. **Chat starten** - Klicken Sie auf "💬 Chat starten" bei einem Interessenten
-4. **Sofortiger Chat-Start** - Der Chat öffnet sich direkt, keine Wartezeit
-5. **Angebotstext automatisch** - Ihr Angebotstext wird als erste Nachricht gesendet
+4. **Whitelist-Update** - Alle anderen User werden automatisch von der Whitelist entfernt
+5. **Angebotstext automatisch** - Ihr Angebotstext wird als erste Nachricht im Gruppen-Chat gesendet
 6. **Auto-Delete** - Ihr Angebot wird automatisch gelöscht (Sie werden gefragt)
-7. **Private Kommunikation** - Chatten Sie direkt in der App mit NIP-17 Verschlüsselung
+7. **Private Kommunikation** - Nur Sie und der Interessent haben noch Zugriff auf den Gruppen-Chat
 8. **Transaktion abwickeln** - Vereinbaren Sie die Details sicher im privaten Chat
 
 **Als Interessent:**
 1. **Interesse zeigen** - Ihr Name und Public Key werden dem Angebotsgeber angezeigt
 2. **Warten auf Chat** - Der Angebotsgeber kann einen Chat mit Ihnen starten
-3. **Erste Nachricht** - Sie erhalten automatisch den Angebotstext als erste Nachricht
-4. **Private Kommunikation** - Chatten Sie direkt in der App
-5. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
+3. **Automatischer Zugriff** - Sie bleiben in der Gruppe, alle anderen werden entfernt
+4. **Erste Nachricht** - Sie sehen den Angebotstext als erste Nachricht im Gruppen-Chat
+5. **Private Kommunikation** - Nur Sie und der Anbieter können kommunizieren
+6. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
 
-**NIP-17 Vorteile:**
-- **Gift-Wrapping**: Dreifache Verschlüsselung (Rumor → Seal → Gift Wrap)
-- **Metadaten-Schutz**: Sender und Empfänger sind nicht öffentlich sichtbar
-- **Zeitstempel-Randomisierung**: Erschwert Timing-Analysen
-- **Zufällige Pubkeys**: Keine Verknüpfung zur echten Identität
+**Whitelist-Chat Vorteile:**
+- **Einfache Implementierung**: Nutzt bestehende Gruppen-Chat-Infrastruktur
+- **Weniger Code**: Keine separate Chat-UI nötig
+- **AES-GCM Verschlüsselung**: Wie alle Gruppen-Nachrichten
 - **Sofortiger Start**: Kein Einladungs-System, direkter Chat-Start
+- **Automatische Isolation**: Alle anderen User verlieren Zugriff
+- **Wartbar**: Einfacher zu verstehen und zu pflegen
 
-📚 **Detaillierte Anleitung**: Siehe [`docs/NIP17-CHAT-ANLEITUNG.md`](docs/NIP17-CHAT-ANLEITUNG.md)
+📚 **Detaillierte Anleitung**: Siehe [`docs/WHITELIST-CHAT-ANLEITUNG.md`](docs/WHITELIST-CHAT-ANLEITUNG.md)
 
 ### 4. Whitelist-Verwaltung (Admin)
 
@@ -210,8 +212,7 @@ Bitcoin-Tausch-Netzwerk/
 │   │   │   ├── types.ts          # TypeScript Interfaces
 │   │   │   ├── client.ts         # Nostr Client & Event-Handling
 │   │   │   ├── crypto.ts         # Verschlüsselung & Key-Management
-│   │   │   ├── nip17.ts          # NIP-17 Gift-Wrapped Messages
-│   │   │   └── whitelist.ts      # Gruppenbasierte Whitelist
+│   │   │   └── whitelist.ts      # Gruppenbasierte Whitelist & Private Chat
 │   │   ├── security/
 │   │   │   └── validation.ts     # Input-Validierung & Rate-Limiting
 │   │   ├── stores/
@@ -222,8 +223,7 @@ Bitcoin-Tausch-Netzwerk/
 │   ├── routes/
 │   │   ├── +page.svelte          # Login-Seite
 │   │   ├── (app)/
-│   │   │   ├── group/+page.svelte    # Gruppen-Chat & Marketplace
-│   │   │   └── dm/[pubkey]/+page.svelte  # NIP-17 Private Chats
+│   │   │   └── group/+page.svelte    # Gruppen-Chat & Marketplace
 │   │   ├── admin/+page.svelte    # Whitelist-Verwaltung
 │   │   ├── debug-secret/+page.svelte     # Debug-Tools
 │   │   └── test-login/+page.svelte       # Test-Seite
@@ -232,7 +232,8 @@ Bitcoin-Tausch-Netzwerk/
 │   ├── SETUP.md                  # Detaillierte Setup-Anleitung
 │   ├── PROJECT_STRUCTURE.md      # Projekt-Struktur Details
 │   ├── WHITELIST-ANLEITUNG.md    # Gruppenbasierte Whitelist
-│   └── NIP17-CHAT-ANLEITUNG.md   # NIP-17 Private Chat
+│   ├── WHITELIST-CHAT-ANLEITUNG.md  # Whitelist-basierter privater Chat
+│   └── CHAT-FLOW-ANALYSE.md      # Chat-Flow Analyse & Verbesserungen
 ├── package.json                  # Dependencies & Scripts
 ├── vite.config.ts                # Vite Konfiguration
 ├── svelte.config.js              # SvelteKit Konfiguration
@@ -250,15 +251,14 @@ Bitcoin-Tausch-Netzwerk/
 ### Implementierte Sicherheitsmaßnahmen
 
 - **Client-seitige Verschlüsselung**: Private Keys verlassen niemals den Browser
-- **AES-GCM Verschlüsselung**: Für Gruppen-Nachrichten
-- **NIP-17 Gift-Wrapping**: Dreifache Verschlüsselung für private Chats
-- **NIP-44 Verschlüsselung**: Für Seal und Gift Wrap Verschlüsselung
+- **AES-GCM Verschlüsselung**: Für alle Gruppen-Nachrichten (inkl. private Chats)
 - **Gruppenbasierte Whitelist**: Jede Gruppe hat separate Zugriffskontrolle
+- **Whitelist-basierter privater Chat**: Automatische Isolation durch Whitelist-Update
 - **Relay-basierte Whitelist**: Dezentrale Speicherung auf Nostr-Relays
 - **Rate-Limiting**: Schutz vor Spam (20 Requests/Minute)
 - **Signatur-Validierung**: Alle Events werden validiert
 - **Input-Validierung**: Schutz vor Injection-Angriffen
-- **Metadaten-Schutz**: NIP-17 versteckt Sender/Empfänger-Informationen
+- **Zugriffskontrolle**: Nur whitelistete User können Nachrichten sehen
 
 ### Best Practices
 
@@ -316,22 +316,28 @@ Dieses Projekt implementiert folgende Nostr Implementation Possibilities (NIPs):
 - **NIP-01**: Basic protocol flow (Event-Struktur, Signing, Validierung, Replaceable Events)
 - **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
 - **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
-- **NIP-17**: Gift-Wrapped Private Direct Messages (Rumor, Seal, Gift Wrap)
-- **NIP-44**: Verschlüsselung für NIP-17 (Seal und Gift Wrap)
 - **Custom Encryption**: AES-GCM für Gruppen-Nachrichten
+- **Custom Whitelist**: Gruppenbasierte Zugriffskontrolle mit Replaceable Events
 
-### 🏗️ Warum nicht NIP-29?
+### 🏗️ Warum nicht NIP-29 oder NIP-17?
 
-Wir haben uns bewusst **gegen NIP-29** (Relay-basierte Gruppen) entschieden und stattdessen eine eigene Lösung mit **client-seitiger AES-GCM-Verschlüsselung** entwickelt.
+Wir haben uns bewusst **gegen NIP-29** (Relay-basierte Gruppen) und **NIP-17** (Gift-Wrapped Messages) entschieden und stattdessen eine eigene Lösung mit **client-seitiger AES-GCM-Verschlüsselung** und **Whitelist-basiertem privaten Chat** entwickelt.
 
-**Hauptgründe:**
+**Hauptgründe gegen NIP-29:**
 - 🔐 **Maximale Privatsphäre**: Relay sieht nur verschlüsselte Events, keine Gruppenmitglieder
 - 🌐 **Relay-Unabhängigkeit**: Funktioniert mit jedem Standard-Relay (kein spezieller NIP-29 Relay nötig)
 - 🛡️ **Zensur-Resistenz**: Keine zentrale Kontrolle durch Relay-Admin
 - 🎭 **Anonyme Angebote**: Temporäre Keypairs für Marketplace
 - 🎯 **Einfachheit**: Client-seitige Logik statt komplexer Server-Verwaltung
 
-📚 **Detaillierte Architektur-Analyse**: Siehe [`docs/ARCHITECTURE-DECISIONS.md`](docs/ARCHITECTURE-DECISIONS.md)
+**Hauptgründe gegen NIP-17:**
+- 🔧 **Komplexität**: Separate Chat-UI und Infrastruktur nötig
+- 📦 **Mehr Code**: Zusätzliche Implementierung für Gift-Wrapping
+- 🐛 **Fehleranfällig**: Mehr Komponenten = mehr potenzielle Fehlerquellen
+- 🔄 **Wartung**: Zwei separate Chat-Systeme zu pflegen
+- ✅ **Whitelist-Lösung**: Nutzt bestehende, getestete Infrastruktur
+
+📚 **Detaillierte Architektur-Analyse**: Siehe [`docs/ARCHITECTURE-DECISIONS.md`](docs/ARCHITECTURE-DECISIONS.md) und [`docs/CHAT-FLOW-ANALYSE.md`](docs/CHAT-FLOW-ANALYSE.md)
 
 ---
 

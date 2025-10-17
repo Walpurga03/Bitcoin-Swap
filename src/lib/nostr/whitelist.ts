@@ -218,3 +218,42 @@ export async function removeFromWhitelist(
     return false;
   }
 }
+
+/**
+ * Setze Whitelist auf nur zwei User (für privaten Chat im Gruppen-Chat)
+ * Alle anderen User werden von der Whitelist entfernt
+ */
+export async function setPrivateChatWhitelist(
+  user1Pubkey: string,
+  user2Pubkey: string,
+  adminPrivateKey: string,
+  relays: string[],
+  channelId: string
+): Promise<boolean> {
+  try {
+    console.log('🔒 [WHITELIST] Setze Private-Chat-Whitelist...');
+    console.log('  User 1:', user1Pubkey.substring(0, 16) + '...');
+    console.log('  User 2:', user2Pubkey.substring(0, 16) + '...');
+    
+    // Normalisiere beide Public Keys
+    const normalizedUser1 = normalizePublicKey(user1Pubkey);
+    const normalizedUser2 = normalizePublicKey(user2Pubkey);
+    
+    // Erstelle neue Whitelist mit nur diesen beiden Usern
+    const pubkeys = [normalizedUser1, normalizedUser2];
+    
+    const success = await saveWhitelist(pubkeys, adminPrivateKey, relays, channelId);
+    
+    if (success) {
+      console.log('✅ [WHITELIST] Private-Chat-Whitelist gesetzt');
+      console.log('  Nur noch 2 User haben Zugriff auf diese Gruppe');
+    } else {
+      console.error('❌ [WHITELIST] Fehler beim Setzen der Private-Chat-Whitelist');
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('❌ [WHITELIST] Fehler:', error);
+    return false;
+  }
+}
