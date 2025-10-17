@@ -68,12 +68,16 @@
         return;
       }
 
-      // Prüfe Berechtigung
-      if (!isParticipant) {
+      // Prüfe Berechtigung (direkt, nicht über reactive isParticipant)
+      const userPubkey = $userStore.pubkey!;
+      const isSeller = $activeDealRoom.participants.seller === userPubkey;
+      const isBuyer = $activeDealRoom.participants.buyer === userPubkey;
+      
+      if (!isSeller && !isBuyer) {
         console.error('❌ [DEAL-PAGE] Berechtigungsfehler:');
-        console.error('  User:', $userStore.pubkey?.substring(0, 16));
-        console.error('  Seller:', $activeDealRoom?.participants.seller.substring(0, 16));
-        console.error('  Buyer:', $activeDealRoom?.participants.buyer.substring(0, 16));
+        console.error('  User:', userPubkey.substring(0, 16));
+        console.error('  Seller:', $activeDealRoom.participants.seller.substring(0, 16));
+        console.error('  Buyer:', $activeDealRoom.participants.buyer.substring(0, 16));
         error = 'Du bist kein Teilnehmer dieses Deal-Rooms';
         return;
       }
