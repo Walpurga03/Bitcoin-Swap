@@ -679,6 +679,67 @@ export async function fetchDealMessages(
 }
 
 /**
+ * Lade Nostr-Profil (Kind 0) von populären Relays
+ * Sucht nach name, display_name oder nip05
+ */
+export async function fetchUserProfile(
+  pubkey: string,
+  relays?: string[]
+): Promise<{ name?: string; display_name?: string; nip05?: string } | null> {
+  try {
+    console.log('👤 [PROFILE] Lade Profil für:', pubkey.substring(0, 16) + '...');
+
+    // Populäre Relays für Profil-Suche (falls nicht angegeben)
+    const profileRelays = relays || [
+      'wss://relay.damus.io',
+      'wss://relay.nostr.band',
+      'wss://nos.lol',
+      'wss://relay.snort.social',
+      'wss://nostr.wine',
+      'wss://relay.current.fyi',
+      'wss://nostr-pub.wellorder.net',
+      'wss://relay.nostr.info'
+    ];
+
+    console.log('  📡 Suche auf', profileRelays.length, 'Relays...');
+
+    // Filter für Kind 0 (Metadata) Events
+    const filter = {
+      kinds: [0],
+      authors: [pubkey],
+      limit: 1
+    } as NostrFilter;
+
+    const events = await fetchEvents(profileRelays, filter, 3000);
+
+    if (events.length === 0) {
+      console.log('  ⚠️ Kein Profil gefunden');
+      return null;
+    }
+
+    // Nehme neuestes Event
+    const latestEvent = events.sort((a, b) => b.created_at - a.created_at)[0];
+    
+    try {
+      const metadata = JSON.parse(latestEvent.content);
+      console.log('  ✅ Profil gefunden:', metadata.name || metadata.display_name || metadata.nip05 || 'Unbekannt');
+      
+      return {
+        name: metadata.name,
+        display_name: metadata.display_name,
+        nip05: metadata.nip05
+      };
+    } catch (error) {
+      console.error('  ❌ Fehler beim Parsen des Profils:', error);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ [PROFILE] Fehler beim Laden:', error);
+    return null;
+  }
+}
+
+/**
  * Cleanup: Schließe alle Verbindungen
  */
 export function cleanup(): void {

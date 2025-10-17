@@ -9,6 +9,7 @@
   import { parseInviteLink } from '$lib/utils';
   import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
   import { loadWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
+  import { fetchUserProfile } from '$lib/nostr/client';
   // @ts-ignore
   import { env } from '$env/dynamic/public';
   
@@ -17,9 +18,10 @@
   const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
 
   let nsecInput = '';
-  let nameInput = '';
   let error = '';
   let loading = false;
+  let loadingProfile = false;
+  let profileName = '';
   let inviteData: { relay: string; secret: string } | null = null;
   let whitelist: WhitelistData | null = null;
   let whitelistLoading = false;
@@ -135,13 +137,27 @@
         }
       }
 
-      // Validiere Name
-      if (!nameInput.trim() || nameInput.trim().length < 2) {
-        throw new Error('Bitte gib einen Namen mit mindestens 2 Zeichen ein');
+      // Lade Profil vom Nostr-Netzwerk
+      loadingProfile = true;
+      console.log('👤 Lade Nostr-Profil...');
+      
+      const profile = await fetchUserProfile(pubkey);
+      
+      let userName = 'Anonym';
+      if (profile) {
+        // Priorität: display_name > name > nip05 (nur Username-Teil)
+        userName = profile.display_name || profile.name ||
+                   (profile.nip05 ? profile.nip05.split('@')[0] : 'Anonym');
+        console.log('✅ Profil-Name gefunden:', userName);
+        profileName = userName;
+      } else {
+        console.log('⚠️ Kein Profil gefunden, verwende "Anonym"');
       }
+      
+      loadingProfile = false;
 
-      // Setze User
-      userStore.setUserFromNsec(nsecInput, nameInput.trim());
+      // Setze User mit Profil-Namen
+      userStore.setUserFromNsec(nsecInput, userName);
 
       // Initialisiere Gruppe
       await groupStore.initialize(inviteData.secret, inviteData.relay);
@@ -202,22 +218,6 @@
 
     <form on:submit|preventDefault={handleLogin}>
       <div class="form-group">
-        <label for="name">Name *</label>
-        <input
-          id="name"
-          type="text"
-          class="input"
-          bind:value={nameInput}
-          placeholder="Dein Anzeigename (z.B. Max Mustermann)"
-          required
-          minlength="2"
-          maxlength="50"
-          disabled={loading}
-        />
-        <small>Dieser Name wird angezeigt, wenn du Interesse an Angeboten zeigst.</small>
-      </div>
-
-      <div class="form-group">
         <label for="nsec">Private Key (NSEC oder Hex) *</label>
         <input
           id="nsec"
@@ -231,12 +231,24 @@
         <small>Dein Private Key wird nur lokal gespeichert und nie übertragen.</small>
       </div>
 
+      {#if loadingProfile}
+        <div class="info-message">
+          ⏳ Lade dein Nostr-Profil von populären Relays...
+        </div>
+      {/if}
+
+      {#if profileName}
+        <div class="success-message">
+          ✅ Profil gefunden: <strong>{profileName}</strong>
+        </div>
+      {/if}
+
       {#if error}
         <div class="error">{error}</div>
       {/if}
 
-      <button type="submit" class="btn btn-primary" disabled={loading || !inviteData}>
-        {loading ? 'Verbinde...' : 'Gruppe beitreten'}
+      <button type="submit" class="btn btn-primary" disabled={loading || loadingProfile || !inviteData}>
+        {loading ? 'Verbinde...' : loadingProfile ? 'Lade Profil...' : 'Gruppe beitreten'}
       </button>
     </form>
 
@@ -245,6 +257,7 @@
       <ul>
         <li>Du benötigst einen gültigen Einladungslink</li>
         <li>Dein Public Key muss in der Whitelist sein</li>
+        <li>Dein Name wird automatisch von deinem Nostr-Profil geladen (Kind 0)</li>
         <li>Alle Nachrichten sind Ende-zu-Ende verschlüsselt</li>
         <li>Dein Private Key verlässt niemals deinen Browser</li>
       </ul>
@@ -357,5 +370,23 @@
   .whitelist-status.warning {
     background-color: rgba(245, 158, 11, 0.1);
     color: #f59e0b;
+  }
+
+  .info-message {
+    padding: 0.75rem;
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .success-message {
+    padding: 0.75rem;
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
   }
 </style>
