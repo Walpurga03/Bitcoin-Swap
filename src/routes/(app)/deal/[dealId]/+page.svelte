@@ -244,31 +244,40 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: var(--bg-color);
+    background: linear-gradient(135deg, var(--bg-color) 0%, var(--bg-secondary) 100%);
   }
 
   .deal-header {
-    background-color: var(--surface-color);
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
+    padding: 1.25rem 2rem;
+    border-bottom: 2px solid var(--border-color);
+    box-shadow: 0 4px 20px rgba(255, 0, 110, 0.15);
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-wrap: wrap;
   }
 
   .btn-back {
-    background: none;
-    border: none;
-    color: var(--primary-color);
-    font-size: 1rem;
+    background: linear-gradient(135deg, var(--surface-elevated), var(--surface-color));
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-size: 0.9375rem;
+    font-weight: 600;
     cursor: pointer;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    transition: background-color 0.2s;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .btn-back:hover {
-    background-color: rgba(var(--primary-rgb), 0.1);
+    background: linear-gradient(135deg, var(--surface-color), var(--bg-secondary));
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 0, 110, 0.2);
+    border-color: var(--primary-color);
   }
 
   .deal-info {
@@ -276,23 +285,31 @@
   }
 
   .deal-info h1 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     margin: 0;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
   }
 
   .deal-meta {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     color: var(--text-muted);
-    margin: 0.25rem 0 0 0;
+    margin: 0.375rem 0 0 0;
+    font-weight: 500;
   }
 
   .error-message {
-    padding: 1rem;
-    margin: 1rem;
-    background-color: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 0.5rem;
+    padding: 1.25rem;
+    margin: 1.5rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+    border: 2px solid rgba(239, 68, 68, 0.4);
+    border-radius: 1rem;
     color: #ef4444;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
   }
 
   .loading-state,
@@ -307,8 +324,9 @@
   }
 
   .offer-preview {
-    margin: 1rem;
-    padding: 1rem;
+    margin: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
   }
 
   .offer-header {
@@ -325,29 +343,35 @@
 
   .offer-content {
     white-space: pre-wrap;
-    line-height: 1.6;
+    line-height: 1.7;
     color: var(--text-color);
-    padding: 0.75rem;
-    background-color: rgba(var(--primary-rgb), 0.05);
-    border-radius: 0.5rem;
-    border-left: 3px solid var(--primary-color);
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, rgba(255, 0, 110, 0.1) 0%, rgba(139, 92, 246, 0.08) 100%);
+    border-radius: 0.75rem;
+    border-left: 4px solid var(--primary-color);
+    font-size: 0.9375rem;
   }
 
   .chat-section {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 1rem;
+    padding: 1.5rem;
     overflow: hidden;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .messages-container {
     flex: 1;
     overflow-y: auto;
-    padding: 1rem;
-    background-color: var(--surface-color);
-    border-radius: 0.75rem;
-    margin-bottom: 1rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
+    border-radius: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
   }
 
   .empty-state {
@@ -357,16 +381,44 @@
   }
 
   .message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    background-color: var(--bg-color);
-    border-radius: 0.5rem;
-    max-width: 80%;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface-color) 100%);
+    border-radius: 1rem 1rem 1rem 0.25rem;
+    max-width: 75%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .message.own {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #d90062 100%);
+    color: white;
     margin-left: auto;
+    border-radius: 1rem 1rem 0.25rem 1rem;
+    border: none;
+    box-shadow: 0 4px 16px rgba(255, 0, 110, 0.4);
+  }
+
+  .message.own .message-author,
+  .message.own .message-time {
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .message.own .message-content {
+    color: white;
   }
 
   .message-header {
@@ -377,7 +429,7 @@
   }
 
   .message-author {
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .message-time {
@@ -391,36 +443,45 @@
 
   .message-form {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
+    border-radius: 1rem;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
   }
 
   .message-form input {
     flex: 1;
+    font-size: 0.9375rem;
   }
 
   .card {
-    background-color: var(--surface-color);
-    border-radius: 0.75rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
+    border-radius: 1rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   }
 
   .btn {
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
     border: none;
-    border-radius: 0.5rem;
-    font-weight: 500;
+    border-radius: 0.75rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.9375rem;
   }
 
   .btn-primary {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #d90062 100%);
     color: white;
+    box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
   }
 
   .btn-primary:hover:not(:disabled) {
-    opacity: 0.9;
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, #d90062 0%, #b30052 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 0, 110, 0.5);
   }
 
   .btn:disabled {
@@ -430,16 +491,132 @@
 
   .input {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    background-color: var(--surface-color);
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.75rem;
+    background-color: var(--bg-secondary);
     color: var(--text-color);
-    font-size: 1rem;
+    font-size: 0.9375rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .input:focus {
     outline: none;
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 0, 110, 0.2);
+    background-color: var(--surface-color);
+  }
+
+  /* ===== RESPONSIVE DESIGN ===== */
+  
+  /* Tablet (768px - 1023px) */
+  @media (max-width: 1023px) {
+    .deal-header {
+      padding: 1rem 1.5rem;
+    }
+
+    .deal-info h1 {
+      font-size: 1.5rem;
+    }
+
+    .chat-section {
+      padding: 1.25rem;
+    }
+
+    .message {
+      max-width: 80%;
+    }
+  }
+
+  /* Mobile (max 767px) */
+  @media (max-width: 767px) {
+    .deal-header {
+      padding: 1rem;
+      gap: 1rem;
+    }
+
+    .btn-back {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    .deal-info h1 {
+      font-size: 1.25rem;
+    }
+
+    .deal-meta {
+      font-size: 0.8125rem;
+    }
+
+    .offer-preview {
+      margin: 1rem;
+      padding: 1rem;
+    }
+
+    .offer-content {
+      padding: 0.875rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    .chat-section {
+      padding: 1rem;
+    }
+
+    .messages-container {
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 0.875rem 1rem;
+      font-size: 0.9375rem;
+    }
+
+    .message-form {
+      padding: 0.75rem;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .message-form input {
+      font-size: 0.875rem;
+      padding: 0.75rem;
+    }
+
+    .message-form button {
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+    }
+  }
+
+  /* Small Mobile (max 480px) */
+  @media (max-width: 480px) {
+    .deal-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .btn-back {
+      width: 100%;
+      text-align: center;
+    }
+
+    .deal-info h1 {
+      font-size: 1.125rem;
+    }
+
+    .message {
+      max-width: 90%;
+    }
+
+    .message-form {
+      flex-direction: column;
+    }
+
+    .message-form input,
+    .message-form button {
+      width: 100%;
+    }
   }
 </style>
