@@ -21,17 +21,27 @@ NIP-17 ist ein Nostr-Standard für private Nachrichten mit folgenden Vorteilen:
 
 ## 🚀 Verwendung
 
-### Chat starten
+### Chat starten (Vereinfachter Flow)
 
-1. **Über Marketplace-Angebot:**
-   - Erstelle ein Angebot oder zeige Interesse an einem bestehenden Angebot
-   - Als Anbieter siehst du die Interessenten mit "💬 Chat starten" Button
-   - Klicke auf den Button um den privaten Chat zu öffnen
+**Als Anbieter:**
+1. Erstelle ein Angebot im Marketplace
+2. Warte auf Interessenten
+3. Klicke bei einem Interessenten auf "💬 Chat starten"
+4. Dein Angebot wird automatisch gelöscht (nach Bestätigung)
+5. Der Chat öffnet sich sofort
+6. Die erste Nachricht enthält automatisch deinen Angebotstext
 
-2. **Auto-Delete Feature:**
-   - Wenn du als Anbieter einen Chat startest, wird dein Angebot automatisch gelöscht
-   - Dies verhindert weitere Interessenten und fokussiert auf die aktuelle Verhandlung
-   - Du wirst vor dem Löschen um Bestätigung gebeten
+**Als Interessent:**
+1. Zeige Interesse an einem Angebot
+2. Warte auf Chat-Start vom Anbieter
+3. Du erhältst die erste Nachricht mit dem Angebotstext
+4. Antworte direkt im Chat
+
+**Vorteile des neuen Flows:**
+- ✅ Sofortiger Chat-Start (keine Wartezeit)
+- ✅ Kein Einladungs-System mehr nötig
+- ✅ Angebotstext automatisch als erste Nachricht
+- ✅ Einfacher und schneller
 
 ### Nachrichten senden
 
@@ -58,13 +68,35 @@ NIP-17 ist ein Nostr-Standard für private Nachrichten mit folgenden Vorteilen:
 - **`src/routes/(app)/dm/[pubkey]/+page.svelte`**: Chat-UI
   - Verwendet NIP-17 für alle Nachrichten
   - Auto-Refresh alle 5 Sekunden
-  - Optimistische UI-Updates
+  - Zeigt Angebotstext als erste Nachricht
 
 - **`src/routes/(app)/group/+page.svelte`**: Marketplace
-  - "💬 Chat starten" Button bei Interessenten
-  - Auto-Delete beim Chat-Start
+  - `startDirectChat()`: Startet Chat direkt
+  - Sendet Angebotstext als erste NIP-17 Message
+  - Löscht Angebot automatisch
 
-### Verschlüsselungs-Flow
+### Chat-Start Flow
+
+```
+Anbieter                          Interessent
+   |                                  |
+   | 1. Klick "💬 Chat starten"       |
+   |                                  |
+   | 2. Sende Angebotstext            |
+   |    als NIP-17 Message            |
+   |--------------------------------->|
+   |                                  |
+   | 3. Lösche Angebot                |
+   |                                  |
+   | 4. Öffne Chat                    |
+   |                                  | 5. Empfange Nachricht
+   |                                  |    mit Angebotstext
+   |                                  |
+   | 6. Kommunikation läuft           |
+   |<-------------------------------->|
+```
+
+### Verschlüsselungs-Flow (NIP-17)
 
 ```
 Sender → Rumor (Kind 14) → Seal (Kind 13) → Gift Wrap (Kind 1059) → Relay
@@ -117,9 +149,14 @@ Das System gibt detaillierte Logs aus:
 - **Lösung**: Stelle sicher dass du der richtige Empfänger bist
 - **Lösung**: Prüfe ob dein Private Key korrekt ist
 
-**Problem**: Chat-Button funktioniert nicht
+**Problem**: Chat startet nicht
 - **Lösung**: Stelle sicher dass du ein Angebot erstellt hast (tempKeypair vorhanden)
-- **Lösung**: Prüfe ob du der Anbieter bist (nur Anbieter sehen Chat-Button)
+- **Lösung**: Prüfe ob du der Anbieter bist (nur Anbieter können Chat starten)
+- **Lösung**: Prüfe Browser-Console auf Fehler
+
+**Problem**: Angebotstext wird nicht angezeigt
+- **Lösung**: Der Angebotstext wird als erste NIP-17 Nachricht gesendet
+- **Lösung**: Prüfe ob die Nachricht im Chat ankommt (kann 5 Sekunden dauern)
 
 ## 🔒 Sicherheit
 

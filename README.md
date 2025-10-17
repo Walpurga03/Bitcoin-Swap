@@ -103,23 +103,7 @@ cd Bitcoin-Swap
 npm install
 ```
 
-### 3. Environment-Variablen konfigurieren
-
-Erstellen Sie eine `.env` Datei basierend auf `.env.example`:
-
-```bash
-cp .env.example .env
-```
-
-Bearbeiten Sie `.env` und fügen Sie die erlaubten Public Keys hinzu:
-
-```env
-PUBLIC_ALLOWED_PUBKEYS=npub1abc...,npub1def...,npub1xyz...
-```
-
-**Hinweis:** Sie können sowohl NPUB- als auch Hex-Format verwenden, komma-separiert.
-
-### 4. Development Server starten
+### 3. Development Server starten
 
 ```bash
 npm run dev
@@ -130,14 +114,6 @@ Die App läuft nun auf `http://localhost:5173`
 ---
 
 ## 🔧 Konfiguration
-
-### Whitelist einrichten
-
-Bearbeiten Sie `.env` oder `.env.production`:
-
-```env
-PUBLIC_ALLOWED_PUBKEYS=npub1abc...,npub1def...,npub1xyz...
-```
 
 ### Einladungslink erstellen
 
@@ -189,21 +165,25 @@ https://ihre-domain.com/?relay=wss%3A%2F%2Frelay.example.com&secret=premium-grou
 1. **Angebot erstellen** - Ein temporärer Keypair wird automatisch generiert (Sie bleiben anonym)
 2. **Interessenten sehen** - Alle Interessenten werden mit Namen und Public Key angezeigt
 3. **Chat starten** - Klicken Sie auf "💬 Chat starten" bei einem Interessenten
-4. **Auto-Delete** - Ihr Angebot wird automatisch gelöscht (Sie werden gefragt)
-5. **Private Kommunikation** - Chatten Sie direkt in der App mit NIP-17 Verschlüsselung
-6. **Transaktion abwickeln** - Vereinbaren Sie die Details sicher im privaten Chat
+4. **Sofortiger Chat-Start** - Der Chat öffnet sich direkt, keine Wartezeit
+5. **Angebotstext automatisch** - Ihr Angebotstext wird als erste Nachricht gesendet
+6. **Auto-Delete** - Ihr Angebot wird automatisch gelöscht (Sie werden gefragt)
+7. **Private Kommunikation** - Chatten Sie direkt in der App mit NIP-17 Verschlüsselung
+8. **Transaktion abwickeln** - Vereinbaren Sie die Details sicher im privaten Chat
 
 **Als Interessent:**
 1. **Interesse zeigen** - Ihr Name und Public Key werden dem Angebotsgeber angezeigt
 2. **Warten auf Chat** - Der Angebotsgeber kann einen Chat mit Ihnen starten
-3. **Private Kommunikation** - Chatten Sie direkt in der App
-4. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
+3. **Erste Nachricht** - Sie erhalten automatisch den Angebotstext als erste Nachricht
+4. **Private Kommunikation** - Chatten Sie direkt in der App
+5. **Interesse zurückziehen** - Sie können Ihr Interesse jederzeit zurückziehen (orangener Button)
 
 **NIP-17 Vorteile:**
 - **Gift-Wrapping**: Dreifache Verschlüsselung (Rumor → Seal → Gift Wrap)
 - **Metadaten-Schutz**: Sender und Empfänger sind nicht öffentlich sichtbar
 - **Zeitstempel-Randomisierung**: Erschwert Timing-Analysen
 - **Zufällige Pubkeys**: Keine Verknüpfung zur echten Identität
+- **Sofortiger Start**: Kein Einladungs-System, direkter Chat-Start
 
 📚 **Detaillierte Anleitung**: Siehe [`docs/NIP17-CHAT-ANLEITUNG.md`](docs/NIP17-CHAT-ANLEITUNG.md)
 
@@ -308,10 +288,14 @@ vercel login
 vercel --prod
 ```
 
-4. **Environment Variables setzen** im Vercel Dashboard:
-```
-PUBLIC_ALLOWED_PUBKEYS=npub1...,npub2...,npub3...
-```
+4. **Whitelist-Verwaltung nach Deployment:**
+   - Die Whitelist wird **nicht mehr über Environment Variables** konfiguriert
+   - Stattdessen verwaltet der **Admin die Whitelist direkt in der App**
+   - Jede Gruppe hat ihre **eigene Whitelist** (gespeichert als Nostr Event)
+   - Der Admin kann über den Button "🔐 Whitelist verwalten" im Gruppen-Chat Nutzer hinzufügen/entfernen
+   - Die Whitelist ist **gruppenspezifisch** (basierend auf dem Secret)
+
+📚 **Detaillierte Anleitung**: Siehe [`docs/WHITELIST-ANLEITUNG.md`](docs/WHITELIST-ANLEITUNG.md)
 
 **Live URL**: [https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
 
