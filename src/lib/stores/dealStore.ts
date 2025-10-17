@@ -46,6 +46,7 @@ function createDealStore() {
 
           return {
             id: dealId,
+            eventId: event.id,  // Speichere Event-ID für Löschung
             offerId: metadata.offerId,
             offerContent: metadata.offerContent,
             participants: {
@@ -110,6 +111,7 @@ function createDealStore() {
 
         const newRoom: DealRoom = {
           id: dealId,
+          eventId: event.id,  // Speichere Event-ID für Löschung
           offerId,
           offerContent,
           participants: {
@@ -243,7 +245,7 @@ function createDealStore() {
         console.log('🗑️ [DEAL-STORE] Lösche Deal-Room:', dealId);
         update(state => ({ ...state, isLoading: true, error: null }));
 
-        // Finde Deal-Room Event-ID
+        // Finde Deal-Room
         const state = get({ subscribe });
         const room = state.rooms.find(r => r.id === dealId);
         
@@ -251,8 +253,10 @@ function createDealStore() {
           throw new Error('Deal-Room nicht gefunden');
         }
 
-        // Lösche Deal-Room Event
-        await deleteEvent(dealId, privateKey, [relay], 'Deal abgeschlossen');
+        console.log('  📋 Event-ID:', room.eventId);
+
+        // Lösche Deal-Room Event mit der richtigen Event-ID
+        await deleteEvent(room.eventId, privateKey, [relay], 'Deal abgeschlossen');
 
         // Entferne aus Store
         update(state => ({

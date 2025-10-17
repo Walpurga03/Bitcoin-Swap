@@ -99,7 +99,8 @@ export interface InviteLinkData {
 
 // Deal-Room Types
 export interface DealRoom {
-  id: string;                    // Unique Deal-Room ID
+  id: string;                    // Unique Deal-Room ID (from d-tag)
+  eventId: string;               // Nostr Event ID (for deletion)
   offerId: string;               // Original Offer ID
   offerContent: string;          // Original Offer Content
   participants: {
