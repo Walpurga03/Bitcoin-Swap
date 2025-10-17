@@ -1,8 +1,28 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import QRCode from 'qrcode';
+
   let showDonation = false;
   let copied = false;
+  let qrCodeDataUrl = '';
 
   const LIGHTNING_ADDRESS = 'aldo.barazutti@walletofsatoshi.com';
+
+  onMount(async () => {
+    // Generiere QR-Code beim Mount
+    try {
+      qrCodeDataUrl = await QRCode.toDataURL(`lightning:${LIGHTNING_ADDRESS}`, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#FF006E',  // Nostr Pink
+          light: '#0a0a0a'  // Schwarz
+        }
+      });
+    } catch (err) {
+      console.error('Fehler beim Generieren des QR-Codes:', err);
+    }
+  });
 
   function toggleDonation() {
     showDonation = !showDonation;
@@ -49,12 +69,19 @@
           Gefällt dir dieses Projekt? Unterstütze die Entwicklung mit ein paar Sats! 🙏
         </p>
         
+        {#if qrCodeDataUrl}
+          <div class="qr-container">
+            <img src={qrCodeDataUrl} alt="Lightning QR Code" class="qr-code" />
+            <p class="qr-hint">Scanne mit deiner Lightning-Wallet</p>
+          </div>
+        {/if}
+        
         <div class="address-container">
           <div class="address-label">Lightning-Adresse:</div>
           <div class="address-box">
             <code class="address">{LIGHTNING_ADDRESS}</code>
-            <button 
-              class="copy-btn" 
+            <button
+              class="copy-btn"
               on:click={copyAddress}
               class:copied
               title={copied ? 'Kopiert!' : 'Kopieren'}
@@ -218,6 +245,31 @@
     color: var(--text-secondary);
     line-height: 1.5;
     font-size: 0.9375rem;
+  }
+
+  .qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(255, 0, 110, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-color);
+  }
+
+  .qr-code {
+    width: 200px;
+    height: 200px;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .qr-hint {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    text-align: center;
   }
 
   .address-container {

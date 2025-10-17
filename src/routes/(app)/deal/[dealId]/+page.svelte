@@ -214,6 +214,41 @@
   function handleBack() {
     goto('/group');
   }
+
+  async function handleCompleteDeal() {
+    if (!$activeDealRoom || !$userStore.privateKey) return;
+
+    const confirmed = confirm(
+      '🎉 Deal abschließen?\n\n' +
+      'Der Deal-Room wird gelöscht und du kehrst zum Marketplace zurück.\n\n' +
+      'Möchtest du fortfahren?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      loading = true;
+      error = '';
+
+      console.log('🗑️ [DEAL-COMPLETE] Lösche Deal-Room:', dealId);
+
+      // Lösche Deal-Room Event (NIP-09)
+      await dealStore.deleteDealRoom(
+        dealId,
+        $userStore.privateKey,
+        $groupStore.relay!
+      );
+
+      console.log('✅ [DEAL-COMPLETE] Deal-Room gelöscht');
+
+      // Zurück zum Marketplace
+      goto('/group');
+    } catch (e: any) {
+      console.error('❌ [DEAL-COMPLETE] Fehler:', e);
+      error = e.message || 'Fehler beim Löschen des Deal-Rooms';
+      loading = false;
+    }
+  }
 </script>
 
 <div class="deal-container">
@@ -229,6 +264,11 @@
         </p>
       {/if}
     </div>
+    {#if $activeDealRoom && isParticipant}
+      <button class="btn-complete" on:click={handleCompleteDeal} disabled={loading}>
+        {loading ? '⏳' : '✅'} Deal erledigt
+      </button>
+    {/if}
   </header>
 
   {#if error}
@@ -341,6 +381,30 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(255, 0, 110, 0.2);
     border-color: var(--primary-color);
+  }
+
+  .btn-complete {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: white;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+
+  .btn-complete:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  }
+
+  .btn-complete:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .deal-info {

@@ -280,7 +280,7 @@ Bei Fragen oder Problemen:
 
 1. Öffne ein **Issue** auf GitHub
 2. Prüfe die **Browser-Console** (F12) für Debug-Informationen
-3. Kontaktiere uns über **Nostr** (npub...)
+3. Kontaktiere uns über **Nostr** (npub1hht9umpeet75w55uzs9lq6ksayfpcvl9lk64hye75j0yj4husq5ss8xsry)
 
 ---
 

@@ -4,7 +4,8 @@ import {
   createDealRoom,
   fetchDealRooms,
   sendDealMessage,
-  fetchDealMessages
+  fetchDealMessages,
+  deleteEvent
 } from '$lib/nostr/client';
 
 // Deal Store State
@@ -230,6 +231,45 @@ function createDealStore() {
         return message;
       } catch (error: any) {
         console.error('❌ [DEAL-STORE] Fehler beim Senden:', error);
+        throw error;
+      }
+    },
+
+    /**
+     * Lösche Deal-Room (NIP-09)
+     */
+    deleteDealRoom: async (dealId: string, privateKey: string, relay: string) => {
+      try {
+        console.log('🗑️ [DEAL-STORE] Lösche Deal-Room:', dealId);
+        update(state => ({ ...state, isLoading: true, error: null }));
+
+        // Finde Deal-Room Event-ID
+        const state = get({ subscribe });
+        const room = state.rooms.find(r => r.id === dealId);
+        
+        if (!room) {
+          throw new Error('Deal-Room nicht gefunden');
+        }
+
+        // Lösche Deal-Room Event
+        await deleteEvent(dealId, privateKey, [relay], 'Deal abgeschlossen');
+
+        // Entferne aus Store
+        update(state => ({
+          ...state,
+          rooms: state.rooms.filter(r => r.id !== dealId),
+          activeRoomId: state.activeRoomId === dealId ? null : state.activeRoomId,
+          isLoading: false
+        }));
+
+        console.log('✅ [DEAL-STORE] Deal-Room gelöscht');
+      } catch (error: any) {
+        console.error('❌ [DEAL-STORE] Fehler beim Löschen:', error);
+        update(state => ({
+          ...state,
+          isLoading: false,
+          error: error.message || 'Fehler beim Löschen des Deal-Rooms'
+        }));
         throw error;
       }
     },
