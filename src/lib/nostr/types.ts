@@ -96,3 +96,34 @@ export interface InviteLinkData {
   relay: string;
   secret: string;
 }
+
+// Deal-Room Types
+export interface DealRoom {
+  id: string;                    // Unique Deal-Room ID
+  offerId: string;               // Original Offer ID
+  offerContent: string;          // Original Offer Content
+  participants: {
+    seller: string;              // Seller's real pubkey
+    buyer: string;               // Buyer's pubkey
+  };
+  created_at: number;
+  status: 'active' | 'completed' | 'cancelled';
+  messages: DealMessage[];
+}
+
+export interface DealMessage {
+  id: string;
+  content: string;
+  sender: string;                // pubkey of sender
+  created_at: number;
+  decrypted?: string;
+}
+
+export interface DealRoomMetadata {
+  dealId: string;
+  offerId: string;
+  offerContent: string;
+  sellerPubkey: string;
+  buyerPubkey: string;
+  created_at: number;
+}

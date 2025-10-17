@@ -492,6 +492,193 @@ export async function deleteEvent(
 }
 
 /**
+ * Erstelle einen Deal-Room (Kind 30080)
+ * Ein Deal-Room ist ein verschlüsselter 2-Personen-Chat zwischen Anbieter und Interessent
+ */
+export async function createDealRoom(
+  offerId: string,
+  offerContent: string,
+  sellerPubkey: string,
+  buyerPubkey: string,
+  channelId: string,
+  groupKey: string,
+  privateKey: string,
+  relays: string[]
+): Promise<NostrEvent> {
+  try {
+    console.log('🏠 [DEAL-ROOM] Erstelle Deal-Room...');
+    console.log('  📋 Offer-ID:', offerId.substring(0, 16) + '...');
+    console.log('  👤 Seller:', sellerPubkey.substring(0, 16) + '...');
+    console.log('  👤 Buyer:', buyerPubkey.substring(0, 16) + '...');
+
+    // Metadata für Deal-Room
+    const metadata = {
+      offerId,
+      offerContent,
+      sellerPubkey,
+      buyerPubkey,
+      created_at: Math.floor(Date.now() / 1000)
+    };
+
+    // Verschlüssele Metadata
+    const encrypted = await encryptForGroup(JSON.stringify(metadata), groupKey);
+
+    // Erstelle Deal-Room Event (Kind 30080)
+    const dealId = `deal-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const tags = [
+      ['d', dealId],                          // Unique Deal-Room ID
+      ['e', offerId, '', 'root'],             // Referenz zum Original-Angebot
+      ['e', channelId, '', 'channel'],        // Channel-ID
+      ['p', sellerPubkey],                    // Seller
+      ['p', buyerPubkey],                     // Buyer
+      ['t', 'bitcoin-deal']                   // Tag für Deal-Rooms
+    ];
+
+    console.log('  🏷️ Deal-Room Tags:', tags.map(t => `${t[0]}=${t[1].substring(0, 16)}...`));
+
+    const event = await createEvent(30080, encrypted, tags, privateKey);
+    const result = await publishEvent(event, relays);
+
+    console.log('  ✅ Deal-Room erstellt:', result.relays.length + '/' + relays.length + ' Relays');
+
+    return event;
+  } catch (error) {
+    console.error('❌ [DEAL-ROOM] Fehler beim Erstellen:', error);
+    throw error;
+  }
+}
+
+/**
+ * Hole alle Deal-Rooms für einen User
+ */
+export async function fetchDealRooms(
+  userPubkey: string,
+  groupKey: string,
+  relays: string[]
+): Promise<Array<NostrEvent & { decrypted?: any }>> {
+  try {
+    console.log('🏠 [DEAL-ROOMS] Lade Deal-Rooms für User:', userPubkey.substring(0, 16) + '...');
+
+    // Filter für Deal-Rooms wo User Teilnehmer ist
+    const filter = {
+      kinds: [30080],
+      '#p': [userPubkey],                    // User ist Teilnehmer
+      '#t': ['bitcoin-deal'],                // Deal-Room Tag
+      limit: 100
+    } as NostrFilter;
+
+    const events = await fetchEvents(relays, filter);
+    console.log('  📦 Gefundene Deal-Rooms:', events.length);
+
+    // Entschlüssele Metadata
+    const decryptedEvents = await Promise.all(
+      events.map(async (event) => {
+        try {
+          const decryptedStr = await decryptForGroup(event.content, groupKey);
+          const decrypted = JSON.parse(decryptedStr);
+          return { ...event, decrypted };
+        } catch (error) {
+          console.error('  ⚠️ Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16));
+          return null;
+        }
+      })
+    );
+
+    const validRooms = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: any }>;
+    console.log('  ✅ Entschlüsselte Deal-Rooms:', validRooms.length);
+
+    return validRooms;
+  } catch (error) {
+    console.error('❌ [DEAL-ROOMS] Fehler beim Laden:', error);
+    return [];
+  }
+}
+
+/**
+ * Sende Nachricht in Deal-Room
+ */
+export async function sendDealMessage(
+  dealId: string,
+  content: string,
+  groupKey: string,
+  privateKey: string,
+  relays: string[]
+): Promise<NostrEvent> {
+  try {
+    console.log('💬 [DEAL-MSG] Sende Nachricht in Deal-Room:', dealId);
+
+    // Verschlüssele Content
+    const encrypted = await encryptForGroup(content, groupKey);
+
+    const publicKey = getPublicKey(privateKey as any);
+    const tags = [
+      ['e', dealId, '', 'root'],             // Referenz zum Deal-Room
+      ['p', publicKey],                      // Sender
+      ['t', 'bitcoin-deal']                  // Deal-Tag
+    ];
+
+    const event = await createEvent(1, encrypted, tags, privateKey);
+    const result = await publishEvent(event, relays);
+
+    console.log('  ✅ Nachricht gesendet:', result.relays.length + '/' + relays.length + ' Relays');
+
+    return event;
+  } catch (error) {
+    console.error('❌ [DEAL-MSG] Fehler beim Senden:', error);
+    throw error;
+  }
+}
+
+/**
+ * Hole Nachrichten für einen Deal-Room
+ */
+export async function fetchDealMessages(
+  dealId: string,
+  groupKey: string,
+  relays: string[],
+  since?: number,
+  limit: number = 100
+): Promise<Array<NostrEvent & { decrypted?: string }>> {
+  try {
+    console.log('💬 [DEAL-MSGS] Lade Nachrichten für Deal-Room:', dealId);
+
+    const filter = {
+      kinds: [1],
+      '#e': [dealId],                        // Nachrichten für diesen Deal-Room
+      '#t': ['bitcoin-deal'],                // Deal-Tag
+      limit
+    } as NostrFilter;
+
+    if (since) {
+      filter.since = since;
+    }
+
+    const events = await fetchEvents(relays, filter);
+    console.log('  📦 Gefundene Nachrichten:', events.length);
+
+    // Entschlüssele Nachrichten
+    const decryptedEvents = await Promise.all(
+      events.map(async (event) => {
+        try {
+          const decrypted = await decryptForGroup(event.content, groupKey);
+          return { ...event, decrypted };
+        } catch (error) {
+          return null;
+        }
+      })
+    );
+
+    const validMessages = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
+    console.log('  ✅ Entschlüsselte Nachrichten:', validMessages.length);
+
+    return validMessages;
+  } catch (error) {
+    console.error('❌ [DEAL-MSGS] Fehler beim Laden:', error);
+    return [];
+  }
+}
+
+/**
  * Cleanup: Schließe alle Verbindungen
  */
 export function cleanup(): void {

@@ -5,41 +5,38 @@
   // @ts-ignore
   import { env } from '$env/dynamic/public';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
-  import { groupStore, groupMessages, marketplaceOffers } from '$lib/stores/groupStore';
+  import { groupStore, marketplaceOffers } from '$lib/stores/groupStore';
+  import { dealStore, dealRooms } from '$lib/stores/dealStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
-  import { setPrivateChatWhitelist } from '$lib/nostr/whitelist';
 
   // Admin Public Key
   const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
   let isAdmin = false;
 
-  let messageInput = '';
   let offerInput = '';
   let showOfferForm = false;
   let loading = false;
   let error = '';
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
   let expandedOffers: Set<string> = new Set();
-  let myInterests: Set<string> = new Set(); // Angebote für die ich Interesse gezeigt habe
-
-  let messagesContainer: HTMLDivElement;
+  let myInterests: Set<string> = new Set();
   let autoRefreshInterval: ReturnType<typeof setInterval>;
 
-  // Prüfe ob ich bei einem Angebot Interesse gezeigt habe
+  // Prüfe ob User bereits ein aktives Angebot hat
+  $: hasActiveOffer = tempKeypair && $marketplaceOffers.some(
+    offer => offer.tempPubkey === tempKeypair?.publicKey
+  );
+
+  // Prüfe ob User aktive Deal-Rooms hat
+  $: hasActiveDeals = $dealRooms.length > 0;
+
   function hasMyInterest(offer: any): boolean {
     if (!$userStore.pubkey) return false;
-    
-    // 1. Prüfe lokalen State (für sofortige UI-Reaktion)
-    if (myInterests.has(offer.id)) {
-      return true;
-    }
-    
-    // 2. Prüfe in den geladenen Replies vom Server
+    if (myInterests.has(offer.id)) return true;
     return offer.replies.some((r: any) => r.pubkey === $userStore.pubkey);
   }
 
-  // Finde mein Interesse-Event für ein Angebot
   function getMyInterest(offer: any): any | null {
     if (!$userStore.pubkey) return null;
     return offer.replies.find((r: any) => r.pubkey === $userStore.pubkey) || null;
@@ -51,7 +48,7 @@
     } else {
       expandedOffers.add(offerId);
     }
-    expandedOffers = expandedOffers; // Trigger reactivity
+    expandedOffers = expandedOffers;
   }
 
   async function copyToClipboard(text: string) {
@@ -60,22 +57,19 @@
       alert(`✅ Public Key kopiert!\n\n${text}\n\nDu kannst den User nun außerhalb der App kontaktieren.`);
     } catch (err) {
       console.error('Fehler beim Kopieren:', err);
-      // Fallback: Zeige den Key in einem Prompt zum manuellen Kopieren
       prompt('Public Key (kopiere ihn manuell):', text);
     }
   }
 
   onMount(async () => {
-    // Prüfe Authentication
     if (!$isAuthenticated) {
       goto('/');
       return;
     }
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
-      console.log('📊 [PAGE] userStore.tempPrivkey:', $userStore.tempPrivkey ? 'vorhanden' : 'nicht vorhanden');
       
-      // Prüfe ob User Admin ist
+      // Prüfe Admin-Status
       const { nip19 } = await import('nostr-tools');
       let adminHex = ADMIN_PUBKEY;
       if (ADMIN_PUBKEY.startsWith('npub1')) {
@@ -85,41 +79,43 @@
         }
       }
       isAdmin = $userStore.pubkey?.toLowerCase() === adminHex.toLowerCase();
-      console.log('🔐 [PAGE] Admin-Status:', isAdmin);
       
-      // ✅ Restore tempKeypair aus userStore falls vorhanden
+      // Restore tempKeypair
       if ($userStore.tempPrivkey) {
         const { getPublicKeyFromPrivate } = await import('$lib/nostr/crypto');
         tempKeypair = {
           privateKey: $userStore.tempPrivkey,
           publicKey: getPublicKeyFromPrivate($userStore.tempPrivkey)
         };
-        console.log('✅ [PAGE] tempKeypair wiederhergestellt:');
-        console.log('  - Private Key:', tempKeypair.privateKey.substring(0, 16) + '...');
-        console.log('  - Public Key:', tempKeypair.publicKey.substring(0, 16) + '...');
-      } else {
-        console.log('⚠️ [PAGE] Kein tempPrivkey gefunden - Angebote werden als anonym angezeigt');
+        console.log('✅ [PAGE] tempKeypair wiederhergestellt');
       }
       
-      // Lade initiale Nachrichten (alle beim ersten Mal)
-      await groupStore.loadMessages(true);
-      console.log('✅ [PAGE] Nachrichten geladen');
-      
+      // Lade Marketplace-Angebote
       await groupStore.loadOffers();
       console.log('✅ [PAGE] Marketplace-Angebote geladen');
 
-      // Auto-Refresh alle 5 Sekunden (nur neue Nachrichten)
+      // Lade Deal-Rooms
+      await dealStore.loadRooms(
+        $userStore.pubkey!,
+        $groupStore.groupKey!,
+        $groupStore.relay!
+      );
+      console.log('✅ [PAGE] Deal-Rooms geladen:', $dealRooms.length);
+
+      // Auto-Refresh alle 5 Sekunden
       autoRefreshInterval = setInterval(async () => {
         try {
-          await groupStore.loadMessages(false);
           await groupStore.loadOffers();
+          await dealStore.loadRooms(
+            $userStore.pubkey!,
+            $groupStore.groupKey!,
+            $groupStore.relay!
+          );
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
       }, 5000);
 
-      // Scroll zu neuesten Nachrichten
-      scrollToBottom();
     } catch (e: any) {
       console.error('❌ [PAGE] Fehler beim Laden:', e);
       error = e.message || 'Fehler beim Laden der Daten';
@@ -132,43 +128,19 @@
     }
   });
 
-  function scrollToBottom() {
-    if (messagesContainer) {
-      setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }, 100);
-    }
-  }
-
-  async function sendMessage() {
-    if (!messageInput.trim() || !$userStore.privateKey) return;
-
-    try {
-      loading = true;
-      error = '';
-
-      await groupStore.sendMessage(messageInput, $userStore.privateKey);
-      messageInput = '';
-      scrollToBottom();
-    } catch (e: any) {
-      error = e.message || 'Fehler beim Senden';
-    } finally {
-      loading = false;
-    }
-  }
-
   async function createOffer() {
     if (!offerInput.trim()) return;
 
+    // Prüfe ob User bereits ein Angebot hat
+    if (hasActiveOffer) {
+      alert('❌ Du hast bereits ein aktives Angebot!\n\nBitte lösche dein bestehendes Angebot, bevor du ein neues erstellst.');
+      return;
+    }
+
     try {
       loading = true;
-      error = '';
+      error = '⏳ Angebot wird erstellt...';
 
-      // Zeige sofortiges Feedback
-      const loadingToast = '⏳ Angebot wird erstellt...';
-      error = loadingToast;
-
-      // Generiere temporäres Keypair falls noch nicht vorhanden
       if (!tempKeypair) {
         tempKeypair = generateTempKeypair();
         userStore.setTempPrivkey(tempKeypair.privateKey);
@@ -176,19 +148,14 @@
 
       await groupStore.createOffer(offerInput, tempKeypair.privateKey);
       
-      // Erfolgs-Feedback
       error = '✅ Angebot wird veröffentlicht...';
-      
-      // Warte kurz damit das Event im Relay gespeichert ist
       await new Promise(resolve => setTimeout(resolve, 500));
-      
       await groupStore.loadOffers();
       
       offerInput = '';
       showOfferForm = false;
-      error = ''; // Lösche Feedback nach Erfolg
+      error = '';
       
-      // Zeige kurze Erfolgs-Meldung
       setTimeout(() => {
         alert('✅ Angebot erfolgreich erstellt!');
       }, 100);
@@ -206,8 +173,6 @@
       loading = true;
       error = '⏳ Interesse wird gesendet...';
 
-      console.log('✋ [UI] Sende Interesse für Angebot:', offerId.substring(0, 16) + '...');
-
       const userName = $userStore.name || 'Unbekannt';
       
       await groupStore.sendInterest(
@@ -217,27 +182,17 @@
         $userStore.privateKey
       );
 
-      console.log('✅ [UI] Interesse gesendet, lade Angebote neu...');
-
-      // Markiere lokal (für sofortige UI-Reaktion)
       myInterests.add(offerId);
       myInterests = myInterests;
 
-      // Warte kurz damit das Event im Relay gespeichert ist
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Reload Angebote um die neue Antwort zu sehen
       await groupStore.loadOffers();
 
-      console.log('✅ [UI] Angebote neu geladen');
-
-      error = ''; // Lösche Lade-Feedback
-      alert('✅ Interesse gesendet! Der Anbieter kann jetzt deinen Public Key sehen.');
+      error = '';
+      alert('✅ Interesse gesendet! Der Anbieter kann jetzt einen Deal-Room mit dir starten.');
     } catch (e: any) {
       console.error('❌ [UI] Fehler beim Senden des Interesses:', e);
       error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
-      
-      // Entferne aus myInterests bei Fehler
       myInterests.delete(offerId);
       myInterests = myInterests;
     } finally {
@@ -247,35 +202,23 @@
 
   async function withdrawInterest(offerId: string, interestId: string) {
     if (!$userStore.privateKey) return;
-
     if (!confirm('Möchtest du dein Interesse wirklich zurückziehen?')) return;
 
     try {
       loading = true;
       error = '';
 
-      console.log('🗑️ [UI] Ziehe Interesse zurück für Angebot:', offerId.substring(0, 16) + '...');
-
       await groupStore.deleteInterest(interestId, $userStore.privateKey);
 
-      // Entferne lokal (für sofortige UI-Reaktion)
       myInterests.delete(offerId);
       myInterests = myInterests;
 
-      // Warte kurz damit das Delete-Event im Relay verarbeitet ist
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Reload Angebote
       await groupStore.loadOffers();
-
-      console.log('✅ [UI] Interesse zurückgezogen, Angebote neu geladen');
 
       alert('✅ Interesse zurückgezogen.');
     } catch (e: any) {
-      console.error('❌ [UI] Fehler beim Zurückziehen:', e);
       error = e.message || 'Fehler beim Zurückziehen des Interesses';
-      
-      // Füge zurück zu myInterests bei Fehler
       myInterests.add(offerId);
       myInterests = myInterests;
     } finally {
@@ -285,7 +228,6 @@
 
   async function deleteOffer(offerId: string) {
     if (!tempKeypair?.privateKey) return;
-
     if (!confirm('Möchtest du dieses Angebot wirklich löschen?')) return;
 
     try {
@@ -293,13 +235,10 @@
       error = '⏳ Angebot wird gelöscht...';
 
       await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
-      
-      // Warte kurz damit das Delete-Event verarbeitet wird
       await new Promise(resolve => setTimeout(resolve, 500));
-      
       await groupStore.loadOffers();
       
-      error = ''; // Lösche Lade-Feedback
+      error = '';
       alert('✅ Angebot erfolgreich gelöscht!');
     } catch (e: any) {
       error = '❌ ' + (e.message || 'Fehler beim Löschen');
@@ -308,107 +247,64 @@
     }
   }
 
-  async function startDirectChat(offerId: string, recipientPubkey: string, recipientName: string) {
-    if (!tempKeypair?.privateKey) {
-      alert('❌ Fehler: Kein temporärer Key vorhanden');
+  async function startDealRoom(offerId: string, recipientPubkey: string, recipientName: string) {
+    if (!tempKeypair?.privateKey || !$userStore.privateKey) {
+      alert('❌ Fehler: Keine Keys vorhanden');
       return;
     }
 
-    if (!$userStore.privateKey) {
-      alert('❌ Fehler: Kein Private Key vorhanden');
+    const offer = $marketplaceOffers.find(o => o.id === offerId);
+    if (!offer || offer.tempPubkey !== tempKeypair.publicKey) {
+      alert('❌ Fehler: Dies ist nicht dein Angebot');
       return;
     }
+
+    const confirmMessage = `💬 Möchtest du einen Deal-Room mit ${recipientName} starten?\n\n` +
+      `✅ VORTEILE:\n` +
+      `• Privater verschlüsselter Chat nur für euch beide\n` +
+      `• Dein Angebot wird gelöscht\n` +
+      `• Andere User können weiter Angebote erstellen\n` +
+      `• Whitelist bleibt unverändert`;
+    
+    if (!confirm(confirmMessage)) return;
 
     try {
-      // Prüfe ob dies mein eigenes Angebot ist
-      const offer = $marketplaceOffers.find(o => o.id === offerId);
-      if (!offer || offer.tempPubkey !== tempKeypair.publicKey) {
-        alert('❌ Fehler: Dies ist nicht dein Angebot');
-        return;
-      }
-
-      // Bestätige Chat-Start
-      const confirmMessage = `💬 Möchtest du einen privaten Chat mit ${recipientName} starten?\n\n` +
-        `⚠️ WICHTIG:\n` +
-        `• Dein Angebot wird gelöscht\n` +
-        `• Alle anderen User werden aus der Gruppe entfernt\n` +
-        `• Nur du und ${recipientName} können dann noch im Gruppen-Chat kommunizieren\n` +
-        `• Der Angebotstext wird als erste Nachricht im Chat gesendet`;
-      
-      if (!confirm(confirmMessage)) {
-        return;
-      }
-
       loading = true;
-      error = '⏳ Chat wird gestartet...';
+      error = '⏳ Deal-Room wird erstellt...';
 
-      console.log('💬 [CHAT] Starte privaten Chat im Gruppen-Chat...');
-      console.log('  📝 Angebot:', offerId.substring(0, 16) + '...');
-      console.log('  👤 Anbieter (du):', tempKeypair.publicKey.substring(0, 16) + '...');
-      console.log('  👤 Interessent:', recipientPubkey.substring(0, 16) + '...');
+      console.log('🏠 [UI] Erstelle Deal-Room...');
 
-      const relay = $groupStore.relay;
-      const channelId = $groupStore.channelId;
-      
-      if (!relay || !channelId) {
-        throw new Error('Kein Relay oder Channel-ID verfügbar');
-      }
-
-      // 1. Setze Whitelist auf 3 Keys (Anbieter echter + temp Key + Interessent)
-      console.log('🔒 [CHAT] Setze Whitelist für privaten Chat...');
-      console.log('  Anbieter echter Key:', $userStore.pubkey?.substring(0, 16) + '...');
-      console.log('  Anbieter temp Key:', tempKeypair.publicKey.substring(0, 16) + '...');
-      console.log('  Interessent:', recipientPubkey.substring(0, 16) + '...');
-      
-      const whitelistSuccess = await setPrivateChatWhitelist(
-        $userStore.pubkey!,     // Anbieter echter Key (zum Schreiben)
-        tempKeypair.publicKey,  // Anbieter temp Key (für Angebot)
-        recipientPubkey,        // Interessent
-        $userStore.privateKey,  // Admin key (für Whitelist-Update)
-        [relay],
-        channelId
+      // Erstelle Deal-Room
+      const dealRoom = await dealStore.createRoom(
+        offerId,
+        offer.content,
+        $userStore.pubkey!,
+        recipientPubkey,
+        $groupStore.channelId!,
+        $groupStore.groupKey!,
+        $userStore.privateKey,
+        $groupStore.relay!
       );
 
-      if (!whitelistSuccess) {
-        throw new Error('Fehler beim Setzen der Whitelist');
-      }
+      console.log('✅ [UI] Deal-Room erstellt:', dealRoom.id);
 
-      console.log('✅ [CHAT] Whitelist gesetzt - nur noch Anbieter und Interessent haben Zugriff');
-
-      // 2. Sende Angebotstext als erste Gruppen-Nachricht
-      console.log('📋 [CHAT] Sende Angebotstext als Gruppen-Nachricht...');
-      await groupStore.sendMessage(
-        `📋 Ursprüngliches Angebot:\n\n${offer.content}`,
-        $userStore.privateKey
-      );
-
-      console.log('✅ [CHAT] Angebotstext gesendet');
-
-      // 3. Lösche Angebot
+      // Lösche Angebot
       await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
-      console.log('✅ [CHAT] Angebot gelöscht');
+      console.log('✅ [UI] Angebot gelöscht');
 
-      // Warte kurz damit Events verarbeitet werden
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await groupStore.loadOffers();
 
-      // 4. Reload Messages um Angebotstext zu sehen
-      await groupStore.loadMessages(true);
-
-      error = '✅ Privater Chat gestartet! Nur du und ' + recipientName + ' können jetzt noch kommunizieren.';
+      error = '';
       loading = false;
 
-      // Zeige Erfolgs-Meldung
-      setTimeout(() => {
-        alert(`✅ Privater Chat erfolgreich gestartet!\n\n` +
-          `Nur du und ${recipientName} haben jetzt noch Zugriff auf diese Gruppe.\n` +
-          `Alle anderen User wurden von der Whitelist entfernt.\n\n` +
-          `Der Angebotstext wurde als erste Nachricht gesendet.`);
-        error = '';
-      }, 500);
+      // Navigiere zum Deal-Room
+      alert(`✅ Deal-Room erfolgreich erstellt!\n\nDu wirst jetzt zum privaten Chat weitergeleitet.`);
+      goto(`/deal/${dealRoom.id}`);
 
     } catch (e: any) {
-      console.error('❌ [CHAT] Fehler beim Chat-Start:', e);
-      error = '❌ ' + (e.message || 'Fehler beim Chat-Start');
+      console.error('❌ [UI] Fehler beim Deal-Room-Start:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Deal-Room-Start');
       loading = false;
     }
   }
@@ -417,6 +313,7 @@
     if (confirm('Möchtest du dich wirklich abmelden?')) {
       userStore.logout();
       groupStore.clearGroupData();
+      dealStore.reset();
       goto('/');
     }
   }
@@ -425,7 +322,7 @@
 <div class="group-container">
   <header class="group-header">
     <div>
-      <h1>💬 Gruppen-Chat</h1>
+      <h1>🛒 Bitcoin Tausch Netzwerk</h1>
       <p class="user-info">
         Angemeldet als: <strong>{$userStore.name || 'Anonym'}</strong>
         ({truncatePubkey($userStore.pubkey || '')})
@@ -435,6 +332,11 @@
       </p>
     </div>
     <div class="header-actions">
+      {#if hasActiveDeals}
+        <button class="btn btn-deals" on:click={() => goto('/deal/' + $dealRooms[0].id)}>
+          💬 Meine Deals ({$dealRooms.length})
+        </button>
+      {/if}
       {#if isAdmin}
         <button class="btn btn-admin" on:click={() => goto('/admin')}>
           🔐 Whitelist verwalten
@@ -452,255 +354,212 @@
     </div>
   {/if}
 
-  <div class="content-grid">
-    <!-- Chat-Bereich -->
-    <div class="chat-section">
-      <div class="messages-container" bind:this={messagesContainer}>
-        {#if $groupMessages.length === 0}
-          <div class="empty-state">
-            <p>Noch keine Nachrichten. Sei der Erste!</p>
-          </div>
-        {:else}
-          {#each $groupMessages as message (message.id)}
-            <div class="message" class:own={message.pubkey === $userStore.pubkey}>
-              <div class="message-header">
-                <span class="message-author">
-                  {message.author || truncatePubkey(message.pubkey)}
-                </span>
-                <span class="message-time">
-                  {formatTimestamp(message.created_at)}
-                </span>
-              </div>
-              <div class="message-content">
-                {message.content}
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-
-      <form class="message-form" on:submit|preventDefault={sendMessage}>
-        <input
-          type="text"
-          class="input"
-          bind:value={messageInput}
-          placeholder="Nachricht schreiben..."
-          disabled={loading}
-        />
-        <button type="submit" class="btn btn-primary" disabled={loading || !messageInput.trim()}>
-          Senden
-        </button>
-      </form>
+  <div class="marketplace-container">
+    <div class="marketplace-header">
+      <h2>🛒 Marketplace</h2>
+      <button 
+        class="btn btn-primary btn-sm" 
+        on:click={() => showOfferForm = !showOfferForm}
+        disabled={hasActiveOffer && !showOfferForm}
+        title={hasActiveOffer ? 'Du hast bereits ein aktives Angebot' : 'Neues Angebot erstellen'}
+      >
+        {showOfferForm ? '✕ Abbrechen' : '+ Neues Angebot'}
+      </button>
     </div>
 
-    <!-- Marketplace-Bereich -->
-    <div class="marketplace-section">
-      <div class="marketplace-header">
-        <h2>🛒 Marketplace</h2>
-        <button class="btn btn-primary btn-sm" on:click={() => showOfferForm = !showOfferForm}>
-          {showOfferForm ? '✕ Abbrechen' : '+ Neues Angebot'}
-        </button>
+    {#if hasActiveOffer && !showOfferForm}
+      <div class="info-banner">
+        ℹ️ Du hast bereits ein aktives Angebot. Lösche es, um ein neues zu erstellen.
       </div>
+    {/if}
 
-      {#if showOfferForm}
-        <form class="offer-form card" on:submit|preventDefault={createOffer}>
-          <h3>📝 Neues Angebot erstellen</h3>
-          <textarea
-            class="input"
-            bind:value={offerInput}
-            placeholder="z.B. Verkaufe 0.01 BTC gegen EUR-Bargeld in Berlin..."
-            rows="5"
-            disabled={loading}
-          ></textarea>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
-              {#if loading}
-                <span class="spinner"></span>
-                <span>Wird veröffentlicht...</span>
-              {:else}
-                🚀 Angebot veröffentlichen
-              {/if}
-            </button>
-          </div>
-          <small class="hint">
-            💡 <strong>Hinweis:</strong> Dein Angebot wird anonym mit einem temporären Key veröffentlicht.
-            Andere Nutzer können Interesse zeigen und du siehst deren Public Keys.
-          </small>
-        </form>
-      {/if}
+    {#if showOfferForm}
+      <form class="offer-form card" on:submit|preventDefault={createOffer}>
+        <h3>📝 Neues Angebot erstellen</h3>
+        <textarea
+          class="input"
+          bind:value={offerInput}
+          placeholder="z.B. Verkaufe 0.01 BTC gegen EUR-Bargeld in Berlin..."
+          rows="5"
+          disabled={loading}
+        ></textarea>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
+            {#if loading}
+              <span class="spinner"></span>
+              <span>Wird veröffentlicht...</span>
+            {:else}
+              🚀 Angebot veröffentlichen
+            {/if}
+          </button>
+        </div>
+        <small class="hint">
+          💡 <strong>Hinweis:</strong> Dein Angebot wird anonym veröffentlicht.
+          Andere Nutzer können Interesse zeigen und du kannst dann einen privaten Deal-Room starten.
+        </small>
+      </form>
+    {/if}
 
-      <div class="offers-list">
-        {#if loading && $marketplaceOffers.length === 0}
-          <div class="loading-state">
-            <p>⏳ Lade Angebote...</p>
-          </div>
-        {:else if $marketplaceOffers.length === 0}
-          <div class="empty-state">
-            <div class="empty-icon">🛒</div>
-            <p><strong>Noch keine Angebote vorhanden</strong></p>
-            <p class="text-muted">Sei der Erste und erstelle ein Bitcoin-Tauschangebot!</p>
-          </div>
-        {:else}
-          <div class="offers-count">
-            {$marketplaceOffers.length} {$marketplaceOffers.length === 1 ? 'Angebot' : 'Angebote'}
-          </div>
-          {#each $marketplaceOffers as offer (offer.id)}
-            <div class="offer-card card" class:own-offer={offer.tempPubkey === tempKeypair?.publicKey}>
-              <div class="offer-header">
-                <div class="offer-meta">
-                  <span class="offer-author">
-                    {#if offer.tempPubkey === tempKeypair?.publicKey}
-                      <span class="badge badge-primary">Dein Angebot</span>
-                    {:else}
-                      <span class="badge badge-secondary">Anonym</span>
-                    {/if}
-                    <!-- Debug Info (nur in Entwicklung sichtbar) -->
-                    {#if false}
-                      <small style="font-size: 0.6rem; opacity: 0.5;">
-                        Offer: {offer.tempPubkey.substring(0, 8)}... |
-                        Temp: {tempKeypair?.publicKey?.substring(0, 8) || 'none'}...
-                      </small>
-                    {/if}
-                  </span>
-                  <span class="offer-time">
-                    {formatTimestamp(offer.created_at)}
-                  </span>
-                </div>
-              </div>
-              <div class="offer-content">
-                {offer.content}
-              </div>
-              <div class="offer-footer">
-                <div class="offer-info">
-                  <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
-                  {#if offer.replies.length > 0}
-                    <button 
-                      class="interest-badge"
-                      on:click={() => toggleOfferExpand(offer.id)}
-                    >
-                      💌 {offer.replies.length} {offer.replies.length === 1 ? 'Interessent' : 'Interessenten'}
-                      <span class="expand-icon">{expandedOffers.has(offer.id) ? '▼' : '▶'}</span>
-                    </button>
-                  {/if}
-                </div>
-                <div class="offer-actions">
+    <div class="offers-list">
+      {#if loading && $marketplaceOffers.length === 0}
+        <div class="loading-state">
+          <p>⏳ Lade Angebote...</p>
+        </div>
+      {:else if $marketplaceOffers.length === 0}
+        <div class="empty-state">
+          <div class="empty-icon">🛒</div>
+          <p><strong>Noch keine Angebote vorhanden</strong></p>
+          <p class="text-muted">Sei der Erste und erstelle ein Bitcoin-Tauschangebot!</p>
+        </div>
+      {:else}
+        <div class="offers-count">
+          {$marketplaceOffers.length} {$marketplaceOffers.length === 1 ? 'Angebot' : 'Angebote'}
+        </div>
+        {#each $marketplaceOffers as offer (offer.id)}
+          <div class="offer-card card" class:own-offer={offer.tempPubkey === tempKeypair?.publicKey}>
+            <div class="offer-header">
+              <div class="offer-meta">
+                <span class="offer-author">
                   {#if offer.tempPubkey === tempKeypair?.publicKey}
-                    <button 
-                      class="btn btn-danger btn-sm" 
-                      on:click={() => deleteOffer(offer.id)}
-                      disabled={loading}
-                    >
-                      🗑️ Löschen
-                    </button>
-                  {:else if hasMyInterest(offer)}
-                    {@const myInterest = getMyInterest(offer)}
-                    <button 
-                      class="btn btn-warning btn-sm" 
-                      on:click={() => withdrawInterest(offer.id, myInterest.id)}
-                      disabled={loading}
-                      title="Interesse zurückziehen"
-                    >
-                      ✅ Interesse gezeigt
-                    </button>
+                    <span class="badge badge-primary">Dein Angebot</span>
                   {:else}
-                    <button 
-                      class="btn btn-success btn-sm" 
-                      on:click={() => sendInterest(offer.id)}
-                      disabled={loading}
-                    >
-                      ✋ Interesse zeigen
-                    </button>
+                    <span class="badge badge-secondary">Anonym</span>
                   {/if}
-                </div>
+                </span>
+                <span class="offer-time">
+                  {formatTimestamp(offer.created_at)}
+                </span>
               </div>
-
-              {#if expandedOffers.has(offer.id) && offer.replies.length > 0}
-                <div class="interest-list">
-                  {#if offer.tempPubkey === tempKeypair?.publicKey}
-                    <!-- Angebotsgeber sieht alle Interessenten mit Details -->
-                    <div class="interest-header">
-                      <strong>Interessenten:</strong>
-                      <small class="hint-text">💡 Klicke auf Name oder Public Key zum Kopieren</small>
-                    </div>
-                    {#each offer.replies as reply (reply.id)}
-                      {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
-                      {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
-                      <div class="interest-item">
-                        <div class="interest-meta">
-                          <button
-                            class="interest-name clickable"
-                            on:click={() => copyToClipboard(reply.pubkey)}
-                            title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
-                          >
-                            👤 <strong>{userName}</strong>
-                            <span class="copy-icon">📋</span>
-                          </button>
-                          <span class="interest-time">
-                            {formatTimestamp(reply.created_at)}
-                          </span>
-                        </div>
-                        <div class="interest-actions">
-                          <button
-                            class="interest-pubkey-detail clickable"
-                            on:click={() => copyToClipboard(reply.pubkey)}
-                            title="Klicke zum Kopieren: {reply.pubkey}"
-                          >
-                            🔑 {truncatePubkey(reply.pubkey)}
-                          </button>
-                          <button
-                            class="btn btn-chat btn-sm"
-                            on:click={() => startDirectChat(offer.id, reply.pubkey, userName)}
-                            title="Privaten Chat mit {userName} starten"
-                            disabled={loading}
-                          >
-                            💬 Chat starten
-                          </button>
-                        </div>
-                        {#if message !== userName}
-                          <div class="interest-message">
-                            {message}
-                          </div>
-                        {/if}
-                      </div>
-                    {/each}
-                  {:else}
-                    <!-- Interessenten sehen nur ihr eigenes Interesse -->
-                    <div class="interest-header">
-                      <strong>Dein Interesse:</strong>
-                    </div>
-                    {#each offer.replies.filter(r => r.pubkey === $userStore.pubkey) as reply (reply.id)}
-                      {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
-                      {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
-                      <div class="interest-item own-interest">
-                        <div class="interest-meta">
-                          <span class="interest-name">
-                            👤 <strong>{userName}</strong>
-                          </span>
-                          <span class="interest-time">
-                            {formatTimestamp(reply.created_at)}
-                          </span>
-                        </div>
-                        {#if message !== userName}
-                          <div class="interest-message">
-                            {message}
-                          </div>
-                        {/if}
-                        
-                        <!-- Warte auf Chat-Start vom Anbieter -->
-                        <div class="interest-status">
-                          ⏳ Warte auf Chat-Start vom Anbieter...
-                          <br>
-                          <small>Der Anbieter kann direkt einen Chat mit dir starten.</small>
-                        </div>
-                      </div>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
             </div>
-          {/each}
-        {/if}
-      </div>
+            <div class="offer-content">
+              {offer.content}
+            </div>
+            <div class="offer-footer">
+              <div class="offer-info">
+                <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
+                {#if offer.replies.length > 0}
+                  <button 
+                    class="interest-badge"
+                    on:click={() => toggleOfferExpand(offer.id)}
+                  >
+                    💌 {offer.replies.length} {offer.replies.length === 1 ? 'Interessent' : 'Interessenten'}
+                    <span class="expand-icon">{expandedOffers.has(offer.id) ? '▼' : '▶'}</span>
+                  </button>
+                {/if}
+              </div>
+              <div class="offer-actions">
+                {#if offer.tempPubkey === tempKeypair?.publicKey}
+                  <button 
+                    class="btn btn-danger btn-sm" 
+                    on:click={() => deleteOffer(offer.id)}
+                    disabled={loading}
+                  >
+                    🗑️ Löschen
+                  </button>
+                {:else if hasMyInterest(offer)}
+                  {@const myInterest = getMyInterest(offer)}
+                  <button 
+                    class="btn btn-warning btn-sm" 
+                    on:click={() => withdrawInterest(offer.id, myInterest.id)}
+                    disabled={loading}
+                    title="Interesse zurückziehen"
+                  >
+                    ✅ Interesse gezeigt
+                  </button>
+                {:else}
+                  <button 
+                    class="btn btn-success btn-sm" 
+                    on:click={() => sendInterest(offer.id)}
+                    disabled={loading}
+                  >
+                    ✋ Interesse zeigen
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            {#if expandedOffers.has(offer.id) && offer.replies.length > 0}
+              <div class="interest-list">
+                {#if offer.tempPubkey === tempKeypair?.publicKey}
+                  <div class="interest-header">
+                    <strong>Interessenten:</strong>
+                    <small class="hint-text">💡 Klicke auf "Deal starten" für privaten Chat</small>
+                  </div>
+                  {#each offer.replies as reply (reply.id)}
+                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
+                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
+                    <div class="interest-item">
+                      <div class="interest-meta">
+                        <button
+                          class="interest-name clickable"
+                          on:click={() => copyToClipboard(reply.pubkey)}
+                          title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
+                        >
+                          👤 <strong>{userName}</strong>
+                          <span class="copy-icon">📋</span>
+                        </button>
+                        <span class="interest-time">
+                          {formatTimestamp(reply.created_at)}
+                        </span>
+                      </div>
+                      <div class="interest-actions">
+                        <button
+                          class="interest-pubkey-detail clickable"
+                          on:click={() => copyToClipboard(reply.pubkey)}
+                          title="Klicke zum Kopieren: {reply.pubkey}"
+                        >
+                          🔑 {truncatePubkey(reply.pubkey)}
+                        </button>
+                        <button
+                          class="btn btn-chat btn-sm"
+                          on:click={() => startDealRoom(offer.id, reply.pubkey, userName)}
+                          title="Deal-Room mit {userName} starten"
+                          disabled={loading}
+                        >
+                          🏠 Deal starten
+                        </button>
+                      </div>
+                      {#if message !== userName}
+                        <div class="interest-message">
+                          {message}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                {:else}
+                  <div class="interest-header">
+                    <strong>Dein Interesse:</strong>
+                  </div>
+                  {#each offer.replies.filter(r => r.pubkey === $userStore.pubkey) as reply (reply.id)}
+                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
+                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
+                    <div class="interest-item own-interest">
+                      <div class="interest-meta">
+                        <span class="interest-name">
+                          👤 <strong>{userName}</strong>
+                        </span>
+                        <span class="interest-time">
+                          {formatTimestamp(reply.created_at)}
+                        </span>
+                      </div>
+                      {#if message !== userName}
+                        <div class="interest-message">
+                          {message}
+                        </div>
+                      {/if}
+                      <div class="interest-status">
+                        ⏳ Warte auf Deal-Room vom Anbieter...
+                        <br>
+                        <small>Der Anbieter kann einen privaten Deal-Room mit dir starten.</small>
+                      </div>
+                    </div>
+                  {/each}
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      {/if}
     </div>
   </div>
 </div>
@@ -710,6 +569,7 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    background-color: var(--bg-color);
   }
 
   .group-header {
@@ -771,106 +631,56 @@
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
   }
 
-  .btn-admin:active {
-    transform: translateY(0);
-  }
-
-  .content-grid {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 1rem;
-    padding: 1rem;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  @media (max-width: 768px) {
-    .content-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .chat-section {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 120px);
-  }
-
-  .messages-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    background-color: var(--surface-color);
-    border-radius: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .empty-state {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 2rem;
-  }
-
-  .message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    background-color: var(--bg-color);
+  .btn-deals {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
     border-radius: 0.5rem;
-  }
-
-  .message.own {
-    background-color: var(--primary-color);
-    margin-left: 2rem;
-  }
-
-  .message-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
     font-size: 0.875rem;
   }
 
-  .message-author {
-    font-weight: 500;
+  .btn-deals:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
   }
 
-  .message-time {
-    color: var(--text-muted);
-  }
-
-  .message-content {
-    word-wrap: break-word;
-  }
-
-  .message-form {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .message-form input {
+  .marketplace-container {
     flex: 1;
-  }
-
-  .marketplace-section {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 120px);
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .marketplace-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
   }
 
   .marketplace-header h2 {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     margin: 0;
   }
 
-  .offer-form {
+  .info-banner {
+    padding: 1rem;
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.5rem;
+    color: #3b82f6;
     margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .offer-form {
+    margin-bottom: 1.5rem;
     padding: 1.5rem;
   }
 
@@ -906,18 +716,20 @@
   }
 
   .offers-list {
-    flex: 1;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .offers-count {
     font-size: 0.875rem;
     color: var(--text-muted);
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     font-weight: 500;
   }
 
-  .loading-state {
+  .loading-state,
+  .empty-state {
     text-align: center;
     color: var(--text-muted);
     padding: 3rem 1rem;
@@ -934,7 +746,6 @@
   }
 
   .offer-card {
-    margin-bottom: 1rem;
     transition: transform 0.2s, box-shadow 0.2s;
   }
 
@@ -1092,10 +903,6 @@
     transform: translateY(-1px);
   }
 
-  .interest-name:active {
-    transform: translateY(0);
-  }
-
   .interest-actions {
     display: flex;
     align-items: center;
@@ -1126,7 +933,7 @@
   }
 
   .btn-chat {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    background: linear-gradient(135deg, #10b981, #059669);
     color: white;
     border: none;
     font-weight: 500;
@@ -1134,13 +941,9 @@
   }
 
   .btn-chat:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  }
-
-  .btn-chat:active {
-    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
   }
 
   .copy-icon {
@@ -1185,9 +988,38 @@
     gap: 0.5rem;
   }
 
+  .btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
   .btn-sm {
     padding: 0.375rem 0.75rem;
     font-size: 0.875rem;
+  }
+
+  .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--bg-color);
   }
 
   .btn-success {
@@ -1211,33 +1043,21 @@
   .btn-warning {
     background-color: #f59e0b;
     color: white;
-    position: relative;
   }
 
   .btn-warning:hover:not(:disabled) {
     background-color: #d97706;
   }
 
-  .btn-warning:hover:not(:disabled)::after {
-    content: "Zurückziehen?";
-    position: absolute;
-    top: -2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 10;
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
-  /* Status-Nachrichten */
   .status-message {
     padding: 1rem;
     border-radius: 0.5rem;
-    margin-bottom: 1rem;
+    margin: 1rem 1.5rem;
     font-weight: 500;
     display: flex;
     align-items: center;
@@ -1262,7 +1082,6 @@
     color: #ef4444;
   }
 
-  /* Spinner Animation */
   .spinner {
     display: inline-block;
     width: 1rem;
@@ -1279,13 +1098,29 @@
     }
   }
 
-  /* Button mit Spinner */
-  .btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
+  .card {
+    background-color: var(--surface-color);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  .btn .spinner {
-    margin-right: 0.5rem;
+  .input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    font-size: 1rem;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+
+  .clickable {
+    cursor: pointer;
   }
 </style>
