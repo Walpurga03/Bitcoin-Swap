@@ -19,10 +19,19 @@
   let autoRefreshInterval: ReturnType<typeof setInterval>;
 
   // Prüfe ob User Teilnehmer ist
-  $: isParticipant = $activeDealRoom && (
+  $: isParticipant = $activeDealRoom && $userStore.pubkey && (
     $activeDealRoom.participants.seller === $userStore.pubkey ||
     $activeDealRoom.participants.buyer === $userStore.pubkey
   );
+
+  // Debug-Logging für Berechtigungsprüfung
+  $: if ($activeDealRoom && $userStore.pubkey) {
+    console.log('🔍 [DEAL-PAGE] Berechtigungsprüfung:');
+    console.log('  User Pubkey:', $userStore.pubkey.substring(0, 16) + '...');
+    console.log('  Seller:', $activeDealRoom.participants.seller.substring(0, 16) + '...');
+    console.log('  Buyer:', $activeDealRoom.participants.buyer.substring(0, 16) + '...');
+    console.log('  isParticipant:', isParticipant);
+  }
 
   // Bestimme anderen Teilnehmer
   $: otherParticipant = $activeDealRoom && $userStore.pubkey
@@ -61,6 +70,10 @@
 
       // Prüfe Berechtigung
       if (!isParticipant) {
+        console.error('❌ [DEAL-PAGE] Berechtigungsfehler:');
+        console.error('  User:', $userStore.pubkey?.substring(0, 16));
+        console.error('  Seller:', $activeDealRoom?.participants.seller.substring(0, 16));
+        console.error('  Buyer:', $activeDealRoom?.participants.buyer.substring(0, 16));
         error = 'Du bist kein Teilnehmer dieses Deal-Rooms';
         return;
       }
