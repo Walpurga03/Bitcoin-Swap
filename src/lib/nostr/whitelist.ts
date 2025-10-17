@@ -220,33 +220,49 @@ export async function removeFromWhitelist(
 }
 
 /**
- * Setze Whitelist auf nur zwei User (für privaten Chat im Gruppen-Chat)
+ * Setze Whitelist für privaten Chat (Anbieter + Interessent)
  * Alle anderen User werden von der Whitelist entfernt
+ *
+ * @param offerCreatorRealPubkey - Echter User-Key des Anbieters (zum Schreiben)
+ * @param offerCreatorTempPubkey - Temporärer Key des Anbieters (für Angebot)
+ * @param interestedUserPubkey - Key des Interessenten
+ * @param adminPrivateKey - Admin Private Key für Whitelist-Update
+ * @param relays - Relay URLs
+ * @param channelId - Channel ID
  */
 export async function setPrivateChatWhitelist(
-  user1Pubkey: string,
-  user2Pubkey: string,
+  offerCreatorRealPubkey: string,
+  offerCreatorTempPubkey: string,
+  interestedUserPubkey: string,
   adminPrivateKey: string,
   relays: string[],
   channelId: string
 ): Promise<boolean> {
   try {
     console.log('🔒 [WHITELIST] Setze Private-Chat-Whitelist...');
-    console.log('  User 1:', user1Pubkey.substring(0, 16) + '...');
-    console.log('  User 2:', user2Pubkey.substring(0, 16) + '...');
+    console.log('  Anbieter (echter Key):', offerCreatorRealPubkey.substring(0, 16) + '...');
+    console.log('  Anbieter (temp Key):', offerCreatorTempPubkey.substring(0, 16) + '...');
+    console.log('  Interessent:', interestedUserPubkey.substring(0, 16) + '...');
     
-    // Normalisiere beide Public Keys
-    const normalizedUser1 = normalizePublicKey(user1Pubkey);
-    const normalizedUser2 = normalizePublicKey(user2Pubkey);
+    // Normalisiere alle Public Keys
+    const normalizedRealKey = normalizePublicKey(offerCreatorRealPubkey);
+    const normalizedTempKey = normalizePublicKey(offerCreatorTempPubkey);
+    const normalizedInterestedKey = normalizePublicKey(interestedUserPubkey);
     
-    // Erstelle neue Whitelist mit nur diesen beiden Usern
-    const pubkeys = [normalizedUser1, normalizedUser2];
+    // Erstelle neue Whitelist mit diesen 3 Keys
+    // (echter Key + temp Key des Anbieters + Interessent)
+    const pubkeys = [normalizedRealKey, normalizedTempKey, normalizedInterestedKey];
     
-    const success = await saveWhitelist(pubkeys, adminPrivateKey, relays, channelId);
+    // Entferne Duplikate (falls temp key = real key)
+    const uniquePubkeys = [...new Set(pubkeys)];
+    
+    console.log('  Whitelist wird gesetzt auf', uniquePubkeys.length, 'User');
+    
+    const success = await saveWhitelist(uniquePubkeys, adminPrivateKey, relays, channelId);
     
     if (success) {
       console.log('✅ [WHITELIST] Private-Chat-Whitelist gesetzt');
-      console.log('  Nur noch 2 User haben Zugriff auf diese Gruppe');
+      console.log('  Nur noch diese User haben Zugriff auf die Gruppe');
     } else {
       console.error('❌ [WHITELIST] Fehler beim Setzen der Private-Chat-Whitelist');
     }

@@ -354,10 +354,15 @@
         throw new Error('Kein Relay oder Channel-ID verfügbar');
       }
 
-      // 1. Setze Whitelist auf nur 2 User (Anbieter + Interessent)
-      console.log('🔒 [CHAT] Setze Whitelist auf nur 2 User...');
+      // 1. Setze Whitelist auf 3 Keys (Anbieter echter + temp Key + Interessent)
+      console.log('🔒 [CHAT] Setze Whitelist für privaten Chat...');
+      console.log('  Anbieter echter Key:', $userStore.pubkey?.substring(0, 16) + '...');
+      console.log('  Anbieter temp Key:', tempKeypair.publicKey.substring(0, 16) + '...');
+      console.log('  Interessent:', recipientPubkey.substring(0, 16) + '...');
+      
       const whitelistSuccess = await setPrivateChatWhitelist(
-        tempKeypair.publicKey,  // Anbieter (temp key)
+        $userStore.pubkey!,     // Anbieter echter Key (zum Schreiben)
+        tempKeypair.publicKey,  // Anbieter temp Key (für Angebot)
         recipientPubkey,        // Interessent
         $userStore.privateKey,  // Admin key (für Whitelist-Update)
         [relay],
@@ -368,7 +373,7 @@
         throw new Error('Fehler beim Setzen der Whitelist');
       }
 
-      console.log('✅ [CHAT] Whitelist gesetzt - nur noch 2 User haben Zugriff');
+      console.log('✅ [CHAT] Whitelist gesetzt - nur noch Anbieter und Interessent haben Zugriff');
 
       // 2. Sende Angebotstext als erste Gruppen-Nachricht
       console.log('📋 [CHAT] Sende Angebotstext als Gruppen-Nachricht...');
