@@ -8,9 +8,10 @@
 
 import { createEvent, publishEvent, fetchEvents } from './client';
 import { nip19 } from 'nostr-tools';
+import { GROUP_TAG, EVENT_KINDS } from '$lib/config';
 
 // Event Kind für Whitelist (Replaceable Event)
-const WHITELIST_KIND = 30000;
+const WHITELIST_KIND = EVENT_KINDS.WHITELIST;
 
 /**
  * Generiere d-Tag für Whitelist basierend auf channelId
@@ -95,7 +96,7 @@ export async function saveWhitelist(
       JSON.stringify(data),
       [
         ['d', dTag],
-        ['t', 'bitcoin-group'],
+        ['t', GROUP_TAG],
         ['channel', channelId] // Zusätzlicher Tag für einfacheres Filtern
       ],
       adminPrivateKey

@@ -2,6 +2,7 @@ import { SimplePool, finalizeEvent, getPublicKey, type Event } from 'nostr-tools
 import type { NostrEvent, NostrFilter, RelayConnection } from './types';
 import { deriveChannelId, encryptForGroup, decryptForGroup } from './crypto';
 import { RateLimiter } from '$lib/security/validation';
+import { GROUP_TAG, EVENT_KINDS, POPULAR_RELAYS } from '$lib/config';
 
 // Globaler Pool für Relay-Verbindungen
 let pool: SimplePool | null = null;
@@ -184,13 +185,13 @@ export async function sendGroupMessage(
     const tags = [
       ['e', channelId, '', 'root'],     // Channel-ID als root event
       ['p', publicKey],                  // Empfänger (für Gruppen: eigener pubkey)
-      ['t', 'bitcoin-group']             // Hashtag für Relay-Filter (WICHTIG!)
+      ['t', GROUP_TAG]                   // Hashtag für Relay-Filter (WICHTIG!)
     ];
     
     console.log('  🏷️ Event-Tags erstellt:');
     console.log('    ├─ e-Tag (root):', channelId.substring(0, 16) + '...');
     console.log('    ├─ p-Tag:', publicKey.substring(0, 16) + '...');
-    console.log('    └─ t-Tag: bitcoin-group ✅');
+    console.log('    └─ t-Tag:', GROUP_TAG, '✅');
     
     const event = await createEvent(1, encrypted, tags, privateKey);
     console.log('  ✅ Event erstellt:', event.id);
@@ -221,7 +222,7 @@ export async function fetchGroupMessages(
     console.log('📥 [FETCH] Lade Gruppen-Nachrichten...');
     console.log('  📋 Channel-ID:', channelId);
     console.log('  📡 Relays:', relays);
-    console.log('  🏷️ Filter: #t=bitcoin-group');
+    console.log('  🏷️ Filter: #t=' + GROUP_TAG);
     if (since) {
       console.log('  ⏰ Since:', new Date(since * 1000).toLocaleString(), `(${since})`);
       console.log('  ⚠️ Nur Events NACH diesem Zeitpunkt werden geladen!');
@@ -231,10 +232,9 @@ export async function fetchGroupMessages(
     console.log('  📊 Limit:', limit);
     
     // ✅ Unser eigenes Relay unterstützt #t Filter (NIP-12)!
-    // Test mit websocat bestätigt: ["REQ","test",{"kinds":[1],"#t":["bitcoin-group"]}]
     const filter = {
-      kinds: [1],
-      '#t': ['bitcoin-group'],  // 🎯 Direkter Tag-Filter
+      kinds: [EVENT_KINDS.GROUP_MESSAGE],
+      '#t': [GROUP_TAG],  // 🎯 Direkter Tag-Filter
       limit: limit
     } as NostrFilter;
 
@@ -245,7 +245,7 @@ export async function fetchGroupMessages(
     console.log('  🎯 Verwende #t Filter direkt (Relay unterstützt NIP-12)');
     const events = await fetchEvents(relays, filter);
     
-    console.log(`  📦 ${events.length} Events mit #t=bitcoin-group geladen`);
+    console.log(`  📦 ${events.length} Events mit #t=${GROUP_TAG} geladen`);
 
     // Filtere Interesse-Events aus (die haben 'reply' als 4. Element im e-Tag)
     const chatEvents = events.filter((event: any) => {
@@ -305,7 +305,7 @@ export async function createMarketplaceOffer(
     const tags = [
       ['e', channelId, '', 'root'],      // Channel-ID als root event
       ['p', publicKey],                   // Empfänger
-      ['t', 'bitcoin-group'],             // Hashtag für Relay-Filter
+      ['t', GROUP_TAG],                   // Hashtag für Relay-Filter
       ['d', `offer-${Date.now()}`]        // Replaceable event identifier
     ];
     
@@ -332,14 +332,14 @@ export async function fetchMarketplaceOffers(
   try {
     // ✅ Unser Relay unterstützt #t Filter (NIP-12)
     const filter = {
-      kinds: [30000],
-      '#t': ['bitcoin-group'],  // 🎯 Direkter Tag-Filter
+      kinds: [EVENT_KINDS.MARKETPLACE_OFFER],
+      '#t': [GROUP_TAG],  // 🎯 Direkter Tag-Filter
       limit: 100
     } as NostrFilter;
 
     const events = await fetchEvents(relays, filter);
     
-    console.log(`  🔍 Marketplace: ${events.length} Events mit #t=bitcoin-group geladen`);
+    console.log(`  🔍 Marketplace: ${events.length} Events mit #t=${GROUP_TAG} geladen`);
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
@@ -391,7 +391,7 @@ export async function sendOfferInterest(
       ['e', channelId, '', 'root'],                  // Channel-Tag als root
       ['p', publicKey],                              // Eigener Pubkey für Identifikation
       ['name', userName],                            // Name als eigener Tag
-      ['t', 'bitcoin-group']                         // Hashtag für Relay-Filter
+      ['t', GROUP_TAG]                               // Hashtag für Relay-Filter
     ];
 
     console.log('  📋 Tags:', tags.map(t => t[0] + '=' + t[1].substring(0, 16) + '...'));
@@ -425,8 +425,8 @@ export async function fetchOfferInterests(
 
     // Filter für alle Interesse-Events (kind:1 mit 'e' Tag reply zu den Angeboten)
     const filter = {
-      kinds: [1],
-      '#t': ['bitcoin-group'],
+      kinds: [EVENT_KINDS.MARKETPLACE_INTEREST],
+      '#t': [GROUP_TAG],
       '#e': offerIds,  // Alle Events die auf unsere Angebote referenzieren
       limit: 500
     } as NostrFilter;
@@ -690,16 +690,7 @@ export async function fetchUserProfile(
     console.log('👤 [PROFILE] Lade Profil für:', pubkey.substring(0, 16) + '...');
 
     // Populäre Relays für Profil-Suche (falls nicht angegeben)
-    const profileRelays = relays || [
-      'wss://relay.damus.io',
-      'wss://relay.nostr.band',
-      'wss://nos.lol',
-      'wss://relay.snort.social',
-      'wss://nostr.wine',
-      'wss://relay.current.fyi',
-      'wss://nostr-pub.wellorder.net',
-      'wss://relay.nostr.info'
-    ];
+    const profileRelays = relays || POPULAR_RELAYS;
 
     console.log('  📡 Suche auf', profileRelays.length, 'Relays...');
 

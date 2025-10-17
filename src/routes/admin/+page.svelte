@@ -6,12 +6,7 @@
   import { validatePublicKey } from '$lib/security/validation';
   // @ts-ignore
   import { goto } from '$app/navigation';
-  // @ts-ignore
-  import { env } from '$env/dynamic/public';
-
-  // Admin Public Key wird aus .env.production geladen
-  // Fallback nur für lokale Entwicklung ohne .env
-  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
+  import { ADMIN_PUBKEY } from '$lib/config';
 
   let whitelist: WhitelistData | null = null;
   let loading = false;

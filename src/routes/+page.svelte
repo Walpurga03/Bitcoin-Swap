@@ -10,12 +10,7 @@
   import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
   import { loadWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
   import { fetchUserProfile } from '$lib/nostr/client';
-  // @ts-ignore
-  import { env } from '$env/dynamic/public';
-  
-  // Admin Public Key (für Whitelist-Verwaltung)
-  // Wird aus .env.production geladen, Fallback nur für lokale Entwicklung
-  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
+  import { ADMIN_PUBKEY } from '$lib/config';
 
   let nsecInput = '';
   let error = '';

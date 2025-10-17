@@ -2,16 +2,12 @@
   import { onMount, onDestroy } from 'svelte';
   // @ts-ignore
   import { goto } from '$app/navigation';
-  // @ts-ignore
-  import { env } from '$env/dynamic/public';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore, marketplaceOffers } from '$lib/stores/groupStore';
   import { dealStore, dealRooms } from '$lib/stores/dealStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
-
-  // Admin Public Key
-  const ADMIN_PUBKEY = env.PUBLIC_ADMIN_PUBKEY || 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
+  import { ADMIN_PUBKEY } from '$lib/config';
   let isAdmin = false;
 
   let offerInput = '';
