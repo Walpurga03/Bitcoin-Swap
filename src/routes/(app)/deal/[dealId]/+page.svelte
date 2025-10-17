@@ -8,6 +8,7 @@
   import { groupStore } from '$lib/stores/groupStore';
   import { dealStore, activeDealRoom } from '$lib/stores/dealStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
+  import { fetchUserProfile } from '$lib/nostr/client';
 
   // Deal-Room ID aus URL
   $: dealId = $page.params.dealId;
@@ -17,6 +18,11 @@
   let error = '';
   let messagesContainer: HTMLDivElement;
   let autoRefreshInterval: ReturnType<typeof setInterval>;
+  
+  // Profile der Teilnehmer
+  let sellerName = '';
+  let buyerName = '';
+  let profilesLoaded = false;
 
   // Prüfe ob User Teilnehmer ist
   $: isParticipant = $activeDealRoom && $userStore.pubkey && (
@@ -39,6 +45,60 @@
         ? $activeDealRoom.participants.buyer
         : $activeDealRoom.participants.seller)
     : null;
+  
+  // Name des anderen Teilnehmers
+  $: otherParticipantName = $activeDealRoom && $userStore.pubkey
+    ? ($activeDealRoom.participants.seller === $userStore.pubkey
+        ? buyerName
+        : sellerName)
+    : '';
+  
+  /**
+   * Lade Profile der Teilnehmer
+   */
+  async function loadParticipantProfiles() {
+    if (!$activeDealRoom) return;
+    
+    try {
+      console.log('👤 [DEAL-PAGE] Lade Teilnehmer-Profile...');
+      
+      // Lade Seller-Profil
+      const sellerProfile = await fetchUserProfile($activeDealRoom.participants.seller);
+      sellerName = sellerProfile?.name || sellerProfile?.display_name || truncatePubkey($activeDealRoom.participants.seller);
+      
+      // Lade Buyer-Profil
+      const buyerProfile = await fetchUserProfile($activeDealRoom.participants.buyer);
+      buyerName = buyerProfile?.name || buyerProfile?.display_name || truncatePubkey($activeDealRoom.participants.buyer);
+      
+      profilesLoaded = true;
+      console.log('✅ [DEAL-PAGE] Profile geladen:');
+      console.log('  Seller:', sellerName);
+      console.log('  Buyer:', buyerName);
+    } catch (error) {
+      console.error('❌ [DEAL-PAGE] Fehler beim Laden der Profile:', error);
+      // Fallback zu truncated pubkeys
+      sellerName = truncatePubkey($activeDealRoom.participants.seller);
+      buyerName = truncatePubkey($activeDealRoom.participants.buyer);
+      profilesLoaded = true;
+    }
+  }
+  
+  /**
+   * Hole Namen für einen Sender
+   */
+  function getSenderName(senderPubkey: string): string {
+    if (!$activeDealRoom) return truncatePubkey(senderPubkey);
+    
+    if (senderPubkey === $userStore.pubkey) {
+      return 'Du';
+    } else if (senderPubkey === $activeDealRoom.participants.seller) {
+      return sellerName || truncatePubkey(senderPubkey);
+    } else if (senderPubkey === $activeDealRoom.participants.buyer) {
+      return buyerName || truncatePubkey(senderPubkey);
+    }
+    
+    return truncatePubkey(senderPubkey);
+  }
 
   onMount(async () => {
     // Prüfe Authentication
@@ -81,6 +141,9 @@
         error = 'Du bist kein Teilnehmer dieses Deal-Rooms';
         return;
       }
+
+      // Lade Teilnehmer-Profile
+      await loadParticipantProfiles();
 
       // Lade Nachrichten
       await dealStore.loadMessages(
@@ -160,9 +223,9 @@
     </button>
     <div class="deal-info">
       <h1>💬 Deal-Room</h1>
-      {#if $activeDealRoom}
+      {#if $activeDealRoom && profilesLoaded}
         <p class="deal-meta">
-          Mit: <strong>{truncatePubkey(otherParticipant || '')}</strong>
+          Mit: <strong>{otherParticipantName || truncatePubkey(otherParticipant || '')}</strong>
         </p>
       {/if}
     </div>
@@ -209,7 +272,7 @@
             <div class="message" class:own={message.sender === $userStore.pubkey}>
               <div class="message-header">
                 <span class="message-author">
-                  {message.sender === $userStore.pubkey ? 'Du' : truncatePubkey(message.sender)}
+                  {getSenderName(message.sender)}
                 </span>
                 <span class="message-time">
                   {formatTimestamp(message.created_at)}

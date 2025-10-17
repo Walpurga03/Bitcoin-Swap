@@ -1,6 +1,9 @@
 # Admin files (private, do not push)
 ADMIN-GUIDE.md
 
+# Archive (private documentation, do not push)
+archive/
+
 # Dependencies
 node_modules/
 
