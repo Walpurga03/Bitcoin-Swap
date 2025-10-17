@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  // @ts-ignore
   import { goto } from '$app/navigation';
+  // @ts-ignore
   import { page } from '$app/stores';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
