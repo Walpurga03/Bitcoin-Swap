@@ -28,6 +28,9 @@
     offer => offer.tempPubkey === tempKeypair?.publicKey
   );
 
+  // GLOBALE Sperre: Wenn IRGENDEIN Angebot existiert, kann NIEMAND ein neues erstellen
+  $: anyOfferExists = $marketplaceOffers.length > 0;
+
   // Prüfe ob User aktive Deal-Rooms hat
   $: hasActiveDeals = $dealRooms.length > 0;
 
@@ -131,9 +134,9 @@
   async function createOffer() {
     if (!offerInput.trim()) return;
 
-    // Prüfe ob User bereits ein Angebot hat
-    if (hasActiveOffer) {
-      alert('❌ Du hast bereits ein aktives Angebot!\n\nBitte lösche dein bestehendes Angebot, bevor du ein neues erstellst.');
+    // GLOBALE Prüfung: Wenn IRGENDEIN Angebot existiert, kann NIEMAND ein neues erstellen
+    if (anyOfferExists) {
+      alert('❌ Es existiert bereits ein aktives Angebot!\n\nBitte warte, bis das aktuelle Angebot abgeschlossen oder gelöscht wurde.');
       return;
     }
 
@@ -357,19 +360,19 @@
   <div class="marketplace-container">
     <div class="marketplace-header">
       <h2>🛒 Marketplace</h2>
-      <button 
-        class="btn btn-primary btn-sm" 
+      <button
+        class="btn btn-primary btn-sm"
         on:click={() => showOfferForm = !showOfferForm}
-        disabled={hasActiveOffer && !showOfferForm}
-        title={hasActiveOffer ? 'Du hast bereits ein aktives Angebot' : 'Neues Angebot erstellen'}
+        disabled={anyOfferExists && !showOfferForm}
+        title={anyOfferExists ? 'Es existiert bereits ein aktives Angebot' : 'Neues Angebot erstellen'}
       >
         {showOfferForm ? '✕ Abbrechen' : '+ Neues Angebot'}
       </button>
     </div>
 
-    {#if hasActiveOffer && !showOfferForm}
+    {#if anyOfferExists && !showOfferForm}
       <div class="info-banner">
-        ℹ️ Du hast bereits ein aktives Angebot. Lösche es, um ein neues zu erstellen.
+        ℹ️ Es existiert bereits ein aktives Angebot. Nur 1 Angebot gleichzeitig erlaubt.
       </div>
     {/if}
 
@@ -548,9 +551,11 @@
                         </div>
                       {/if}
                       <div class="interest-status">
-                        ⏳ Warte auf Deal-Room vom Anbieter...
+                        ℹ️ Warte auf Deal-Room vom Anbieter...
                         <br>
                         <small>Der Anbieter kann einen privaten Deal-Room mit dir starten.</small>
+                        <br><br>
+                        <small>💡 Sobald der Deal-Room erstellt wurde, findest du ihn unter "Meine Deals" im Header.</small>
                       </div>
                     </div>
                   {/each}
