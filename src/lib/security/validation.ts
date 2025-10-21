@@ -153,16 +153,32 @@ export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): 
   }
 }
 
-/**
- * Validiere Event-Signatur
- */
 export function validateEventSignature(event: any): boolean {
   try {
-    // Hier würde normalerweise die Signatur-Validierung stattfinden
-    // nostr-tools bietet dafür verifySignature()
-    // Für diese Implementation vereinfacht
-    return event.sig && event.sig.length === 128;
+    // 🔐 VERBESSERUNG: Vollständige Signatur-Validierung
+    const { verifySignature } = require('nostr-tools');
+    
+    if (!event.id || !event.sig || !event.pubkey) {
+      console.warn('⚠️ Event fehlen erforderliche Felder (id, sig, pubkey)');
+      return false;
+    }
+
+    // Prüfe Signatur-Format (128 Hex-Zeichen)
+    if (!/^[0-9a-f]{128}$/i.test(event.sig)) {
+      console.warn('⚠️ Ungültiges Signatur-Format');
+      return false;
+    }
+
+    // Verwende nostr-tools für echte Validierung
+    const isValid = verifySignature(event);
+    
+    if (!isValid) {
+      console.warn('⚠️ Event-Signatur ungültig für:', event.id.substring(0, 16) + '...');
+    }
+    
+    return isValid;
   } catch (error) {
+    console.error('❌ Fehler bei Signatur-Validierung:', error);
     return false;
   }
 }

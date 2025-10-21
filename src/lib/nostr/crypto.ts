@@ -183,3 +183,233 @@ export function pubkeyToNpub(pubkey: string): string {
 export function privkeyToNsec(privkey: string): string {
   return nip19.nsecEncode(privkey as any);
 }
+
+/**
+ * ============================================
+ * NIP-17: Gift-Wrapped Messages für D2D Chat
+ * ============================================
+ */
+
+/**
+ * Entschlüssele mit NIP-44 (für NIP-17 Wrapper)
+ */
+export function nip44DecryptWithConversationKey(
+  encrypted: string,
+  conversationKey: Uint8Array
+): string {
+  try {
+    const decrypted = nip44.v2.decrypt(encrypted, conversationKey);
+    return decrypted;
+  } catch (error) {
+    console.error('❌ NIP-44 Entschlüsselung fehlgeschlagen:', error);
+    throw new Error('NIP-44 Entschlüsselung fehlgeschlagen');
+  }
+}
+
+/**
+ * Generiere Conversation Key für NIP-17 (asymmetrisch)
+ * Wird verwendet für: Sender → Recipient
+ */
+export function getConversationKey(
+  senderPrivateKey: string,
+  recipientPublicKey: string
+): Uint8Array {
+  try {
+    const conversationKey = nip44.v2.utils.getConversationKey(
+      senderPrivateKey as any,
+      recipientPublicKey as any
+    );
+    return conversationKey;
+  } catch (error) {
+    console.error('❌ Conversation Key Generierung fehlgeschlagen:', error);
+    throw new Error('Conversation Key konnte nicht generiert werden');
+  }
+}
+
+/**
+ * ============================================
+ * Metadaten-Verschlüsselung (für Pubkeys)
+ * ============================================
+ */
+
+export interface EncryptedMetadata {
+  content: string; // encrypted JSON
+  iv: string;     // IV in hex
+}
+
+/**
+ * Verschlüssele strukturierte Metadaten mit groupKey
+ * Wird verwendet für: Pubkeys, Offer-Inhalte etc.
+ */
+export async function encryptMetadata(
+  metadata: Record<string, any>,
+  groupKey: string
+): Promise<EncryptedMetadata> {
+  try {
+    const jsonString = JSON.stringify(metadata);
+    const encrypted = await encryptForGroup(jsonString, groupKey);
+    
+    // Extrahiere IV (erste 12 bytes = 24 hex chars)
+    const iv = encrypted.substring(0, 24);
+    const content = encrypted;
+    
+    return { content, iv };
+  } catch (error) {
+    console.error('❌ Metadaten-Verschlüsselung fehlgeschlagen:', error);
+    throw error;
+  }
+}
+
+/**
+ * Entschlüssele strukturierte Metadaten mit groupKey
+ */
+export async function decryptMetadata(
+  encryptedData: EncryptedMetadata | string,
+  groupKey: string
+): Promise<Record<string, any>> {
+  try {
+    // Fallback: wenn nur String übergeben
+    const encrypted = typeof encryptedData === 'string' ? encryptedData : encryptedData.content;
+    
+    const decrypted = await decryptForGroup(encrypted, groupKey);
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error('❌ Metadaten-Entschlüsselung fehlgeschlagen:', error);
+    throw error;
+  }
+}
+
+/**
+ * ============================================
+ * NIP-17 Gift-Wrapped Messages
+ * ============================================
+ * 
+ * NIP-17 ist der Standard für D2D (1:1) verschlüsselte Nachrichten
+ * 
+ * Format:
+ * 1. Innere Nachricht: Kind 14 (verschlüsselt mit NIP-44)
+ * 2. Äußere Nachricht: Kind 1059 (Gift-Wrapped)
+ * 3. Nur Recipient kann äußeres Event entschlüsseln
+ */
+
+export async function createNIP17Message(
+  messageContent: string,
+  recipientPublicKey: string,
+  senderPrivateKey: string
+): Promise<{
+  innerEvent: any;
+  wrappedEvent: any;
+}> {
+  try {
+    const { finalizeEvent, getPublicKey } = await import('nostr-tools');
+    
+    console.log('🎁 [NIP-17] Erstelle Gift-Wrapped Message...');
+    
+    // 1. Generiere temporären Key für den Wrapper
+    const tempKey = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+    const tempPubkey = getPublicKey(tempKey as any);
+    
+    // 2. Erstelle inneres Event (Kind 14 - Sealed Direct Message)
+    const senderPubkey = getPublicKey(senderPrivateKey as any);
+    const now = Math.floor(Date.now() / 1000);
+    
+    const innerEvent = {
+      kind: 14,
+      created_at: now,
+      tags: [['p', recipientPublicKey]],
+
+      content: messageContent,
+      pubkey: senderPubkey
+    };
+    
+    const signedInnerEvent = finalizeEvent(innerEvent, senderPrivateKey as any);
+    
+    console.log('  ✅ Inneres Event erstellt (Kind 14)');
+    
+    // 3. Verschlüssele inneres Event mit NIP-44
+    const conversationKey = getConversationKey(tempKey, recipientPublicKey);
+    const innerEventString = JSON.stringify(signedInnerEvent);
+    const encryptedInner = nip44.v2.encrypt(innerEventString, conversationKey);
+    
+    console.log('  🔐 Inneres Event verschlüsselt');
+    
+    // 4. Erstelle äußeres Event (Kind 1059 - Gift Wrap)
+    const outerEvent = {
+      kind: 1059,
+      created_at: now + 1,
+      tags: [['p', recipientPublicKey]],
+      content: encryptedInner,
+      pubkey: tempPubkey
+    };
+    
+    const signedOuterEvent = finalizeEvent(outerEvent, tempKey as any);
+    
+    console.log('  ✅ Äußeres Event erstellt (Kind 1059 - Gift Wrap)');
+    console.log('  📦 NIP-17 Message bereit zum Versenden');
+    
+    return {
+      innerEvent: signedInnerEvent,
+      wrappedEvent: signedOuterEvent
+    };
+  } catch (error) {
+    console.error('❌ [NIP-17] Fehler beim Erstellen:', error);
+    throw error;
+  }
+}
+
+/**
+ * Entschlüssele NIP-17 Gift-Wrapped Message
+ * Nur der Recipient kann diese entschlüsseln
+ */
+export async function decryptNIP17Message(
+  wrappedEvent: any,
+  recipientPrivateKey: string
+): Promise<{
+  content: string;
+  senderPubkey: string;
+  createdAt: number;
+}> {
+  try {
+    console.log('🎁 [NIP-17] Entschlüssele Gift-Wrapped Message...');
+    
+    // 1. Entschlüssele mit NIP-44 (wrapped event content)
+    const conversationKey = getConversationKey(recipientPrivateKey, wrappedEvent.pubkey);
+    const decryptedInnerString = nip44DecryptWithConversationKey(
+      wrappedEvent.content,
+      conversationKey
+    );
+    
+    console.log('  ✅ Äußeres Event entschlüsselt');
+    
+    // 2. Parse inneres Event
+    const innerEvent = JSON.parse(decryptedInnerString);
+    
+    console.log('  ✅ Inneres Event geparst');
+    console.log('  📨 Nachricht von:', innerEvent.pubkey.substring(0, 16) + '...');
+    
+    return {
+      content: innerEvent.content,
+      senderPubkey: innerEvent.pubkey,
+      createdAt: innerEvent.created_at
+    };
+  } catch (error) {
+    console.error('❌ [NIP-17] Fehler beim Entschlüsseln:', error);
+    throw error;
+  }
+}
+
+/**
+ * ============================================
+ * Signatur-Validierung
+ * ============================================
+ */
+
+export function verifyEventSignature(event: any): boolean {
+  try {
+    const { verifySignature } = require('nostr-tools');
+    return verifySignature(event);
+  } catch (error) {
+    console.error('❌ Signatur-Validierung fehlgeschlagen:', error);
+    return false;
+  }
+}

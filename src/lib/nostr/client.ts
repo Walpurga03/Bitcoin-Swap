@@ -381,20 +381,30 @@ export async function sendOfferInterest(
     console.log('💌 [INTEREST] Sende Interesse an Angebot:', offerId.substring(0, 16) + '...');
     console.log('  👤 Name:', userName);
     
-    // Füge Name zur Nachricht hinzu
-    const messageWithName = `${userName}: ${message}`;
-    const encrypted = await encryptForGroup(messageWithName, groupKey);
-
+    const { encryptMetadata } = await import('$lib/nostr/crypto');
+    
+    // 🔐 VERBESSERUNG: Pubkey + Name in verschlüsselte Metadaten
     const publicKey = getPublicKey(privateKey as any);
+    const metadata = {
+      pubkey: publicKey,
+      name: userName,
+      message: message
+    };
+    
+    // Verschlüssele komplette Nachricht inklusive Pubkey
+    const encrypted = await encryptForGroup(JSON.stringify(metadata), groupKey);
+
+    // 🔐 VERBESSERUNG: Tags enthalten KEINE Pubkeys mehr!
     const tags = [
       ['e', offerId, '', 'reply'],                   // Referenz zum Angebot
       ['e', channelId, '', 'root'],                  // Channel-Tag als root
-      ['p', publicKey],                              // Eigener Pubkey für Identifikation
-      ['name', userName],                            // Name als eigener Tag
       ['t', GROUP_TAG]                               // Hashtag für Relay-Filter
+      // ❌ ENTFERNT: ['p', publicKey] - jetzt verschlüsselt
+      // ❌ ENTFERNT: ['name', userName] - jetzt verschlüsselt
     ];
 
-    console.log('  📋 Tags:', tags.map(t => t[0] + '=' + t[1].substring(0, 16) + '...'));
+    console.log('  📋 Tags (pubkey-sicher):', tags.map(t => t[0]));
+    console.log('  🔐 Metadaten encrypted: pubkey, name, message');
 
     const event = await createEvent(1, encrypted, tags, privateKey);
     const result = await publishEvent(event, relays);
@@ -511,7 +521,7 @@ export async function createDealRoom(
     console.log('  👤 Seller:', sellerPubkey.substring(0, 16) + '...');
     console.log('  👤 Buyer:', buyerPubkey.substring(0, 16) + '...');
 
-    // Metadata für Deal-Room
+    // 🔐 VERBESSERUNG: Pubkeys gehören in verschlüsselte Metadaten!
     const metadata = {
       offerId,
       offerContent,
@@ -520,21 +530,24 @@ export async function createDealRoom(
       created_at: Math.floor(Date.now() / 1000)
     };
 
-    // Verschlüssele Metadata
+    // Verschlüssele komplette Metadata inklusive Pubkeys
     const encrypted = await encryptForGroup(JSON.stringify(metadata), groupKey);
 
     // Erstelle Deal-Room Event (Kind 30080)
     const dealId = `deal-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    // 🔐 VERBESSERUNG: Tags enthalten KEINE Pubkeys mehr!
     const tags = [
       ['d', dealId],                          // Unique Deal-Room ID
       ['e', offerId, '', 'root'],             // Referenz zum Original-Angebot
       ['e', channelId, '', 'channel'],        // Channel-ID
-      ['p', sellerPubkey],                    // Seller
-      ['p', buyerPubkey],                     // Buyer
       ['t', 'bitcoin-deal']                   // Tag für Deal-Rooms
+      // ❌ ENTFERNT: ['p', sellerPubkey] - jetzt verschlüsselt
+      // ❌ ENTFERNT: ['p', buyerPubkey] - jetzt verschlüsselt
     ];
 
-    console.log('  🏷️ Deal-Room Tags:', tags.map(t => `${t[0]}=${t[1].substring(0, 16)}...`));
+    console.log('  🏷️ Deal-Room Tags (pubkey-sicher):', tags.map(t => t[0]));
+    console.log('  🔐 Pubkeys encrypted: seller + buyer in metadata');
 
     const event = await createEvent(30080, encrypted, tags, privateKey);
     const result = await publishEvent(event, relays);
@@ -597,32 +610,38 @@ export async function fetchDealRooms(
 /**
  * Sende Nachricht in Deal-Room
  */
+/**
+ * Sende Nachricht in Deal-Room mit NIP-17 (Ende-zu-Ende verschlüsselt)
+ */
 export async function sendDealMessage(
   dealId: string,
   content: string,
-  groupKey: string,
+  recipientPubkey: string,
   privateKey: string,
   relays: string[]
 ): Promise<NostrEvent> {
   try {
-    console.log('💬 [DEAL-MSG] Sende Nachricht in Deal-Room:', dealId);
+    console.log('💬 [DEAL-MSG] Sende NIP-17 Nachricht im Deal-Room:', dealId);
+    console.log('  📨 Recipient:', recipientPubkey.substring(0, 16) + '...');
+    
+    const { createNIP17Message } = await import('$lib/nostr/crypto');
+    
+    // 🔐 VERBESSERUNG: Verwende NIP-17 statt groupKey!
+    // NIP-17 = nur Sender + Recipient können lesen
+    const { wrappedEvent } = await createNIP17Message(
+      content,
+      recipientPubkey,
+      privateKey
+    );
 
-    // Verschlüssele Content
-    const encrypted = await encryptForGroup(content, groupKey);
-
-    const publicKey = getPublicKey(privateKey as any);
-    const tags = [
-      ['e', dealId, '', 'root'],             // Referenz zum Deal-Room
-      ['p', publicKey],                      // Sender
-      ['t', 'bitcoin-deal']                  // Deal-Tag
-    ];
-
-    const event = await createEvent(1, encrypted, tags, privateKey);
-    const result = await publishEvent(event, relays);
+    console.log('  🎁 NIP-17 Message erstellt (nur Recipient kann lesen)');
+    
+    // Veröffentliche wrapped Event
+    const result = await publishEvent(wrappedEvent as NostrEvent, relays);
 
     console.log('  ✅ Nachricht gesendet:', result.relays.length + '/' + relays.length + ' Relays');
 
-    return event;
+    return wrappedEvent as NostrEvent;
   } catch (error) {
     console.error('❌ [DEAL-MSG] Fehler beim Senden:', error);
     throw error;
@@ -632,20 +651,25 @@ export async function sendDealMessage(
 /**
  * Hole Nachrichten für einen Deal-Room
  */
+/**
+ * Hole Nachrichten für einen Deal-Room (NIP-17 Gift-Wrapped)
+ */
 export async function fetchDealMessages(
   dealId: string,
-  groupKey: string,
+  recipientPrivateKey: string,
   relays: string[],
   since?: number,
   limit: number = 100
-): Promise<Array<NostrEvent & { decrypted?: string }>> {
+): Promise<Array<NostrEvent & { decrypted?: string; senderPubkey?: string }>> {
   try {
-    console.log('💬 [DEAL-MSGS] Lade Nachrichten für Deal-Room:', dealId);
+    console.log('💬 [DEAL-MSGS] Lade NIP-17 Nachrichten für Deal-Room:', dealId);
 
+    const { decryptNIP17Message } = await import('$lib/nostr/crypto');
+    
+    // 🔐 VERBESSERUNG: Suche nach Kind 1059 (NIP-17 Gift-Wrapped)
     const filter = {
-      kinds: [1],
-      '#e': [dealId],                        // Nachrichten für diesen Deal-Room
-      '#t': ['bitcoin-deal'],                // Deal-Tag
+      kinds: [1059],  // 🔐 Kind 1059 = Gift-Wrapped Messages
+      '#p': [getPublicKey(recipientPrivateKey as any)],  // Nur für uns bestimmte Messages
       limit
     } as NostrFilter;
 
@@ -654,22 +678,27 @@ export async function fetchDealMessages(
     }
 
     const events = await fetchEvents(relays, filter);
-    console.log('  📦 Gefundene Nachrichten:', events.length);
+    console.log('  📦 Gefundene NIP-17 Messages:', events.length);
 
-    // Entschlüssele Nachrichten
+    // Entschlüssele NIP-17 Messages
     const decryptedEvents = await Promise.all(
       events.map(async (event) => {
         try {
-          const decrypted = await decryptForGroup(event.content, groupKey);
-          return { ...event, decrypted };
+          const decrypted = await decryptNIP17Message(event, recipientPrivateKey);
+          return { 
+            ...event, 
+            decrypted: decrypted.content,
+            senderPubkey: decrypted.senderPubkey
+          };
         } catch (error) {
+          console.warn('⚠️ NIP-17 Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16));
           return null;
         }
       })
     );
 
-    const validMessages = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
-    console.log('  ✅ Entschlüsselte Nachrichten:', validMessages.length);
+    const validMessages = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string; senderPubkey?: string }>;
+    console.log('  ✅ Entschlüsselte NIP-17 Nachrichten:', validMessages.length);
 
     return validMessages;
   } catch (error) {

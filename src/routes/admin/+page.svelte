@@ -4,9 +4,11 @@
   import { groupStore } from '$lib/stores/groupStore';
   import { loadWhitelist, saveWhitelist, addToWhitelist, removeFromWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
   import { validatePublicKey } from '$lib/security/validation';
+  import { createInviteLink } from '$lib/utils';
+  import { saveUserConfig, loadUserConfig } from '$lib/nostr/userConfig';
+  import type { UserConfig } from '$lib/nostr/userConfig';
   // @ts-ignore
   import { goto } from '$app/navigation';
-  import { ADMIN_PUBKEY } from '$lib/config';
 
   let whitelist: WhitelistData | null = null;
   let loading = false;
@@ -15,6 +17,7 @@
   let success = '';
   let newPubkey = '';
   let isAdmin = false;
+  let inviteLink = '';
 
   onMount(async () => {
     // Prüfe ob User eingeloggt ist
@@ -32,17 +35,33 @@
       return;
     }
 
-    // Prüfe ob User Admin ist
-    const { nip19 } = await import('nostr-tools');
-    let adminHex = ADMIN_PUBKEY;
-    if (ADMIN_PUBKEY.startsWith('npub1')) {
-      const decoded = nip19.decode(ADMIN_PUBKEY as any);
-      if ((decoded as any).type === 'npub') {
-        adminHex = (decoded as any).data as string;
+    // 🔐 NEU: Versuche Config von Nostr zu laden
+    let userConfig: UserConfig | null = null;
+    if (user.privateKey) {
+      try {
+        console.log('📥 Lade User-Config von Nostr...');
+        userConfig = await loadUserConfig(user.privateKey, [group.relay]);
+        if (userConfig) {
+          console.log('✅ Config von Nostr geladen');
+          // Setze Einladungslink aus Config
+          if (userConfig.invite_link) {
+            inviteLink = userConfig.invite_link;
+          }
+        }
+      } catch (configError) {
+        // Config existiert nicht oder Relay nicht erreichbar
+        console.log('ℹ️ Keine Config gefunden oder Relay nicht erreichbar');
+        // Zeige Warnung aber blockiere nicht den Zugriff
+        error = '⚠️ Warnung: Config konnte nicht von Nostr geladen werden. Relay möglicherweise nicht erreichbar.';
+        setTimeout(() => error = '', 5000);
       }
     }
 
-    if (user.pubkey?.toLowerCase() !== adminHex.toLowerCase()) {
+    // Prüfe ob User Admin ist (aus Config oder localStorage)
+    const isGroupAdmin = userConfig?.is_group_admin || localStorage.getItem('is_group_admin') === 'true';
+    const adminPubkey = userConfig?.admin_pubkey || localStorage.getItem('admin_pubkey');
+    
+    if (!isGroupAdmin || adminPubkey !== user.pubkey) {
       error = 'Zugriff verweigert. Du bist kein Administrator.';
       setTimeout(() => goto('/group'), 2000);
       return;
@@ -50,6 +69,14 @@
 
     isAdmin = true;
     await loadWhitelistData();
+    
+    // Fallback: Lade gespeicherten Einladungslink aus localStorage (falls nicht in Config)
+    if (!inviteLink) {
+      const savedLink = localStorage.getItem('invite_link');
+      if (savedLink) {
+        inviteLink = savedLink;
+      }
+    }
   });
 
   async function loadWhitelistData() {
@@ -63,24 +90,22 @@
         return;
       }
 
-      const { nip19 } = await import('nostr-tools');
-      let adminHex = ADMIN_PUBKEY;
-      if (ADMIN_PUBKEY.startsWith('npub1')) {
-        const decoded = nip19.decode(ADMIN_PUBKEY as any);
-        if ((decoded as any).type === 'npub') {
-          adminHex = (decoded as any).data as string;
-        }
+      // Hole Admin-Pubkey aus localStorage
+      const adminPubkey = localStorage.getItem('admin_pubkey');
+      if (!adminPubkey) {
+        error = 'Admin-Pubkey nicht gefunden';
+        return;
       }
 
       console.log('📋 Lade Whitelist für Gruppe:', group.channelId.substring(0, 16) + '...');
-      whitelist = await loadWhitelist([group.relay], adminHex, group.channelId);
+      whitelist = await loadWhitelist([group.relay], adminPubkey, group.channelId);
       
       if (!whitelist) {
         // Erstelle neue leere Whitelist für diese Gruppe
         whitelist = {
           pubkeys: [],
           updated_at: Math.floor(Date.now() / 1000),
-          admin_pubkey: adminHex,
+          admin_pubkey: adminPubkey,
           channel_id: group.channelId
         };
         success = 'Neue Whitelist für diese Gruppe erstellt';
@@ -217,6 +242,69 @@
       error = 'Kopieren fehlgeschlagen';
     }
   }
+
+  async function generateInviteLink() {
+    try {
+      const group = $groupStore;
+      const user = $userStore;
+      
+      if (!group || !group.relay) {
+        error = 'Gruppe nicht initialisiert';
+        return;
+      }
+
+      if (!user || !user.privateKey) {
+        error = 'Nicht eingeloggt';
+        return;
+      }
+
+      // Hole Secret aus localStorage
+      const secret = localStorage.getItem('group_secret');
+      if (!secret) {
+        error = 'Secret nicht gefunden. Bitte melde dich neu an.';
+        return;
+      }
+
+      // Generiere Link mit aktueller Domain
+      const domain = window.location.origin;
+      inviteLink = createInviteLink(domain, group.relay, secret);
+      
+      // 🔐 NEU: Speichere Link in User-Config auf Nostr
+      console.log('💾 Speichere Einladungslink in User-Config...');
+      
+      const adminPubkey = localStorage.getItem('admin_pubkey');
+      if (!adminPubkey) {
+        error = 'Admin-Pubkey nicht gefunden';
+        return;
+      }
+
+      const config: UserConfig = {
+        is_group_admin: true,
+        admin_pubkey: adminPubkey,
+        group_secret: secret,
+        invite_link: inviteLink,  // 🔐 Link in Config speichern
+        relay: group.relay,
+        created_at: Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000)
+      };
+
+      try {
+        await saveUserConfig(config, user.privateKey, [group.relay]);
+        console.log('✅ Einladungslink in Config gespeichert');
+        success = 'Einladungslink generiert und auf Nostr gespeichert!';
+      } catch (configError: any) {
+        console.error('❌ Config konnte nicht auf Nostr gespeichert werden:', configError);
+        error = configError.message || '❌ Relay nicht erreichbar. Link konnte nicht gespeichert werden.';
+        inviteLink = ''; // Reset Link da Speicherung fehlgeschlagen
+      }
+    } catch (e: any) {
+      error = `Fehler beim Generieren: ${e.message}`;
+    }
+  }
+
+  async function copyInviteLink() {
+    await copyToClipboard(inviteLink);
+  }
 </script>
 
 <div class="admin-container">
@@ -313,6 +401,42 @@
         {/if}
       </div>
 
+      <!-- Invite Link Section -->
+      <div class="invite-section">
+        <div class="section-header">
+          <h2>🔗 Einladungslink</h2>
+          {#if !inviteLink}
+            <button class="btn-primary" on:click={generateInviteLink}>
+              ✨ Link generieren
+            </button>
+          {:else}
+            <button class="btn-secondary" on:click={generateInviteLink}>
+              🔄 Neu generieren
+            </button>
+          {/if}
+        </div>
+        
+        {#if inviteLink}
+          <div class="invite-link-container">
+            <div class="invite-link-display">
+              <code class="invite-link-text">{inviteLink}</code>
+            </div>
+            <button class="btn-secondary" on:click={copyInviteLink}>
+              📋 Kopieren
+            </button>
+          </div>
+          <p class="hint">
+            💡 Dieser Link ist permanent gespeichert. Teile ihn mit Benutzern, die du zur Gruppe einladen möchtest.
+            Sie müssen sich mit ihrem nsec anmelden und werden gegen die Whitelist geprüft.
+          </p>
+        {:else}
+          <p class="hint">
+            ℹ️ Generiere einen Einladungslink, um neue Benutzer zur Gruppe einzuladen.
+            Der Link wird automatisch gespeichert und bleibt verfügbar.
+          </p>
+        {/if}
+      </div>
+
       <!-- Info Section -->
       <div class="info-section">
         <h3>ℹ️ Informationen</h3>
@@ -321,6 +445,7 @@
           <li>Nur du als Admin kannst die Whitelist bearbeiten</li>
           <li>Änderungen werden sofort auf dem Relay gespeichert</li>
           <li>Benutzer müssen sich neu einloggen, um Änderungen zu sehen</li>
+          <li>Generiere Einladungslinks für neue Benutzer über den "Einladungslink" Bereich</li>
           <li>Letzte Aktualisierung: {new Date(whitelist.updated_at * 1000).toLocaleString('de-DE')}</li>
         </ul>
       </div>
@@ -390,6 +515,7 @@
 
   .add-section,
   .whitelist-section,
+  .invite-section,
   .info-section {
     background: var(--bg-secondary);
     border-radius: 0.5rem;
@@ -398,6 +524,7 @@
 
   .add-section h2,
   .whitelist-section h2,
+  .invite-section h2,
   .info-section h3 {
     margin: 0 0 1rem 0;
     font-size: 1.25rem;
@@ -482,6 +609,39 @@
     font-size: 0.75rem;
     color: var(--text-muted);
   }
+  .invite-link-container {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .invite-link-display {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+
+  .invite-link-text {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--primary-color);
+    word-break: break-all;
+  }
+
+  .hint {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05));
+    border-radius: 0.375rem;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
 
   .info-section ul {
     margin: 0;
@@ -595,6 +755,14 @@
       flex-direction: column;
       gap: 0.75rem;
       align-items: flex-start;
+    }
+
+    .invite-link-container {
+      flex-direction: column;
+    }
+
+    .invite-link-display {
+      width: 100%;
     }
   }
 </style>

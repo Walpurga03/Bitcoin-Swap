@@ -71,35 +71,60 @@ Die App läuft auf `http://localhost:5173`
 
 ## 📖 Verwendung
 
-### 1️⃣ **Login mit Nostr-Profil**
+### 1️⃣ **Neue Gruppe erstellen (Admin)**
 
-1. Öffne die App
-2. Gib deinen **NSEC Private Key** ein (oder Hex-Format)
-3. Dein **Nostr-Profil** wird automatisch geladen (Name, Bild)
-4. Klicke auf "Anmelden"
+1. Öffne die App und wähle **"🆕 Neue Gruppe erstellen"**
+2. Gib deinen **NSEC Private Key** ein (du wirst automatisch Admin)
+3. Wähle ein **Relay** (Standard oder eigenes)
+4. Lasse das **Secret automatisch generieren** oder gib ein eigenes ein (min. 8 Zeichen)
+5. Dein **Nostr-Profil** wird automatisch geladen
+6. Klicke auf **"🚀 Gruppe erstellen"**
+
+> **Als Admin kannst du:**
+> - Die Whitelist verwalten (Public Keys hinzufügen/entfernen)
+> - Einladungslinks für neue User generieren
+> - Die Gruppe vollständig kontrollieren
+
+### 2️⃣ **Gruppe beitreten (User)**
+
+1. Erhalte einen **Einladungslink** vom Gruppen-Admin
+2. Öffne die App und wähle **"🔗 Gruppe beitreten"**
+3. Füge den **Einladungslink** ein
+4. Gib deinen **NSEC Private Key** ein
+5. Dein **Nostr-Profil** wird geladen und gegen die **Whitelist** geprüft
+6. Klicke auf **"🔗 Gruppe beitreten"**
+
+> **Wichtig:** Dein Public Key muss vom Admin zur Whitelist hinzugefügt worden sein!
 
 > **Tipp:** Dein Private Key bleibt im Browser und wird niemals übertragen!
 
-### 2️⃣ **Marketplace: Angebot erstellen**
+### 3️⃣ **Marketplace: Angebot erstellen**
 
 1. Klicke auf **"+ Neues Angebot"**
 2. Beschreibe dein Angebot (z.B. "Verkaufe 0.01 BTC für 500€")
 3. Ein **temporärer Keypair** wird automatisch generiert
 4. Dein Angebot ist jetzt **anonym** für alle sichtbar
 
-### 3️⃣ **Interesse zeigen**
+### 4️⃣ **Interesse zeigen**
 
 1. Finde ein interessantes Angebot
 2. Klicke auf **"💬 Interesse zeigen"**
 3. Ein **privater Deal-Room** wird automatisch erstellt
 4. Du erhältst eine **verschlüsselte Einladung**
 
-### 4️⃣ **Deal-Room: Sicherer Chat**
+### 5️⃣ **Deal-Room: Sicherer Chat**
 
 1. Öffne den **Deal-Room** über die Benachrichtigung
 2. Chatte **Ende-zu-Ende-verschlüsselt** mit dem Anbieter
 3. Vereinbare die **Transaktionsdetails** sicher
 4. Wickle den **Tausch außerhalb der App** ab
+
+### 6️⃣ **Admin: Whitelist verwalten**
+
+1. Als Admin klicke auf **"🔐 Whitelist verwalten"**
+2. **Public Keys hinzufügen**: Gib npub oder hex ein und klicke auf "➕ Hinzufügen"
+3. **Public Keys entfernen**: Klicke auf "🗑️ Entfernen" neben einem Eintrag
+4. **Einladungslink generieren**: Klicke auf "✨ Link generieren" und teile ihn mit neuen Usern
 
 > **Wichtig:** Die App dient nur zur Kontaktanbahnung. Die eigentliche Transaktion erfolgt extern!
 

@@ -7,7 +7,6 @@
   import { dealStore, dealRooms } from '$lib/stores/dealStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
-  import { ADMIN_PUBKEY } from '$lib/config';
   let isAdmin = false;
 
   let offerInput = '';
@@ -68,16 +67,10 @@
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       
-      // Prüfe Admin-Status
-      const { nip19 } = await import('nostr-tools');
-      let adminHex = ADMIN_PUBKEY;
-      if (ADMIN_PUBKEY.startsWith('npub1')) {
-        const decoded = nip19.decode(ADMIN_PUBKEY as any);
-        if ((decoded as any).type === 'npub') {
-          adminHex = (decoded as any).data as string;
-        }
-      }
-      isAdmin = $userStore.pubkey?.toLowerCase() === adminHex.toLowerCase();
+      // Prüfe Admin-Status aus localStorage
+      const isGroupAdmin = localStorage.getItem('is_group_admin') === 'true';
+      const adminPubkey = localStorage.getItem('admin_pubkey');
+      isAdmin = isGroupAdmin && adminPubkey === $userStore.pubkey;
       
       // Restore tempKeypair
       if ($userStore.tempPrivkey) {

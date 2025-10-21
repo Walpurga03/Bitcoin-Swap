@@ -233,18 +233,33 @@ function createGroupStore() {
           console.log('💌 [STORE] Interesse-Events geladen:', interests.length);
 
           // 3. Ordne Interessen den Angeboten zu
-          interests.forEach((interest: any) => {
-            const offer = offers.find(o => o.id === interest.offerId);
-            if (offer && interest.decrypted) {
-              offer.replies.push({
-                id: interest.id,
-                offerId: interest.offerId,
-                pubkey: interest.pubkey,
-                content: interest.decrypted,
-                created_at: interest.created_at
-              });
-            }
-          });
+  // 🔐 VERBESSERUNG: Parse Pubkeys aus verschlüsselten Metadaten
+  interests.forEach((interest: any) => {
+    const offer = offers.find(o => o.id === interest.offerId);
+    if (offer && interest.decrypted) {
+      try {
+        // Versuche Metadaten zu parsen
+        const metadata = JSON.parse(interest.decrypted);
+        offer.replies.push({
+          id: interest.id,
+          offerId: interest.offerId,
+          pubkey: metadata.pubkey || interest.pubkey,  // 🔐 Aus Metadaten!
+          content: `${metadata.name || 'Anonym'}: ${metadata.message || interest.decrypted}`,
+          created_at: interest.created_at
+        });
+      } catch (e) {
+        // Fallback für alte Events (vor Update)
+        console.warn('⚠️ Könnte Interesse-Metadaten nicht parsen, verwende Fallback');
+        offer.replies.push({
+          id: interest.id,
+          offerId: interest.offerId,
+          pubkey: interest.pubkey,
+          content: interest.decrypted,
+          created_at: interest.created_at
+        });
+      }
+    }
+});
 
           // Sortiere replies nach Zeit
           offers.forEach(offer => {

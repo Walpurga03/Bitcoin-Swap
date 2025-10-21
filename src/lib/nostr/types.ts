@@ -128,3 +128,34 @@ export interface DealRoomMetadata {
   buyerPubkey: string;
   created_at: number;
 }
+
+/**
+ * NIP-17 Gift-Wrapped Event
+ */
+export interface GiftWrappedEvent extends NostrEvent {
+  kind: 1059;  // Gift-Wrapped
+  tags: Array<['p', string]>;  // Nur 'p' Tag für Recipient
+}
+
+/**
+ * Sealed Direct Message (Inneres NIP-17 Event)
+ */
+export interface SealedMessage extends NostrEvent {
+  kind: 14;  // Sealed Direct Message
+  tags: Array<['p', string]>;  // Recipient Pubkey
+}
+
+/**
+ * Verschlüsselte Metadaten
+ */
+export interface EncryptedMetadata {
+  pubkey?: string;
+  name?: string;
+  message?: string;
+  sellerPubkey?: string;
+  buyerPubkey?: string;
+  offerId?: string;
+  offerContent?: string;
+  created_at?: number;
+  [key: string]: any;
+}

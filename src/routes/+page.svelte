@@ -2,184 +2,255 @@
   import { onMount } from 'svelte';
   // @ts-ignore
   import { goto } from '$app/navigation';
-  // @ts-ignore
-  import { page } from '$app/stores';
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
-  import { parseInviteLink } from '$lib/utils';
   import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
-  import { loadWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
-  import { fetchUserProfile } from '$lib/nostr/client';
-  import { ADMIN_PUBKEY } from '$lib/config';
+  import { DEFAULT_RELAYS } from '$lib/config';
+  import { deriveChannelId } from '$lib/nostr/crypto';
+  import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
+  import type { UserConfig } from '$lib/nostr/userConfig';
 
-  let nsecInput = '';
+  let mode: 'create' | 'join' = 'create';
+  
+  // Create Group Form
+  let adminNsec = '';
+  let selectedRelay = DEFAULT_RELAYS[0];
+  let customRelay = '';
+  let useCustomRelay = false;
+  let groupSecret = '';
+  let autoGenerateSecret = true;
+  
+  // Join Group Form (für normale User)
+  let joinNsec = '';
+  let inviteLink = '';
+  
   let error = '';
   let loading = false;
   let loadingProfile = false;
   let profileName = '';
-  let inviteData: { relay: string; secret: string } | null = null;
-  let whitelist: WhitelistData | null = null;
-  let whitelistLoading = false;
 
-  onMount(async () => {
-    // Parse URL-Parameter
-    const url = window.location.href;
-    const parsed = parseInviteLink(url);
-    
-    if (parsed) {
-      inviteData = parsed;
-      
-      // Lade Whitelist vom Relay
-      await loadWhitelistFromRelay(parsed.relay);
-    } else {
-      error = 'Ungültiger Einladungslink. Bitte verwende einen gültigen Link.';
+  onMount(() => {
+    // Prüfe ob bereits eingeloggt
+    if ($userStore.isAuthenticated) {
+      goto('/group');
     }
   });
 
-  async function loadWhitelistFromRelay(relay: string) {
-    try {
-      whitelistLoading = true;
-      console.log('📋 Lade Whitelist vom Relay:', relay);
-      
-      if (!inviteData) {
-        console.error('❌ Keine Einladungsdaten vorhanden');
-        return;
-      }
-      
-      // Leite channelId aus Secret ab
-      const { deriveChannelId } = await import('$lib/nostr/crypto');
-      const channelId = await deriveChannelId(inviteData.secret);
-      console.log('🔑 Channel ID abgeleitet:', channelId.substring(0, 16) + '...');
-      
-      // Konvertiere Admin NPUB zu Hex
-      const { nip19 } = await import('nostr-tools');
-      let adminPubkeyHex = ADMIN_PUBKEY;
-      
-      if (ADMIN_PUBKEY.startsWith('npub1')) {
-        const decoded = nip19.decode(ADMIN_PUBKEY as any);
-        if ((decoded as any).type === 'npub') {
-          adminPubkeyHex = (decoded as any).data as string;
-        }
-      }
-      
-      // Lade Whitelist für diese Gruppe
-      whitelist = await loadWhitelist([relay], adminPubkeyHex, channelId);
-      
-      if (whitelist) {
-        console.log('✅ Whitelist für Gruppe geladen:', whitelist.pubkeys.length, 'Einträge');
-      } else {
-        console.warn('⚠️ Keine Whitelist für diese Gruppe gefunden');
-      }
-    } catch (e) {
-      console.error('❌ Fehler beim Laden der Whitelist:', e);
-    } finally {
-      whitelistLoading = false;
+  function generateRandomSecret(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 16; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    return result;
   }
 
-  async function handleLogin() {
+  function handleGenerateSecret() {
+    groupSecret = generateRandomSecret();
+    autoGenerateSecret = false;
+  }
+
+  async function handleCreateGroup() {
     error = '';
     loading = true;
 
     try {
+      // Validiere Admin NSEC
+      const keyValidation = validatePrivateKey(adminNsec);
+      if (!keyValidation.valid || !keyValidation.hex) {
+        throw new Error(keyValidation.error || 'Ungültiger Private Key');
+      }
+
+      // Bestimme Relay
+      const relay = useCustomRelay ? customRelay : selectedRelay;
+      const relayValidation = validateRelayUrl(relay);
+      if (!relayValidation.valid) {
+        throw new Error(relayValidation.error || 'Ungültige Relay-URL');
+      }
+
+      // Generiere Secret falls nötig
+      let finalSecret = groupSecret.trim();
+      if (!finalSecret || autoGenerateSecret) {
+        finalSecret = generateRandomSecret();
+        groupSecret = finalSecret;
+      }
+
+      if (finalSecret.length < 8) {
+        throw new Error('Secret muss mindestens 8 Zeichen lang sein');
+      }
+
+      // Lade Profil
+      loadingProfile = true;
+      const { getPublicKey } = await import('nostr-tools');
+      const { fetchUserProfile } = await import('$lib/nostr/client');
+      
+      const pubkey = getPublicKey(keyValidation.hex! as any);
+      const profile = await fetchUserProfile(pubkey);
+      
+      let userName = 'Admin';
+      if (profile) {
+        userName = profile.display_name || profile.name ||
+                   (profile.nip05 ? profile.nip05.split('@')[0] : 'Admin');
+        profileName = userName;
+      }
+      
+      loadingProfile = false;
+
+      // Setze User als Admin
+      userStore.setUserFromNsec(adminNsec, userName);
+      
+      // 🔐 NEU: Speichere Config auf Nostr (NIP-17)
+      console.log('💾 Speichere User-Config auf Nostr...');
+      const config: UserConfig = {
+        is_group_admin: true,
+        admin_pubkey: pubkey,
+        group_secret: finalSecret,
+        relay: relay,
+        created_at: Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000)
+      };
+      
+      // Speichere auf Nostr - bei Fehler wird Exception geworfen
+      await saveUserConfig(config, keyValidation.hex!, [relay]);
+      console.log('✅ Config auf Nostr gespeichert');
+
+      // Initialisiere Gruppe
+      await groupStore.initialize(finalSecret, relay);
+
+      // Erstelle leere Whitelist für diese Gruppe
+      const channelId = await deriveChannelId(finalSecret);
+      console.log('✅ Gruppe erstellt:', {
+        admin: pubkey.substring(0, 16) + '...',
+        relay,
+        channelId: channelId.substring(0, 16) + '...'
+      });
+
+      // Weiterleitung zur Gruppen-Seite
+      await goto('/group');
+    } catch (e: any) {
+      error = e.message || 'Ein Fehler ist aufgetreten';
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleJoinGroup() {
+    error = '';
+    loading = true;
+
+    try {
+      // Parse Einladungslink
+      const url = new URL(inviteLink);
+      const relay = url.searchParams.get('relay');
+      const secret = url.searchParams.get('secret');
+
+      if (!relay || !secret) {
+        throw new Error('Ungültiger Einladungslink');
+      }
+
       // Validiere NSEC
-      const keyValidation = validatePrivateKey(nsecInput);
+      const keyValidation = validatePrivateKey(joinNsec);
       if (!keyValidation.valid || !keyValidation.hex) {
         throw new Error(keyValidation.error || 'Ungültiger Private Key');
       }
 
       // Validiere Relay
-      if (!inviteData) {
-        throw new Error('Keine Einladungsdaten gefunden');
-      }
-
-      const relayValidation = validateRelayUrl(inviteData.relay);
+      const relayValidation = validateRelayUrl(relay);
       if (!relayValidation.valid) {
         throw new Error(relayValidation.error || 'Ungültige Relay-URL');
       }
 
-      // Prüfe Whitelist
-      const { getPublicKey, nip19 } = await import('nostr-tools');
-      const pubkey = getPublicKey(keyValidation.hex! as any);
-      
-      // Konvertiere Admin NPUB zu Hex für Vergleich
-      let adminPubkeyHex = ADMIN_PUBKEY;
-      if (ADMIN_PUBKEY.startsWith('npub1')) {
-        const decoded = nip19.decode(ADMIN_PUBKEY as any);
-        if ((decoded as any).type === 'npub') {
-          adminPubkeyHex = (decoded as any).data as string;
+      // 🔐 NEU: Versuche Config von Nostr zu laden
+      console.log('📥 Versuche Config von Nostr zu laden...');
+      let existingConfig: UserConfig | null = null;
+      try {
+        existingConfig = await loadUserConfig(keyValidation.hex!, [relay]);
+        if (existingConfig) {
+          console.log('✅ Config von Nostr geladen');
         }
-      }
-      
-      // Admin darf sich IMMER einloggen (auch wenn Whitelist leer ist)
-      const isAdmin = pubkey.toLowerCase() === adminPubkeyHex.toLowerCase();
-      
-      if (isAdmin) {
-        console.log('✅ Admin-Login erkannt - Whitelist-Prüfung übersprungen');
-      } else {
-        // Normale Benutzer: Prüfe Whitelist
-        if (!whitelist || whitelist.pubkeys.length === 0) {
-          throw new Error('Whitelist ist leer. Bitte kontaktiere den Administrator.');
-        }
-        
-        // Prüfe ob Pubkey in Whitelist
-        const isInWhitelist = whitelist.pubkeys.some(
-          allowed => allowed.toLowerCase() === pubkey.toLowerCase()
-        );
-        
-        if (!isInWhitelist) {
-          throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
-        }
+      } catch (configError) {
+        // Config existiert nicht oder Relay nicht erreichbar
+        // Fahre trotzdem fort mit Login (Config wird beim Speichern erstellt)
+        console.log('ℹ️ Keine existierende Config gefunden, wird beim Speichern erstellt');
       }
 
-      // Lade Profil vom Nostr-Netzwerk
+      // Lade Profil
       loadingProfile = true;
-      console.log('👤 Lade Nostr-Profil...');
+      const { getPublicKey } = await import('nostr-tools');
+      const { fetchUserProfile } = await import('$lib/nostr/client');
+      const { loadWhitelist } = await import('$lib/nostr/whitelist');
       
+      const pubkey = getPublicKey(keyValidation.hex! as any);
       const profile = await fetchUserProfile(pubkey);
       
       let userName = 'Anonym';
       if (profile) {
-        // Priorität: display_name > name > nip05 (nur Username-Teil)
         userName = profile.display_name || profile.name ||
                    (profile.nip05 ? profile.nip05.split('@')[0] : 'Anonym');
-        console.log('✅ Profil-Name gefunden:', userName);
         profileName = userName;
-      } else {
-        console.log('⚠️ Kein Profil gefunden, verwende "Anonym"');
       }
       
       loadingProfile = false;
 
-      // Setze User mit Profil-Namen
-      userStore.setUserFromNsec(nsecInput, userName);
+      // Prüfe Whitelist (außer für Admin)
+      const channelId = await deriveChannelId(secret);
+      
+      // 🔐 NEU: Admin-Pubkey aus Config oder localStorage
+      let storedAdminPubkey = existingConfig?.admin_pubkey || localStorage.getItem('admin_pubkey');
+      
+      // Prüfe ob User der Admin ist
+      const isAdmin = storedAdminPubkey && storedAdminPubkey.toLowerCase() === pubkey.toLowerCase();
+      
+      if (!isAdmin) {
+        // Nur für normale User: Whitelist-Prüfung
+        if (!storedAdminPubkey) {
+          throw new Error('Admin-Pubkey nicht gefunden. Bitte kontaktiere den Gruppen-Admin.');
+        }
+
+        const whitelist = await loadWhitelist([relay], storedAdminPubkey, channelId);
+        
+        if (!whitelist || whitelist.pubkeys.length === 0) {
+          throw new Error('Whitelist ist leer. Bitte kontaktiere den Administrator.');
+        }
+
+        // Prüfe ob User in Whitelist
+        const isInWhitelist = whitelist.pubkeys.some(
+          allowed => allowed.toLowerCase() === pubkey.toLowerCase()
+        );
+
+        if (!isInWhitelist) {
+          throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
+        }
+      } else {
+        console.log('✅ Admin-Login erkannt - Whitelist-Prüfung übersprungen');
+      }
+
+      // Setze User
+      userStore.setUserFromNsec(joinNsec, userName);
+
+      // 🔐 NEU: Speichere/Update Config auf Nostr
+      console.log('💾 Speichere User-Config auf Nostr...');
+      const config: UserConfig = {
+        is_group_admin: isAdmin,
+        admin_pubkey: storedAdminPubkey || pubkey,
+        group_secret: secret,
+        relay: relay,
+        created_at: existingConfig?.created_at || Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000)
+      };
+      
+      // Speichere auf Nostr - bei Fehler wird Exception geworfen
+      await saveUserConfig(config, keyValidation.hex!, [relay]);
+      console.log('✅ Config auf Nostr gespeichert');
 
       // Initialisiere Gruppe
-      await groupStore.initialize(inviteData.secret, inviteData.relay);
+      await groupStore.initialize(secret, relay);
 
-      // Lade alle Nachrichten beim ersten Login
+      // Lade Nachrichten
       try {
         await groupStore.loadMessages(true);
       } catch (e) {
         console.warn('Nachrichten konnten nicht geladen werden:', e);
-      }
-
-      // Prüfe ob ein Chat-Redirect ausstehend ist
-      const pendingChatRedirect = localStorage.getItem('pending_chat_redirect');
-      if (pendingChatRedirect) {
-        // Hole auch den Angebotstext falls vorhanden
-        const pendingChatOffer = localStorage.getItem('pending_chat_offer');
-        
-        // Speichere Angebotstext für Chat-Anzeige
-        if (pendingChatOffer) {
-          localStorage.setItem(`chat_offer_${pendingChatRedirect}`, pendingChatOffer);
-          localStorage.removeItem('pending_chat_offer');
-        }
-        
-        console.log('✅ Redirect zu ausstehenden Chat:', pendingChatRedirect.substring(0, 16) + '...');
-        localStorage.removeItem('pending_chat_redirect');
-        await goto(`/dm/${pendingChatRedirect}`);
-        return;
       }
 
       // Weiterleitung zum Chat
@@ -192,111 +263,292 @@
   }
 </script>
 
-<div class="login-container">
-  <div class="login-card card">
-    <h1>🔐 NostrGroupChat</h1>
+<div class="container">
+  <div class="card">
+    <h1>🛒 Bitcoin Tausch Netzwerk</h1>
     <p class="subtitle">Dezentraler Gruppen-Chat mit Nostr</p>
 
-    {#if inviteData}
-      <div class="invite-info">
-        <p><strong>Relay:</strong> {inviteData.relay}</p>
-        <p><strong>Gruppe:</strong> {inviteData.secret}</p>
-        {#if whitelistLoading}
-          <p class="whitelist-status loading">⏳ Lade Whitelist...</p>
-        {:else if whitelist}
-          <p class="whitelist-status success">✅ Whitelist geladen ({whitelist.pubkeys.length} Einträge)</p>
-        {:else}
-          <p class="whitelist-status warning">⚠️ Keine Whitelist gefunden</p>
-        {/if}
-      </div>
-    {/if}
-
-    <form on:submit|preventDefault={handleLogin}>
-      <div class="form-group">
-        <label for="nsec">Private Key (NSEC oder Hex) *</label>
-        <input
-          id="nsec"
-          type="password"
-          class="input"
-          bind:value={nsecInput}
-          placeholder="nsec1... oder hex"
-          required
-          disabled={loading}
-        />
-        <small>Dein Private Key wird nur lokal gespeichert und nie übertragen.</small>
-      </div>
-
-      {#if loadingProfile}
-        <div class="info-message">
-          ⏳ Lade dein Nostr-Profil von populären Relays...
-        </div>
-      {/if}
-
-      {#if profileName}
-        <div class="success-message">
-          ✅ Profil gefunden: <strong>{profileName}</strong>
-        </div>
-      {/if}
-
-      {#if error}
-        <div class="error">{error}</div>
-      {/if}
-
-      <button type="submit" class="btn btn-primary" disabled={loading || loadingProfile || !inviteData}>
-        {loading ? 'Verbinde...' : loadingProfile ? 'Lade Profil...' : 'Gruppe beitreten'}
+    <!-- Mode Toggle -->
+    <div class="mode-toggle">
+      <button
+        class="mode-btn"
+        class:active={mode === 'create'}
+        on:click={() => mode = 'create'}
+      >
+        🆕 Neue Gruppe erstellen
       </button>
-    </form>
+      <button
+        class="mode-btn"
+        class:active={mode === 'join'}
+        on:click={() => mode = 'join'}
+      >
+        🔗 Gruppe beitreten
+      </button>
+    </div>
+
+    {#if mode === 'create'}
+      <!-- Create Group Form -->
+      <form on:submit|preventDefault={handleCreateGroup}>
+        <h2>Neue Gruppe erstellen</h2>
+        <p class="info">Als Gruppen-Admin kannst du die Whitelist verwalten und Einladungslinks erstellen.</p>
+
+        <div class="form-group">
+          <label for="admin-nsec">Dein Private Key (NSEC) *</label>
+          <input
+            id="admin-nsec"
+            type="password"
+            class="input"
+            bind:value={adminNsec}
+            placeholder="nsec1... oder hex"
+            required
+            disabled={loading}
+          />
+          <small>Du wirst automatisch Admin dieser Gruppe</small>
+        </div>
+
+        <div class="form-group">
+          <label for="relay">Relay auswählen *</label>
+          <div class="relay-options">
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={useCustomRelay}
+                value={false}
+                disabled={loading}
+              />
+              Standard-Relay
+            </label>
+            {#if !useCustomRelay}
+              <select
+                id="relay"
+                class="input"
+                bind:value={selectedRelay}
+                disabled={loading}
+              >
+                {#each DEFAULT_RELAYS as relay}
+                  <option value={relay}>{relay}</option>
+                {/each}
+              </select>
+            {/if}
+          </div>
+          
+          <div class="relay-options">
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={useCustomRelay}
+                value={true}
+                disabled={loading}
+              />
+              Eigenes Relay
+            </label>
+            {#if useCustomRelay}
+              <input
+                type="text"
+                class="input"
+                bind:value={customRelay}
+                placeholder="wss://relay.example.com"
+                disabled={loading}
+              />
+            {/if}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="secret">Gruppen-Secret *</label>
+          <div class="secret-input">
+            <input
+              id="secret"
+              type="text"
+              class="input"
+              bind:value={groupSecret}
+              placeholder="Wird automatisch generiert..."
+              disabled={loading || autoGenerateSecret}
+            />
+            <button
+              type="button"
+              class="btn btn-secondary"
+              on:click={handleGenerateSecret}
+              disabled={loading}
+            >
+              🎲 Generieren
+            </button>
+          </div>
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              bind:checked={autoGenerateSecret}
+              disabled={loading}
+            />
+            Automatisch generieren
+          </label>
+          <small>Das Secret wird für die Verschlüsselung verwendet (min. 8 Zeichen)</small>
+        </div>
+
+        {#if loadingProfile}
+          <div class="info-message">
+            ⏳ Lade dein Nostr-Profil...
+          </div>
+        {/if}
+
+        {#if profileName}
+          <div class="success-message">
+            ✅ Profil gefunden: <strong>{profileName}</strong>
+          </div>
+        {/if}
+
+        {#if error}
+          <div class="error">{error}</div>
+        {/if}
+
+        <button type="submit" class="btn btn-primary" disabled={loading || loadingProfile}>
+          {loading ? '⏳ Erstelle Gruppe...' : loadingProfile ? 'Lade Profil...' : '🚀 Gruppe erstellen'}
+        </button>
+      </form>
+    {:else}
+      <!-- Join Group Form -->
+      <form on:submit|preventDefault={handleJoinGroup}>
+        <h2>Gruppe beitreten</h2>
+        <p class="info">Trete einer bestehenden Gruppe mit einem Einladungslink bei.</p>
+
+        <div class="form-group">
+          <label for="invite-link">Einladungslink *</label>
+          <input
+            id="invite-link"
+            type="text"
+            class="input"
+            bind:value={inviteLink}
+            placeholder="https://..."
+            required
+            disabled={loading}
+          />
+          <small>Link vom Gruppen-Admin erhalten</small>
+        </div>
+
+        <div class="form-group">
+          <label for="join-nsec">Dein Private Key (NSEC) *</label>
+          <input
+            id="join-nsec"
+            type="password"
+            class="input"
+            bind:value={joinNsec}
+            placeholder="nsec1... oder hex"
+            required
+            disabled={loading}
+          />
+          <small>Dein Private Key wird nur lokal gespeichert</small>
+        </div>
+
+        {#if loadingProfile}
+          <div class="info-message">
+            ⏳ Lade dein Nostr-Profil...
+          </div>
+        {/if}
+
+        {#if profileName}
+          <div class="success-message">
+            ✅ Profil gefunden: <strong>{profileName}</strong>
+          </div>
+        {/if}
+
+        {#if error}
+          <div class="error">{error}</div>
+        {/if}
+
+        <button type="submit" class="btn btn-primary" disabled={loading || loadingProfile}>
+          {loading ? '⏳ Trete bei...' : loadingProfile ? 'Lade Profil...' : '🔗 Gruppe beitreten'}
+        </button>
+      </form>
+    {/if}
 
     <div class="info-box">
       <h3>ℹ️ Hinweise</h3>
       <ul>
-        <li>Du benötigst einen gültigen Einladungslink</li>
-        <li>Dein Public Key muss in der Whitelist sein</li>
-        <li>Dein Name wird automatisch von deinem Nostr-Profil geladen (Kind 0)</li>
-        <li>Alle Nachrichten sind Ende-zu-Ende verschlüsselt</li>
-        <li>Dein Private Key verlässt niemals deinen Browser</li>
+        <li><strong>Neue Gruppe:</strong> Du wirst automatisch Admin und kannst die Whitelist verwalten</li>
+        <li><strong>Gruppe beitreten:</strong> Du benötigst einen Einladungslink vom Admin</li>
+        <li><strong>Sicherheit:</strong> Dein Private Key verlässt niemals deinen Browser</li>
+        <li><strong>Verschlüsselung:</strong> Alle Nachrichten sind Ende-zu-Ende verschlüsselt</li>
       </ul>
     </div>
   </div>
 </div>
 
 <style>
-  .login-container {
+  .container {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    background: linear-gradient(135deg, var(--bg-color) 0%, var(--bg-secondary) 100%);
   }
 
-  .login-card {
-    max-width: 500px;
+  .card {
+    max-width: 600px;
     width: 100%;
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
   }
 
   h1 {
     font-size: 2rem;
-    margin-bottom: 0.5rem;
+    margin: 0 0 0.5rem 0;
     text-align: center;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .subtitle {
     text-align: center;
     color: var(--text-muted);
+    margin: 0 0 2rem 0;
+  }
+
+  .mode-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
     margin-bottom: 2rem;
+    background: var(--bg-color);
+    padding: 0.5rem;
+    border-radius: 0.75rem;
   }
 
-  .invite-info {
-    background-color: var(--bg-color);
-    padding: 1rem;
+  .mode-btn {
+    padding: 0.75rem 1rem;
+    border: none;
     border-radius: 0.5rem;
-    margin-bottom: 1.5rem;
-    font-size: 0.875rem;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
   }
 
-  .invite-info p {
-    margin: 0.25rem 0;
-    word-break: break-all;
+  .mode-btn.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+  }
+
+  .mode-btn:hover:not(.active) {
+    background: var(--surface-color);
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .info {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
   }
 
   .form-group {
@@ -307,6 +559,28 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
+    color: var(--text-color);
+  }
+
+  .input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+
+  .input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   small {
@@ -316,55 +590,79 @@
     font-size: 0.875rem;
   }
 
-  button[type="submit"] {
-    width: 100%;
-    margin-top: 1rem;
-  }
-
-  .info-box {
-    margin-top: 2rem;
-    padding: 1rem;
-    background-color: var(--bg-color);
-    border-radius: 0.5rem;
-  }
-
-  .info-box h3 {
-    font-size: 1rem;
+  .relay-options {
     margin-bottom: 0.75rem;
   }
 
-  .info-box ul {
-    margin: 0;
-    padding-left: 1.5rem;
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: normal;
   }
 
-  .info-box li {
-    margin: 0.5rem 0;
-    font-size: 0.875rem;
-    color: var(--text-muted);
+  .radio-label input[type="radio"] {
+    width: auto;
   }
 
-  .whitelist-status {
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     margin-top: 0.5rem;
-    padding: 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.8125rem;
+    font-weight: normal;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: auto;
+  }
+
+  .secret-input {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .secret-input .input {
+    flex: 1;
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
     font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1rem;
   }
 
-  .whitelist-status.loading {
-    background-color: rgba(59, 130, 246, 0.1);
-    color: #3b82f6;
+  .btn-primary {
+    width: 100%;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
   }
 
-  .whitelist-status.success {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: #10b981;
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 0, 110, 0.4);
   }
 
-  .whitelist-status.warning {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: #f59e0b;
+  .btn-secondary {
+    background: var(--surface-elevated);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--bg-color);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .info-message {
@@ -383,5 +681,57 @@
     border-radius: 0.5rem;
     margin-bottom: 1rem;
     font-size: 0.875rem;
+  }
+
+  .error {
+    padding: 0.75rem;
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .info-box {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-color);
+  }
+
+  .info-box h3 {
+    font-size: 1rem;
+    margin: 0 0 0.75rem 0;
+  }
+
+  .info-box ul {
+    margin: 0;
+    padding-left: 1.5rem;
+  }
+
+  .info-box li {
+    margin: 0.5rem 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 640px) {
+    .card {
+      padding: 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .mode-toggle {
+      grid-template-columns: 1fr;
+    }
+
+    .secret-input {
+      flex-direction: column;
+    }
   }
 </style>

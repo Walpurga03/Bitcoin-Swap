@@ -30,54 +30,60 @@ function createDealStore() {
     subscribe,
 
     /**
-     * Lade alle Deal-Rooms für einen User
-     */
-    loadRooms: async (userPubkey: string, groupKey: string, relay: string) => {
+ * Lade alle Deal-Rooms für einen User
+ */
+loadRooms: async (userPubkey: string, groupKey: string, relay: string) => {
+  try {
+    console.log('🏠 [DEAL-STORE] Lade Deal-Rooms...');
+    update(state => ({ ...state, isLoading: true, error: null }));
+
+    const events = await fetchDealRooms(userPubkey, groupKey, [relay]);
+
+    // Konvertiere Events zu DealRoom-Objekten
+    const rooms: DealRoom[] = events.map(event => {
       try {
-        console.log('🏠 [DEAL-STORE] Lade Deal-Rooms...');
-        update(state => ({ ...state, isLoading: true, error: null }));
+        // 🔐 VERBESSERUNG: Parse Pubkeys aus verschlüsselten Metadaten
+        const metadata = event.decrypted;
+        const dealId = event.tags.find(t => t[0] === 'd')?.[1] || event.id;
 
-        const events = await fetchDealRooms(userPubkey, groupKey, [relay]);
-
-        // Konvertiere Events zu DealRoom-Objekten
-        const rooms: DealRoom[] = events.map(event => {
-          const metadata = event.decrypted;
-          const dealId = event.tags.find(t => t[0] === 'd')?.[1] || event.id;
-
-          return {
-            id: dealId,
-            eventId: event.id,  // Speichere Event-ID für Löschung
-            offerId: metadata.offerId,
-            offerContent: metadata.offerContent,
-            participants: {
-              seller: metadata.sellerPubkey,
-              buyer: metadata.buyerPubkey
-            },
-            created_at: event.created_at,
-            status: 'active' as const,
-            messages: []
-          };
-        });
-
-        console.log('✅ [DEAL-STORE] Deal-Rooms geladen:', rooms.length);
-
-        update(state => ({
-          ...state,
-          rooms,
-          isLoading: false
-        }));
-
-        return rooms;
-      } catch (error: any) {
-        console.error('❌ [DEAL-STORE] Fehler beim Laden:', error);
-        update(state => ({
-          ...state,
-          isLoading: false,
-          error: error.message || 'Fehler beim Laden der Deal-Rooms'
-        }));
-        return [];
+        return {
+          id: dealId,
+          eventId: event.id,  // Speichere Event-ID für Löschung
+          offerId: metadata.offerId,
+          offerContent: metadata.offerContent,
+          participants: {
+            seller: metadata.sellerPubkey,  // 🔐 Aus Metadaten
+            buyer: metadata.buyerPubkey      // 🔐 Aus Metadaten
+          },
+          created_at: event.created_at,
+          status: 'active' as const,
+          messages: []
+        };
+      } catch (e) {
+        console.error('❌ Fehler beim Parsen des Deal-Room:', e);
+        throw e;
       }
-    },
+    });
+
+    console.log('✅ [DEAL-STORE] Deal-Rooms geladen:', rooms.length);
+
+    update(state => ({
+      ...state,
+      rooms,
+      isLoading: false
+    }));
+
+    return rooms;
+  } catch (error: any) {
+    console.error('❌ [DEAL-STORE] Fehler beim Laden:', error);
+    update(state => ({
+      ...state,
+      isLoading: false,
+      error: error.message || 'Fehler beim Laden der Deal-Rooms'
+    }));
+    return [];
+  }
+},
 
     /**
      * Erstelle neuen Deal-Room
@@ -191,51 +197,43 @@ function createDealStore() {
       }
     },
 
-    /**
-     * Sende Nachricht in Deal-Room
-     */
-    sendMessage: async (
-      dealId: string,
-      content: string,
-      groupKey: string,
-      privateKey: string,
-      relay: string
-    ) => {
-      try {
-        console.log('💬 [DEAL-STORE] Sende Nachricht...');
-
-        const event = await sendDealMessage(dealId, content, groupKey, privateKey, [relay]);
-
-        const message: DealMessage = {
+   /**
+ * Sende Nachricht in Deal-Room mit NIP-17
+ */
+sendMessage: async (dealId: string, content: string, recipientPubkey: string, privateKey: string, relay: string) => {
+  try {
+    console.log('📨 [DEAL-STORE] Sende NIP-17 Nachricht...');
+    
+    // 🔐 VERBESSERUNG: Verwende NIP-17 (nicht groupKey)
+    const event = await sendDealMessage(
+      dealId,
+      content,
+      recipientPubkey,  // 🔐 Nur dieser Recipient kann lesen
+      privateKey,
+      [relay]
+    );
+    
+    // Füge lokal hinzu
+    update(state => {
+      const room = state.rooms.find(r => r.id === dealId);
+      if (room) {
+        room.messages.push({
           id: event.id,
           content,
           sender: event.pubkey,
-          created_at: event.created_at
-        };
-
-        // Füge Nachricht lokal hinzu
-        update(state => {
-          const rooms = state.rooms.map(room => {
-            if (room.id === dealId) {
-              return {
-                ...room,
-                messages: [...room.messages, message]
-              };
-            }
-            return room;
-          });
-
-          return { ...state, rooms };
+          created_at: event.created_at,
+          decrypted: content  // 🔐 Füge decrypted hinzu für konsistente Anzeige
         });
-
-        console.log('✅ [DEAL-STORE] Nachricht gesendet');
-
-        return message;
-      } catch (error: any) {
-        console.error('❌ [DEAL-STORE] Fehler beim Senden:', error);
-        throw error;
       }
-    },
+      return state;
+    });
+
+    return event;
+  } catch (error) {
+    console.error('❌ Fehler beim Senden der Nachricht:', error);
+    throw error;
+  }
+},
 
     /**
      * Lösche Deal-Room (NIP-09)

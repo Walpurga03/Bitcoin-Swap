@@ -1,15 +1,9 @@
 /**
  * Zentrale Konfiguration für das Bitcoin-Tausch-Netzwerk
- * 
+ *
  * Diese Datei enthält alle wichtigen Konstanten, die an mehreren Stellen verwendet werden.
  * Änderungen hier wirken sich auf die gesamte Anwendung aus.
  */
-
-/**
- * Admin Public Key (npub Format)
- * Dieser Key hat Admin-Rechte und kann die Whitelist verwalten.
- */
-export const ADMIN_PUBKEY = 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj42ps6svpfgt3';
 
 /**
  * Gruppen-Tag für Nostr Events
@@ -17,6 +11,17 @@ export const ADMIN_PUBKEY = 'npub1z90zurzsh00cmg6qfuyc5ca4auyjsp8kqxyf4hykyynxjj
  * WICHTIG: Änderungen hier machen die App inkompatibel mit bestehenden Daten!
  */
 export const GROUP_TAG = 'bitcoin-group';
+
+/**
+ * Standard-Relays zur Auswahl
+ */
+export const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://nos.lol',
+  'wss://relay.snort.social',
+  'wss://nostr.wine'
+];
 
 /**
  * Lightning-Adresse für Spenden
