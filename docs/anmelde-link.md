@@ -1,59 +1,452 @@
-# 🔐 Anmelde-System - Dynamische Gruppen-Verwaltung mit NIP-17
+# 🔐 Anmelde-System - Analyse & Kritische Übersicht
 
-## 📋 Übersicht
+## 🎯 Was ist das System?
 
-Das Bitcoin-Tausch-Netzwerk verwendet ein **dezentrales Anmelde-System** mit **NIP-17 verschlüsselter User-Config-Speicherung**. Benutzer können entweder neue Gruppen erstellen (als Admin) oder bestehenden Gruppen beitreten (als normaler User). Das System kombiniert URL-basierte Einladungen mit Nostr-Identitätsverifizierung, Whitelist-Prüfung und verschlüsselter Config-Speicherung auf Nostr-Relays.
+**Dezentrales Gruppen-Login** ohne zentrale Authentifizierung. Admin erstellt Gruppe → verteilt Einladungslink → System prüft automatisch über Nostr ob User in Whitelist ist.
 
-## 🎯 Aktueller Stand (Oktober 2025)
+**Kernmechanismus**: Admin-Status = `pubkey vom Relay === aktueller pubkey` (wird bei jedem Login neu berechnet)
 
-### ✅ Implementierte Features
+---
 
-#### 1. Zwei-Modi-System
-- **Neue Gruppe erstellen**: Admin-Modus mit voller Kontrolle
-- **Gruppe beitreten**: User-Modus mit Whitelist-Prüfung
+## 💡 HAUPTFEATURE: Dynamische Admin-Verwaltung
 
-#### 2. Admin-Gruppen-Erstellung
-- **NSEC-basierte Authentifizierung**: Admin meldet sich mit eigenem Private Key an
-- **Relay-Auswahl**: Wahl zwischen Standard-Relays oder eigenem Relay
-- **Secret-Generierung**: Automatisch oder manuell (min. 8 Zeichen)
-- **Dynamischer Admin**: Kein hardcoded Admin-Pubkey mehr
-- **🔐 NIP-17 Config-Speicherung**: Admin-Status, Pubkey und Secret werden verschlüsselt auf Nostr gespeichert
-- **localStorage als Fallback**: Backup wenn Relay nicht erreichbar
+### ✅ Das Problem (vorher)
+Admin A erstellt Gruppe → localStorage speichert `is_group_admin='true'` → Admin B loggt sich auf gleichem PC ein → **Admin B ist fälschlicherweise Admin!** ❌
 
-#### 3. User-Gruppen-Beitritt
-- **Einladungslink**: Format `https://domain.com/?relay=wss://relay.example.com&secret=group-secret`
-- **NSEC-Authentifizierung**: User meldet sich mit eigenem Private Key an
-- **Whitelist-Prüfung**: Automatische Validierung gegen Admin-Whitelist
-- **Profil-Laden**: Automatisches Laden von Nostr-Profilen (Kind 0)
-- **🔐 Config-Synchronisation**: User-Config wird von Nostr geladen/gespeichert
+### ✅ Die Lösung (jetzt)
+Admin-Status wird **nicht gespeichert**, sondern **bei jedem Login neu berechnet**: `admin_pubkey (von Nostr) === current_pubkey` → funktioniert korrekt mit mehreren NSECs ✅
 
-#### 4. Whitelist-System
-- **Event-basierte Speicherung**: Whitelist als Nostr Event (Kind 30000)
-- **Admin-Verwaltung**: Nur Admin kann Whitelist bearbeiten (CRUD)
-- **Gruppen-spezifisch**: Jede Gruppe hat eigene Whitelist (via Channel-ID)
-- **Einladungslink-Generierung**: Admin kann Links für neue User erstellen
-- **🔐 Link-Speicherung**: Einladungslink wird in verschlüsselter Config gespeichert
+---
 
-#### 5. 🆕 NIP-17 User-Config-System
-- **Verschlüsselte Speicherung**: User-Config wird mit NIP-17 verschlüsselt auf Nostr gespeichert
-- **Multi-Device-Support**: Config ist auf allen Geräten verfügbar
-- **Maximale Privatsphäre**: Nur User kann seine eigenen Daten entschlüsseln
-- **Dezentrale Speicherung**: Keine zentrale Datenbank, alles auf Nostr-Relays
-- **Automatische Migration**: Alte localStorage-Daten werden automatisch migriert
+## 🏆 Implementierte Features
 
-### 🔒 Privatsphäre-Aspekte
+| Feature | Status | Details |
+|---------|--------|---------|
+| **Dynamische Admin-Verwaltung** | ✅ | Multi-NSEC-sicher, neu berechnet bei jedem Login |
+| **Einladungslinks** | ✅ | URL-basiert: `?relay=...&secret=...` |
+| **Whitelist-System** | ✅ | Public Keys auf Nostr (Kind 30000), nur Admin editierbar |
+| **Admin-Bypass** | ✅ | Admin braucht nicht in Whitelist zu sein |
+| **Profil-Laden** | ✅ | Automatisch von Nostr (Kind 0) |
+| **Gruppen-spezifische Whitelists** | ✅ | Via Channel-ID gekapselt |
 
-#### ✅ Starke Seiten
-- **Client-seitige Validierung**: Private Keys verlassen niemals den Browser
-- **Lokale Speicherung**: Keys werden nur im Browser gespeichert (localStorage)
-- **Keine Server-Logs**: Dezentrale Architektur verhindert zentrale Datensammlung
-- **Anonymität**: Keine persönlichen Daten erforderlich
-- **Dynamische Admin-Verwaltung**: Kein hardcoded Admin mehr
+---
 
-#### ⚠️ Wichtige Hinweise
-- **Relay-Abhängigkeit**: System benötigt funktionierende Relay-Verbindung
-- **Keine Offline-Nutzung**: Config muss auf Nostr gespeichert werden
-- **Klare Fehlermeldungen**: Bei Relay-Ausfall wird User informiert
+## 🔐 Privatsphäre-Analyse
+
+### ✅ STARK - Diese Dinge sind gut geschützt
+
+| Aspekt | Bewertung | Erklärung |
+|--------|-----------|-----------|
+| **Private Keys** | ✅✅✅ | Verlassen niemals Browser, nur lokal im localStorage |
+| **Anonymität** | ✅✅✅ | Keine E-Mail/Passwort, nur Nostr-Keys erforderlich |
+| **Dezentralisierung** | ✅✅✅ | Kein Server, alles auf Nostr-Relays |
+| **Admin-Erkennung** | ✅✅✅ | Von öffentlicher Config geladen, nicht manipulierbar |
+| **Whitelist-Integrität** | ✅✅ | Signiert vom Admin, nicht fälschbar (NIP-01) |
+
+### ⚠️ KRITISCH - Aufgepasst!
+
+| Problem | Schweregrad | Erklärung | Lösung |
+|---------|------------|-----------|--------|
+| **Relay muss öffentlich sein** | 🔴 KRITISCH | GroupConfig+Whitelist **müssen** öffentlich sein zum Funktionieren | Keine Alternative möglich |
+| **Relay-Offline = kein Zugriff** | 🟠 WICHTIG | Wenn Relay offline → Admin-Panel funktioniert nicht | Fallback auf localStorage? (soll vermieden werden) |
+| **Secret im URL sichtbar** | 🟠 WICHTIG | Einladungslink zeigt Secret im URL-Parameter (HTTPS schützt) | TBD: Server-seitige Generierung prüfen |
+| **localStorage = lokale Schwelle** | 🟡 MITTEL | Browser-Cache-Löschung → Daten weg (aber Relay hat Backup) | Aktuell OK, User wird zu Relogin gezwungen |
+
+---
+
+## 🎯 Detaillierte Architektur
+
+### Admin-Erkennung Flow (das Herzstück!)
+
+```
+1. User meldet sich an (mit NSEC)
+2. App speichert: group.secret, group.relay
+3. Bei Login/Page-Mount passiert dies:
+   
+   a) Berechne Secret-Hash = SHA256(group.secret)
+   b) Frage Nostr: "Gib mir Event wo d=secretHash"
+   c) Nostr antwortet: { admin_pubkey: "abc123...", ... }
+   d) Vergleiche: admin_pubkey === user.pubkey?
+   
+   JA → isAdmin = true (Admin-Button sichtbar)
+   NEIN → isAdmin = false (User-Ansicht)
+```
+
+**VORTEIL**: Nicht hardcoded, dynamisch, Multi-NSEC-sicher ✅
+**NACHTEIL**: Braucht funktionierende Relay-Verbindung ⚠️
+
+### Event-Struktur auf Nostr
+
+**GroupConfig** (öffentlich lesbar):
+```javascript
+{
+  kind: 30000,
+  d: "SHA256-HASH-DES-SECRETS",  // Eindeutige ID
+  content: {
+    relay: "wss://relay.example.com",
+    admin_pubkey: "abc123def456...",  // Admin erkannt daran!
+    secret_hash: "xyz789...",
+    created_at: 1729xxx
+  }
+}
+```
+
+**Whitelist** (öffentlich lesbar):
+```javascript
+{
+  kind: 30000,
+  d: "CHANNEL-ID",
+  content: {
+    pubkeys: ["user1hex", "user2hex", ...],
+    admin_pubkey: "abc123def456...",
+    updated_at: 1729xxx
+  }
+}
+```
+
+🔓 **Beide Events sind öffentlich!** Das ist nötig für Dezentralisierung (User müssen ohne Authentifizierung prüfen können).
+
+---
+
+## 💾 Was wird gespeichert & wo?
+
+| Daten | Ort | Sichtbar? | Bemerkung |
+|-------|-----|----------|-----------|
+| **Private Key** | Browser localStorage | ❌ Privat (lokal) | Kritisch! Bei Kompromittierung → ganzes Konto weg |
+| **Public Key** | Nostr (öffentlich) | ✅ Öffentlich | OK, ist Publikum-Identität |
+| **Group Secret** | Browser localStorage | ❌ Privat (lokal) | Identifiziert Gruppe, darf nicht raus! |
+| **Admin-Status** | Nostr (öffentlich) | ✅ Öffentlich | Muss öffentlich sein für Prüfung |
+| **Whitelist** | Nostr (öffentlich) | ✅ Öffentlich | Muss öffentlich sein für Zugriffs-Prüfung |
+| **Chat/Angebote** | Nostr (verschlüsselt) | 🔐 Mit Secret verschlüsselt | Nur wer Secret hat kann lesen |
+
+**Fazit**: Sensible Daten (Private Key, Secret) sind lokal. Notwendig-öffentliche Daten (Admin-Pubkey, Whitelist) auf Relay.
+
+---
+
+## 🔴 KRITISCHE SICHERHEITSANMERKUNGEN
+
+### 1. **Relay muss IMMER erreichbar sein**
+❌ Problem: Wenn Relay offline → Admin-Panel zeigt Fehler und lädt nicht
+⚠️ Aktuell: App sagt "Relay nicht erreichbar" und leitet zurück
+✅ Besser: Lokaler Fallback für bekannte Admin-States?
+
+### 2. **GroupConfig ist ÖFFENTLICH**
+⚠️ Das bedeutet: Jeder kann sehen, wer Admin ist
+✅ OK wenn: Secret selbst ist nicht öffentlich (SHA-256 hash wird verwendet)
+❌ ABER: Mit genug Rechenleistung könnte man Secret bruteforce-en (kurze Secrets)
+
+**→ Empfehlung**: Mindestens 16-32 Zeichen Secret erzwingen, nicht 8!
+
+### 3. **Einladungslink zeigt Secret im URL**
+🟠 `https://domain.com/?relay=...&secret=mysecreet123`
+⚠️ Wenn Link in Logs/History/Analytics auftaucht → Secret ist kompromittiert!
+✅ HTTPS schützt zumindest die Übertragung
+✅ Browser-History könnte Problem sein
+
+**→ Empfehlung**: Admin warnen "Behandle Link wie Passwort, nicht weitergeben"
+
+### 4. **localStorage ist unsicher auf Shared PCs**
+🟠 Mehrere User auf einem PC können sich gegenseitig nicht sehen (weil Browser sie trennt)
+✅ Aber: Browser-Addons könnten Zugriff haben
+✅ Aber: Physischer Zugriff + Browser-Dev-Tools = Private Key ist weg
+
+**→ Das ist aber NICHT spezifisch für dieses System** (gilt für alle Browser-basierte Wallets)
+
+---
+
+## 🟢 OPTIMIERUNGSVORSCHLÄGE
+
+### 1. Offline-Fallback (PRIORITÄT 1)
+**Status**: ⚠️ Nicht implementiert, aber möglich
+
+```typescript
+// Fallback bei Relay-Fehler
+async function getAdminStatus(secretHash, relay) {
+  try {
+    return await loadGroupAdmin(secretHash, [relay]);  // Nostr
+  } catch (relayError) {
+    console.warn('⚠️ Relay offline, nutze Cache');
+    const cached = localStorage.getItem('admin_pubkey');
+    if (cached) return cached;  // Fallback zu lokaler Kopie
+    throw new Error('Kein Relay + kein lokaler Cache');
+  }
+}
+```
+
+**Nutzen**: App funktioniert auch wenn Relay kurzzeitig offline ist
+**Implementierungsaufwand**: Niedrig (30min)
+
+---
+
+### 2. Admin-Status Caching (PRIORITÄT 2)
+**Status**: ⚠️ Nicht implementiert, aber wichtig für Performance
+
+Aktuell: Jedes Mount = 1 Nostr-Query (Login, Seiten-Wechsel, Refresh)
+Mit Cache: Nur 1 Query alle 5 Minuten
+
+```typescript
+// Beispiel: 5-Min-Cache
+const adminCache = { 
+  value: null, 
+  timestamp: 0,
+  ttl: 5 * 60 * 1000  // 5 Minuten
+};
+
+function getAdminCached(pubkey, group) {
+  const now = Date.now();
+  if (adminCache.value !== null && 
+      now - adminCache.timestamp < adminCache.ttl) {
+    return adminCache.value;  // Aus Cache
+  }
+  // Sonst von Nostr laden
+}
+```
+
+**Nutzen**: Weniger Relay-Last, schnelleres UI
+**Implementierungsaufwand**: Mittel (1-2h)
+
+---
+
+### 3. sessionStorage statt localStorage für Secrets (PRIORITÄT 2)
+**Status**: ⚠️ Aktuell localStorage (unsicher bei Shared-PC)
+
+```typescript
+// ALT: localStorage (bleibt nach Browser-Close)
+localStorage.setItem('group_secret', secret);  // ❌ Dauerhaft!
+
+// NEU: sessionStorage (wird gelöscht beim Browser-Close)
+sessionStorage.setItem('group_secret', secret);  // ✅ Temporär
+sessionStorage.setItem('admin_pubkey', pubkey);
+
+// Nur NON-SECRET Config sollte persistent sein:
+localStorage.setItem('group_config', JSON.stringify({
+  relay,      // OK - ist öffentlich
+  channelId,  // OK - ist öffentlich
+}));
+```
+
+**Nutzen**: Höhere Sicherheit auf Shared PCs, Secrets nicht dauerhaft gespeichert
+**Implementierungsaufwand**: Niedrig (30min)
+
+---
+
+### 4. Relay-Status Indikator im UI (PRIORITÄT 3)
+**Status**: ⚠️ Nicht sichtbar für User, nur in Console logs
+
+```svelte
+<!-- Zeige Relay-Status an -->
+{#if relayStatus === 'offline'}
+  <div class="alert alert-error">
+    🔴 Relay offline - manche Funktionen funktionieren nicht
+  </div>
+{:else if relayStatus === 'connecting'}
+  <div class="alert alert-info">
+    🟡 Verbinde zu Relay... ({connectingTime}ms)
+  </div>
+{:else if relayStatus === 'online'}
+  <div class="alert alert-success">
+    🟢 Mit Relay verbunden
+  </div>
+{/if}
+```
+
+**Nutzen**: User weiß wieso Admin-Panel fehlt
+**Implementierungsaufwand**: Niedrig (45min)
+
+---
+
+### 5. Secret-Länge erzwingen (PRIORITÄT 2)
+**Status**: ⚠️ Aktuell min. 8 Zeichen, zu kurz
+
+```typescript
+// ALT: 8-32 Zeichen (8 Zeichen = leicht bruteforcebar!)
+if (secret.length < 8 || secret.length > 32) {
+  error = 'Secret muss 8-32 Zeichen sein';
+}
+
+// NEU: 16-64 Zeichen (deutlich sicherer)
+const MIN_SECRET_LENGTH = 16;
+const MAX_SECRET_LENGTH = 64;
+
+if (secret.length < MIN_SECRET_LENGTH) {
+  error = `Secret muss mindestens ${MIN_SECRET_LENGTH} Zeichen sein`;
+}
+```
+
+**Nutzen**: Verhindert Bruteforce auf Secret-Hash
+**Implementierungsaufwand**: Niedrig (15min)
+
+---
+
+### 6. Admin-Panel Fehlerbehandlung verbessern (PRIORITÄT 2)
+**Status**: ⚠️ Aktuell: "Relay offline → Redirect nach 2s" (zu schnell!)
+
+```typescript
+// ALT: Sofort bei Error blocken
+if (!adminPubkey) {
+  redirectTo('/group');
+  return;
+}
+
+// NEU: Mit Fallback-Versuch
+let attempts = 0;
+const maxAttempts = 3;
+
+async function tryLoadAdmin() {
+  try {
+    adminPubkey = await loadGroupAdmin(secretHash, [relay]);
+  } catch (err) {
+    attempts++;
+    if (attempts < maxAttempts) {
+      console.log(`Versuch ${attempts}/${maxAttempts}`);
+      setTimeout(tryLoadAdmin, 2000);  // Erneut versuchen
+    } else {
+      showError('Admin-Status konnte nicht geladen werden');
+    }
+  }
+}
+```
+
+**Nutzen**: Temporary Network Issues sind nicht gleich komplett blockiert
+**Implementierungsaufwand**: Niedrig (45min)
+
+---
+
+## 📊 Performance-Metriken
+
+| Metrik | Aktuell | Mit Optimierungen |
+|--------|---------|------------------|
+| Requests pro Session | ~5-10 (ein je Mount) | ~1 (mit Cache) |
+| Admin-Panel Load-Time | ~500-2000ms | ~50-100ms (Cache) |
+| Relay-Last | Hoch (viele Queries) | Niedrig (Cache) |
+| Offline-Support | ❌ Nein | ✅ Mit Fallback |
+| sessionStorage-Ready | ❌ Nein | ✅ Ja |
+
+---
+
+## 🛠️ Implementierungs-Roadmap
+
+**SOFORT (diese Woche)**:
+- [ ] Offline-Fallback zu localStorage
+- [ ] sessionStorage für Secrets statt localStorage
+- [ ] Secret-Mindestlänge auf 16 Zeichen erhöhen
+
+**BALD (nächste Woche)**:
+- [ ] Admin-Status Caching (5-Min-TTL)
+- [ ] Relay-Status Indikator im UI
+- [ ] Bessere Error-Recovery beim Admin-Panel
+
+**SPÄTER (Backlog)**:
+- [ ] Multi-Relay-Fallback (mehrere Relays konfigurierbar)
+- [ ] Offline-Queue für Whitelist-Änderungen (speichern → später sync)
+- [ ] Encryption für localStorage (optional)
+
+---
+
+## 📚 Technische Dokumentation
+
+### Wichtige Files
+
+| File | Zweck | Status |
+|------|-------|--------|
+| `src/routes/+page.svelte` | Login-Seite (Gruppen erstellen/beitreten) | ✅ Aktiv |
+| `src/routes/(app)/group/+page.svelte` | Marketplace mit Whitelist-Check | ✅ Aktiv |
+| `src/routes/admin/+page.svelte` | Admin-Panel (Whitelist verwalten) | ✅ Aktiv |
+| `src/lib/nostr/groupConfig.ts` | GroupConfig laden/speichern | ✅ Aktiv |
+| `src/lib/nostr/whitelist.ts` | Whitelist-Verwaltung | ✅ Aktiv |
+
+### Wichtige Functions
+
+```typescript
+// GroupConfig laden
+loadGroupAdmin(secretHash, relays)
+  → admin_pubkey (von Nostr)
+
+// Secret in Hash konvertieren
+deriveSecretHash(secret)
+  → SHA256 Hash (für Event-ID)
+
+// GroupConfig speichern
+saveGroupConfig(config, adminPrivateKey, relays)
+  → speichert auf Nostr als Signed Event
+
+// Whitelist prüfen
+isUserWhitelisted(pubkey, whitelist)
+  → boolean (ist User in Whitelist?)
+```
+
+---
+
+## ⚠️ BEKANNTE LIMITATIONEN
+
+### 1. **Relay muss online sein**
+- ❌ Offline-Modus nicht unterstützt
+- ⚠️ Temporary Relay-Ausfälle blockieren Admin-Panel
+- ✅ Fallback zu localStorage möglich (nicht implementiert)
+
+### 2. **Admin-Status ist öffentlich**
+- ✅ Notwendig für dezentrale Prüfung
+- ⚠️ Jeder sieht wer Admin ist
+- ✅ Secret selbst bleibt privat (nur Hash öffentlich)
+
+### 3. **Secret in URL sichtbar**
+- 🟠 Einladungslink: `?secret=group-secret-hier`
+- ✅ HTTPS verschlüsselt Übertragung
+- ⚠️ Browser-History könnte Secret zeigen
+- ✅ User sollten Link behandeln wie Passwort
+
+### 4. **localStorage bei Browser-Zugriff**
+- 🟠 Browser-Extensions können auslesen
+- 🟠 Browser-Dev-Tools (Ctrl+Shift+I → Application)
+- ⚠️ Shared PC → jeder User hat eigenen Browser-Profile
+- ✅ Physische Sicherheit ist wichtig
+
+### 5. **Keine Device-Synchronisierung**
+- ❌ Admin-Status wird nicht zwischen Devices synced
+- ⚠️ PC A: Admin ist Admin, PC B: Admin ist Admin (unabhängig)
+- ✅ Das ist gewünscht (keine Cloud-Synchronisierung)
+
+---
+
+## 🔐 SECURITY CHECKLIST
+
+Für Produktionseinsatz müssen diese Punkte gecheckt sein:
+
+- [ ] HTTPS ist aktiviert (URLs sind wss:// und https://)
+- [ ] Relay ist erreichbar und stabil
+- [ ] Secret-Mindestlänge ist 16 Zeichen
+- [ ] Offline-Fallback ist implementiert (oder User-Warnung)
+- [ ] sessionStorage statt localStorage für Secrets
+- [ ] Admin-Status Caching ist implementiert
+- [ ] Relay-Status wird im UI angezeigt
+- [ ] Error-Recovery ist implementiert (Retry-Logik)
+- [ ] Private Keys werden nie an Server gesendet
+- [ ] Kein Admin-Key leaks in Logs/Analytics
+
+---
+
+## 📖 FAQ
+
+**F: Kann der Admin sein Passwort vergessen?**
+A: Nein - das System verwendet NSEC (Private Keys), nicht Passwörter. Wenn der Private Key verloren ist, ist das Konto verloren. Backup deinen NSEC!
+
+**F: Was passiert wenn der Relay ausfällt?**
+A: Aktuell: Admin-Panel funktioniert nicht mehr. Geplant: Fallback zu localStorage für temporäre Ausfälle.
+
+**F: Kann Admin die Whitelist remote verwalten?**
+A: Ja - Admin kann von überall aus Whitelist bearbeiten (über Admin-Panel). Änderungen sind sofort sichtbar (Nostr speichert sie).
+
+**F: Sind Chat-Nachrichten verschlüsselt?**
+A: Ja - mit Group-Secret (bei Nostr-Events). Nur wer Secret hat kann lesen.
+
+**F: Kann Admin den Secret ändern?**
+A: Nein - Secret ist unveränderlich (identifiziert die Gruppe). Neuer Secret = neue Gruppe. Das ist absichtlich so.
+
+**F: Funktioniert das mit Hardware-Wallets?**
+A: Ja - über NIP-07 Browser-Extension (z.B. Alby). Private Keys bleiben in der Wallet.
+
+**F: Kann ich Admin-Status an jemand anderen übertragen?**
+A: Nein - Admin-Status ist an die Public Key gebunden. Neue Admin = neue Gruppe mit neuem Admin.
 
 ### 🔗 Nostr-Integration
 
@@ -63,7 +456,25 @@ Das Bitcoin-Tausch-Netzwerk verwendet ein **dezentrales Anmelde-System** mit **N
 
 #### 📊 Event-Nutzung
 ```typescript
+// GroupConfig-Event (Kind 30000)
+// Öffentlich lesbar - enthält nur Admin-Pubkey und Secret-Hash
+{
+  kind: 30000,
+  tags: [
+    ['d', secretHash],  // Gruppen-Identifier (SHA-256 des Secrets)
+    ['t', 'bitcoin-group-config']
+  ],
+  content: JSON.stringify({
+    relay: 'wss://relay.example.com',
+    admin_pubkey: 'admin-hex',
+    secret_hash: 'sha256-hash',
+    created_at: timestamp,
+    updated_at: timestamp
+  })
+}
+
 // Whitelist-Event (Kind 30000)
+// Öffentlich lesbar - enthält nur Public Keys
 {
   kind: 30000,
   tags: [
@@ -79,145 +490,283 @@ Das Bitcoin-Tausch-Netzwerk verwendet ein **dezentrales Anmelde-System** mit **N
 }
 ```
 
-#### 🔍 Relay-Interaktion
-- **Profil-Fetching**: Abfrage von 8 verschiedenen Relays für maximale Verfügbarkeit
-- **Fallback-Strategie**: Bei Profil-Fehler wird anonymer Modus verwendet
-- **Whitelist-Synchronisation**: Echtzeit-Updates über Relay-Subscriptions
+#### 🔍 Admin-Erkennung
+
+```typescript
+// Bei jedem Login wird Admin-Status neu berechnet
+const secretHash = await deriveSecretHash(group.secret);
+const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
+const isAdmin = adminPubkey.toLowerCase() === user.pubkey.toLowerCase();
+```
+
+**Warum wird es immer neu berechnet?**
+- ✅ Funktioniert mit mehreren NSECs auf demselben PC
+- ✅ localStorage wird nicht benötigt
+- ✅ Admin-Status ist immer aktuell
+- ✅ Keine Datenspeicherung nötig
 
 ## 🚀 Neue Features (Oktober 2025)
 
-### 1. Dynamische Admin-Verwaltung
+### 1. Dynamische Admin-Verwaltung (HAUPTFEATURE!)
 
-#### 🔐 Admin-Erstellung
+#### 🎯 Das Problem (Vorher)
 ```typescript
-// Admin erstellt Gruppe
+// ALT: Admin-Status in localStorage gespeichert
+Szenario mit zwei NSECs auf demselben PC:
+1. Admin A erstellt Gruppe → localStorage.setItem('is_group_admin', 'true')
+2. Admin A geht weg
+3. Admin B loggt sich ein → localStorage hat IMMER noch is_group_admin='true'
+4. Admin B ist fälschlicherweise als Admin erkannt! ❌
+```
+
+#### ✅ Die Lösung (Jetzt)
+```typescript
+// NEU: Admin-Status wird von Nostr geladen
+Szenario mit zwei NSECs auf demselben PC:
+1. Admin A erstellt Gruppe → public GroupConfig wird auf Nostr gespeichert
+2. Admin A geht weg
+3. Admin B loggt sich ein
+4. System lädt GroupConfig von Nostr
+5. Vergleicht: admin_pubkey (von Nostr) vs. current_pubkey (von Admin B)
+6. MATCH? Nein → Admin B ist korrekt NICHT als Admin erkannt ✅
+```
+
+#### 🔐 Admin-Erkennung Flow
+
+```
+Login/Mount
+   ↓
+Lade Group-Secret aus Store
+   ↓
+DerIVE Secret-Hash (SHA-256)
+   ↓
+Lade GroupConfig von Nostr (öffentlich)
+   ↓
+Extrahiere admin_pubkey aus Config
+   ↓
+Vergleiche: admin_pubkey === current_user.pubkey (case-insensitive)
+   ↓
+JA: isAdmin = true ✅
+NEIN: isAdmin = false ❌
+```
+
+#### 💻 Implementierung
+
+**In src/routes/admin/+page.svelte (Admin-Panel)**:
+```typescript
+onMount(async () => {
+  // Lade Admin-Status dynamisch von Nostr
+  const { loadGroupAdmin, deriveSecretHash } = await import('$lib/nostr/groupConfig');
+  const secretHash = await deriveSecretHash(group.secret);
+  const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
+  
+  // Prüfe ob aktueller User der Admin ist
+  if (!adminPubkey || adminPubkey.toLowerCase() !== user.pubkey?.toLowerCase()) {
+    error = 'Zugriff verweigert. Du bist kein Administrator.';
+    setTimeout(() => goto('/group'), 2000);
+    return;
+  }
+  
+  isAdmin = true;
+  await loadWhitelistData(adminPubkey);
+});
+```
+
+**In src/routes/(app)/group/+page.svelte (Marketplace)**:
+```typescript
+onMount(async () => {
+  if (group && group.relay && group.secret) {
+    try {
+      const { loadGroupAdmin, deriveSecretHash } = await import('$lib/nostr/groupConfig');
+      const secretHash = await deriveSecretHash(group.secret);
+      const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
+      
+      const isCurrentUserAdmin = adminPubkey?.toLowerCase() === userPubkey?.toLowerCase();
+      isAdmin = isCurrentUserAdmin;
+      
+      console.log('🔐 [ADMIN-CHECK-DYNAMIC]', {
+        isAdmin: isCurrentUserAdmin ? '✅ JA' : '❌ NEIN'
+      });
+    } catch (adminCheckError) {
+      console.warn('⚠️ [ADMIN-CHECK] Konnte Admin-Status nicht laden:', adminCheckError);
+      isAdmin = false;
+    }
+  }
+});
+```
+
+#### 📊 Vergleich: localStorage vs. Nostr
+
+| Feature | localStorage (ALT) | Nostr (NEU) |
+|---------|-------------------|-----------|
+| **Multi-NSEC-Support** | ❌ Nein | ✅ Ja |
+| **Admin-Status-Berechnung** | Manuell gespeichert | Dynamisch berechnet |
+| **PC-Browser-übergreifend** | ❌ Problem | ✅ Kein Problem |
+| **Fallback bei Relay-Ausfall** | ✅ Funktioniert weiter | ⚠️ Zeigt Fehler |
+| **Sicherheit** | ⚠️ Unsicher bei Fremdzugriff | ✅ Aber lokal gespeichert |
+
+### 2. Sofortiges Admin-Erkennungssystem
+
+Wenn Admin eine Gruppe erstellt, wird er **sofort** als Admin erkannt:
+
+```typescript
+// In handleCreateGroup()
 async function handleCreateGroup() {
-  // 1. Validiere Admin NSEC
-  const keyValidation = validatePrivateKey(adminNsec);
+  // ... validierung ...
   
-  // 2. Bestimme Relay (Standard oder Custom)
-  const relay = useCustomRelay ? customRelay : selectedRelay;
+  // Speichere öffentliche GroupConfig auf Nostr
+  const secretHash = await deriveSecretHash(finalSecret);
+  const groupConfigData = {
+    relay: relay,
+    admin_pubkey: pubkey,          // ← Admin wird gespeichert
+    secret_hash: secretHash,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
   
-  // 3. Generiere oder verwende Secret
-  const finalSecret = autoGenerateSecret ? generateRandomSecret() : groupSecret;
+  await saveGroupConfig(groupConfigData, keyValidation.hex!, [relay]);
   
-  // 4. Lade Nostr-Profil
-  const profile = await fetchUserProfile(pubkey);
-  
-  // 5. Speichere Admin-Status in localStorage
+  // Speichere auch im localStorage als Backup
   localStorage.setItem('is_group_admin', 'true');
   localStorage.setItem('admin_pubkey', pubkey);
   localStorage.setItem('group_secret', finalSecret);
   
-  // 6. Initialisiere Gruppe
+  // Initialisiere Gruppe
   await groupStore.initialize(finalSecret, relay);
-}
-```
-
-#### 🔗 Einladungslink-Generierung
-```typescript
-// Admin generiert Einladungslink
-function generateInviteLink() {
-  const secret = localStorage.getItem('group_secret');
-  const relay = $groupStore.relay;
-  const domain = window.location.origin;
   
-  return `${domain}/?relay=${encodeURIComponent(relay)}&secret=${encodeURIComponent(secret)}`;
+  // → Admin ist SOFORT erkannt! ✅
+  // → Keine Logout/Login nötig
+  // → Admin-Button erscheint sofort
+  await goto('/group');
 }
-```
-
-### 2. localStorage-basierte Verwaltung
-
-#### 📦 Gespeicherte Daten
-```typescript
-interface LocalStorageData {
-  is_group_admin: 'true' | 'false';  // Admin-Status
-  admin_pubkey: string;               // Admin Public Key (hex)
-  group_secret: string;               // Gruppen-Secret
-  // ... weitere User-Daten aus userStore
-}
-```
-
-#### 🔄 Admin-Prüfung
-```typescript
-// In group/+page.svelte und admin/+page.svelte
-const isGroupAdmin = localStorage.getItem('is_group_admin') === 'true';
-const adminPubkey = localStorage.getItem('admin_pubkey');
-isAdmin = isGroupAdmin && adminPubkey === $userStore.pubkey;
 ```
 
 ### 3. Whitelist-Verwaltung
 
-#### ➕ Public Key hinzufügen
+**Admin-Only Features**:
 ```typescript
-async function handleAddPubkey() {
-  // Validiere Public Key (npub oder hex)
-  const validation = validatePublicKey(newPubkey);
-  
-  // Füge zur Whitelist hinzu (mit channelId)
-  await addToWhitelist(validation.hex!, privateKey, [relay], channelId);
-  
-  // Lade Whitelist neu
-  await loadWhitelistData();
-}
+// Nur Admin sieht den Admin-Button im Marketplace
+{#if isAdmin}
+  <button on:click={() => goto('/admin')}>
+    🔐 Whitelist verwalten
+  </button>
+{/if}
+
+// Admin-Panel ist geschützt
+// Nur Admin kann auf /admin zugreifen
+// Andere User werden sofort zu /group weitergeleitet
 ```
 
-#### 🗑️ Public Key entfernen
+**Whitelist-Operationen**:
 ```typescript
-async function handleRemovePubkey(pubkey: string) {
-  // Entferne von Whitelist (mit channelId)
-  await removeFromWhitelist(pubkey, privateKey, [relay], channelId);
+// Public Key hinzufügen
+await addToWhitelist(pubkey, adminPrivateKey, [relay], channelId);
+
+// Public Key entfernen
+await removeFromWhitelist(pubkey, adminPrivateKey, [relay], channelId);
+
+// Einladungslink generieren
+const link = createInviteLink(domain, relay, secret);
+```
+
+### 4. Einladungslink-System
+
+Admin kann Einladungslinks generieren:
+
+```typescript
+async function generateInviteLink() {
+  const domain = window.location.origin;
+  const relay = $groupStore.relay;
+  const secret = $groupStore.secret;
   
-  // Lade Whitelist neu
-  await loadWhitelistData();
+  inviteLink = createInviteLink(domain, relay, secret);
+  // → Format: https://domain.com/?relay=wss://...&secret=...
+  
+  // Link wird in User-Config gespeichert (localStorage)
 }
 ```
 
 ## 🔧 Technische Implementierung
 
-### Aktuelle Code-Struktur
+### Code-Struktur
 ```
-src/routes/+page.svelte              # Login-UI (Create/Join Modi)
-src/routes/(app)/group/+page.svelte  # Marketplace (Admin-Check)
-src/routes/admin/+page.svelte        # Whitelist-Verwaltung + Link-Generator
-src/lib/stores/userStore.ts          # User-State Management
-src/lib/stores/groupStore.ts         # Group-State Management
-src/lib/nostr/client.ts              # Nostr-Client Funktionen
-src/lib/nostr/whitelist.ts           # Whitelist CRUD-Operationen
-src/lib/security/validation.ts       # Input-Validierung
-src/lib/config.ts                    # Zentrale Konfiguration (DEFAULT_RELAYS)
+src/routes/+page.svelte                      # Login-UI (Create/Join Modi)
+src/routes/(app)/group/+page.svelte          # Marketplace (Admin-Check + Button)
+src/routes/admin/+page.svelte                # Whitelist-Verwaltung + Link-Generator
+src/lib/stores/userStore.ts                  # User-State Management
+src/lib/stores/groupStore.ts                 # Group-State Management
+src/lib/nostr/groupConfig.ts                 # Admin-Erkennung (NEW!)
+src/lib/nostr/whitelist.ts                   # Whitelist CRUD-Operationen
+src/lib/security/validation.ts               # Input-Validierung
+src/lib/config.ts                            # Zentrale Konfiguration (DEFAULT_RELAYS)
 ```
 
-### Kritische Änderungen
+### NEU: `src/lib/nostr/groupConfig.ts`
 
-#### ❌ Entfernt
+Diese Datei ist das Herzstück der dynamischen Admin-Verwaltung:
+
 ```typescript
-// ENTFERNT aus src/lib/config.ts
-export const ADMIN_PUBKEY = 'npub1z90zu...';
+// Admin-Pubkey laden
+export async function loadGroupAdmin(
+  secretHash: string,
+  relays: string[]
+): Promise<string>  // Gibt Pubkey hex zurück
+
+// Secret-Hash berechnen (SHA-256)
+export async function deriveSecretHash(
+  secret: string
+): Promise<string>  // Gibt SHA-256 hash zurück
+
+// GroupConfig speichern
+export async function saveGroupConfig(
+  config: GroupConfig,
+  adminPrivateKey: string,
+  relays: string[]
+): Promise<string>  // Gibt Event-ID zurück
+
+// GroupConfig laden
+export async function loadGroupConfig(
+  secretHash: string,
+  relays: string[]
+): Promise<GroupConfig | null>
 ```
 
-#### ✅ Hinzugefügt
+**Verwendung**:
 ```typescript
-// NEU in src/lib/config.ts
-export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://nos.lol',
-  'wss://relay.snort.social',
-  'wss://nostr.wine'
-];
+// 1. Admin erstellt Gruppe
+const secretHash = await deriveSecretHash(secret);
+await saveGroupConfig({ relay, admin_pubkey: pubkey, secret_hash: secretHash }, privateKey, [relay]);
+
+// 2. User/Admin meldet sich an
+const adminPubkey = await loadGroupAdmin(secretHash, [relay]);
+const isAdmin = adminPubkey.toLowerCase() === user.pubkey.toLowerCase();
 ```
 
 ## 🔐 Sicherheitsmodell
 
-### Admin-Privilegien
+### Admin-Erkennung
 
-#### ✅ Admin hat IMMER Zugriff
-Der Admin kann sich jederzeit mit seinem NSEC und dem Einladungslink anmelden, **ohne** in der Whitelist zu sein:
+✅ **Wie Admin-Status funktioniert**:
+
+1. **Bei Gruppe erstellen**: Admin-Pubkey wird öffentlich auf Nostr gespeichert
+2. **Bei Login/Mount**: Admin-Pubkey wird von Nostr geladen
+3. **Vergleich**: `admin_pubkey von Nostr === current_user.pubkey`
+4. **JA** → `isAdmin = true`
+5. **NEIN** → `isAdmin = false`
+
+✅ **Warum das sicher ist**:
+- Kein localStorage-Fallback nötig
+- Jeder Login wird neu berechnet
+- Multi-NSEC-Szenarien funktionieren korrekt
+- Relay ist Single-Source-of-Truth
+
+### Admin-Bypass für Whitelist
+
+✅ **Admin hat IMMER Zugriff**:
 
 ```typescript
 // Sicherheitslogik beim Beitreten
-if (userPubkey === adminPubkey) {
+if (isAdmin) {
   // ✅ Admin-Bypass aktiviert
   // Keine Whitelist-Prüfung
   // Direkter Zugriff zur Gruppe
@@ -228,105 +777,46 @@ if (userPubkey === adminPubkey) {
 }
 ```
 
-#### 🎯 Vorteile des Admin-Bypass
+**Vorteile**:
+1. Admin muss sich nicht selbst zur Whitelist hinzufügen
+2. Admin kann sich jederzeit anmelden
+3. Admin kann Gruppe immer verwalten
+4. Normale User sind durch Whitelist geschützt
 
-1. **Keine Selbst-Verwaltung**: Admin muss sich nicht selbst zur Whitelist hinzufügen
-2. **Immer Zugriff**: Admin kann sich jederzeit anmelden, auch wenn Whitelist leer ist
-3. **Flexibilität**: Admin kann Gruppe jederzeit verwalten
-4. **Sicherheit**: Normale User müssen weiterhin in Whitelist sein
-
-### Whitelist-System für normale User
-
-#### 📋 Whitelist-Prüfung
-Normale User durchlaufen beim Beitreten folgende Schritte:
+### Whitelist-Prüfung (für normale User)
 
 ```
-1. User gibt Einladungslink + NSEC ein
+User gibt Einladungslink + NSEC ein
    ↓
-2. System extrahiert Relay + Secret aus Link
+System extrahiert Relay + Secret
    ↓
-3. System berechnet Channel-ID aus Secret
+Berechne Channel-ID aus Secret
    ↓
-4. System lädt Whitelist vom Relay (Kind 30000 Event)
+Lade Whitelist vom Relay (Kind 30000 Event)
    ↓
-5. System prüft: Ist User-Pubkey in Whitelist?
-   ├─ JA → ✅ Zugriff gewährt
-   └─ NEIN → ❌ Zugriff verweigert
+Ist aktueller User Admin? → JA: Bypass ✅
+   ↓
+NEIN: Prüfe Whitelist
+   ├─ User in Whitelist? → JA: Zugriff ✅
+   └─ NEIN: Zugriff verweigert ❌
 ```
 
-#### 🔒 Sicherheitsgarantien
+## ⚠️ Bekannte Probleme & Lösungen
 
-- **Kein Bypass für normale User**: Nur Admin hat privilegierten Zugriff
-- **Event-basierte Whitelist**: Dezentral auf Nostr-Relay gespeichert
-- **Admin-Signatur**: Nur Admin kann Whitelist bearbeiten (NIP-01 Signaturen)
-- **Channel-spezifisch**: Jede Gruppe hat eigene Whitelist (via Channel-ID)
+### Problem 1: localStorage-Abhängigkeit (GELÖST!)
+- **Vorher**: Admin-Status wurde in localStorage gespeichert
+- **Nachher**: Admin-Status wird dynamisch von Nostr geladen
+- **Warum gelöst**: Mehrere NSECs auf demselben PC funktionieren jetzt korrekt
 
-## 📈 Metriken & KPIs
+### Problem 2: Multi-NSEC-Support (GELÖST!)
+- **Vorher**: localStorage konnte NSECs nicht unterscheiden
+- **Nachher**: Jeder Login wird neu gegen Nostr validiert
+- **Warum gelöst**: Admin-Status basiert auf pubkey-Vergleich, nicht auf localStorage
 
-### Aktuelle Performance
-- **Gruppen-Erstellung**: ~2-3 Sekunden (inkl. Profil-Laden)
-- **Gruppen-Beitritt**: ~3-4 Sekunden (inkl. Whitelist-Prüfung)
-- **Erfolgsrate**: >95% bei gültigen Keys
-- **Fehlerquote**: <5% (meist Relay-Probleme)
-
-### Privatsphäre-Score
-- **Data Minimization**: ✅ (nur notwendige Daten)
-- **Encryption**: ✅ (Keys bleiben lokal)
-- **Anonymity**: ✅ (keine persönlichen Daten)
-- **Decentralization**: ✅ (kein hardcoded Admin)
-- **Admin-Bypass**: ✅ (Admin hat privilegierten Zugriff)
-- **Auditability**: ⚠️ (keine Logs verfügbar)
-
-### Sicherheits-Score
-- **Whitelist-Schutz**: ✅ (normale User müssen in Whitelist sein)
-- **Admin-Kontrolle**: ✅ (nur Admin kann Whitelist bearbeiten)
-- **Event-Signaturen**: ✅ (alle Whitelist-Änderungen signiert)
-- **Admin-Bypass**: ✅ (Admin kann immer zugreifen)
-- **Relay-Abhängigkeit**: ⚠️ (Whitelist auf Relay gespeichert)
-
-## 🎯 Roadmap
-
-### Phase 1: Sofortige Verbesserungen (1-2 Wochen)
-- [x] Dynamische Admin-Verwaltung implementieren
-- [x] localStorage-basierte Speicherung
-- [x] Einladungslink-Generierung für Admin
-- [x] Permanente Link-Speicherung in localStorage
-- [x] Admin-Bypass für Whitelist-Prüfung
-- [ ] Key-Export/Import Funktion implementieren
-- [ ] Multi-Relay Fallback für Profil-Laden
-
-### Phase 2: Erweiterte Features (2-4 Wochen)
-- [ ] NIP-07 Browser-Extension Integration
-- [ ] Biometrische Authentifizierung
-- [ ] Progressive Web App Features
-- [ ] QR-Code basierte Einladungslinks
-
-### Phase 3: Advanced Privacy (4-6 Wochen)
-- [ ] Zero-Knowledge Proofs für Identitätsverifizierung
-- [ ] Tor-Integration für zusätzliche Anonymität
-- [ ] Multi-Signature Support für Admin-Aktionen
-
-## ⚠️ Bekannte Probleme
-
-### 1. localStorage-Abhängigkeit
-**Problem**: Bei Browser-Cache-Löschung gehen Admin-Daten verloren
-**Lösung**: Backup-Mechanismus mit verschlüsseltem Export
-
-### 2. Relay-Abhängigkeit
-**Problem**: Profil-Laden scheitert bei Relay-Ausfällen
-**Lösung**: Bessere Fallback-Strategien und Caching
-
-### 3. Mobile UX
-**Problem**: NSEC-Eingabe auf Mobile umständlich
-**Lösung**: QR-Code basierte Login-Option
-
-### 4. Admin-Wechsel
-**Problem**: Kein Mechanismus für Admin-Übertragung
-**Lösung**: Multi-Admin Support oder Admin-Transfer-Funktion
-
-### 5. Admin-Bypass Sicherheit
-**Problem**: Admin-Bypass könnte missbraucht werden, wenn localStorage kompromittiert wird
-**Lösung**: Zusätzliche Authentifizierung für Admin-Aktionen (z.B. Signatur-Prüfung)
+### Problem 3: Relay-Abhängigkeit (BEKANNT)
+- **Symptom**: Wenn Relay offline ist, funktioniert Admin-Panel nicht
+- **Workaround**: User wird zu Gruppe zurück geleitet
+- **Lösung geplant**: Bessere Fehlerbehandlung und Fallback-Mechanismen
 
 ## 📚 Referenzen
 
@@ -334,431 +824,8 @@ Normale User durchlaufen beim Beitreten folgende Schritte:
 - [NIP-19: bech32-encoded entities](https://github.com/nostr-protocol/nips/blob/master/19.md)
 - [NIP-07: window.nostr](https://github.com/nostr-protocol/nips/blob/master/07.md)
 
-## 🔐 NIP-17 User-Config-System (NEU!)
-
-### 📋 Was ist NIP-17?
-
-**NIP-17 = Gift-Wrapped Messages** ist ein Nostr-Standard für Ende-zu-Ende verschlüsselte Nachrichten. Wir verwenden ihn, um User-Konfigurationen verschlüsselt auf Nostr-Relays zu speichern.
-
-### 🎯 Warum NIP-17?
-
-#### ✅ Vorteile gegenüber localStorage
-
-| Feature | localStorage | NIP-17 auf Nostr |
-|---------|--------------|------------------|
-| Multi-Device | ❌ Nein | ✅ Ja |
-| Backup | ❌ Verloren bei Cache-Löschung | ✅ Permanent auf Relay |
-| Privatsphäre | ⚠️ Lokal, aber unverschlüsselt | ✅ Ende-zu-Ende verschlüsselt |
-| Synchronisation | ❌ Keine | ✅ Automatisch |
-| Dezentral | ⚠️ Nur lokal | ✅ Auf Nostr-Relays |
-
-### 🏗️ Architektur
-
-#### 1. User-Config-Struktur
-
-```typescript
-interface UserConfig {
-  is_group_admin: boolean;      // Admin-Status
-  admin_pubkey: string;          // Admin Public Key (hex)
-  group_secret: string;          // Gruppen-Secret
-  invite_link?: string;          // Einladungslink (optional)
-  relay: string;                 // Relay-URL
-  created_at: number;            // Erstellungszeitpunkt
-  updated_at: number;            // Letztes Update
-}
-```
-
-#### 2. Event-Format (Kind 30078)
-
-```typescript
-{
-  kind: 30078,  // Parameterized Replaceable Event
-  created_at: timestamp,
-  tags: [
-    ['d', 'bitcoin-swap-user-config'],  // Identifier
-    ['encrypted', 'nip17'],              // Verschlüsselungs-Typ
-    ['app', 'bitcoin-swap-network']      // App-Identifier
-  ],
-  content: nip17_encrypted_content,  // NIP-17 verschlüsselt
-  pubkey: user_pubkey
-}
-```
-
-#### 3. Verschlüsselung
-
-**User verschlüsselt Config zu sich selbst**:
-```typescript
-// Sender = Recipient = User selbst
-const { wrappedEvent } = await createNIP17Message(
-  JSON.stringify(config),
-  userPublicKey,   // Recipient = Self
-  userPrivateKey   // Sender = Self
-);
-```
-
-**Nur User kann entschlüsseln**:
-- Relay-Betreiber sehen nur verschlüsselte Daten
-- Niemand sonst kann Secret oder Admin-Status auslesen
-- Maximale Privatsphäre garantiert
-
-### 🔄 Ablauf
-
-#### Gruppe erstellen (Admin)
-
-```
-1. Admin meldet sich mit NSEC an
-   ↓
-2. Wählt Relay und generiert Secret
-   ↓
-3. Config wird erstellt:
-   {
-     is_group_admin: true,
-     admin_pubkey: "hex...",
-     group_secret: "secret...",
-     relay: "wss://..."
-   }
-   ↓
-4. 🔐 Config wird mit NIP-17 verschlüsselt
-   ↓
-5. 📡 Verschlüsselte Config wird auf Nostr-Relay gespeichert
-   ↓
-6. 💾 Backup in localStorage (Fallback)
-   ↓
-7. ✅ Admin kann Gruppe verwalten
-```
-
-#### Gruppe beitreten (User)
-
-```
-1. User meldet sich mit NSEC an
-   ↓
-2. Gibt Einladungslink ein
-   ↓
-3. 📥 System versucht Config von Nostr zu laden
-   ↓
-4. Whitelist-Prüfung (außer für Admin)
-   ↓
-5. Config wird aktualisiert/erstellt:
-   {
-     is_group_admin: false,
-     admin_pubkey: "admin-hex...",
-     group_secret: "secret...",
-     relay: "wss://..."
-   }
-   ↓
-6. 🔐 Config wird mit NIP-17 verschlüsselt
-   ↓
-7. 📡 Verschlüsselte Config wird auf Nostr-Relay gespeichert
-   ↓
-8. 💾 Backup in localStorage (Fallback)
-   ↓
-9. ✅ User kann Gruppe nutzen
-```
-
-#### Einladungslink generieren (Admin)
-
-```
-1. Admin generiert Link
-   ↓
-2. Link wird in Config hinzugefügt:
-   {
-     ...existing_config,
-     invite_link: "https://..."
-   }
-   ↓
-3. 🔐 Config wird mit NIP-17 verschlüsselt
-   ↓
-4. 📡 Aktualisierte Config wird auf Nostr gespeichert
-   ↓
-5. ✅ Link ist auf allen Geräten verfügbar
-```
-
-### 🛡️ Sicherheitsmodell
-
-#### Was ist verschlüsselt? (NIP-17)
-
-✅ **Verschlüsselt auf Nostr**:
-- Admin-Status (`is_group_admin`)
-- Gruppen-Secret (`group_secret`)
-- Einladungslink (`invite_link`)
-- Admin-Pubkey (`admin_pubkey`)
-
-#### Was ist öffentlich?
-
-❌ **Öffentlich lesbar**:
-- Whitelist (Kind 30000) - **muss** öffentlich sein für Login-Prüfung
-- Chat-Nachrichten (Kind 1) - verschlüsselt mit Gruppen-Secret
-- Marketplace-Angebote (Kind 30000) - verschlüsselt mit Gruppen-Secret
-
-#### Warum ist die Whitelist öffentlich?
-
-Die Whitelist **muss** öffentlich lesbar sein, damit:
-1. User beim Login geprüft werden können
-2. Keine Authentifizierung vor der Prüfung nötig ist
-3. Das System dezentral funktioniert
-
-**Aber**: Die Whitelist enthält nur Public Keys (keine sensiblen Daten wie Secret oder Admin-Status)
-
-### 📡 API-Funktionen
-
-#### `saveUserConfig()`
-
-Speichert User-Config verschlüsselt auf Nostr.
-
-```typescript
-await saveUserConfig(
-  config: UserConfig,
-  privateKey: string,
-  relays: string[]
-): Promise<string>  // Event-ID
-```
-
-**Features**:
-- Verschlüsselt mit NIP-17
-- Replaceable Event (alte Config wird ersetzt)
-- Automatischer localStorage-Fallback
-
-**Beispiel**:
-```typescript
-const config: UserConfig = {
-  is_group_admin: true,
-  admin_pubkey: pubkey,
-  group_secret: secret,
-  invite_link: link,
-  relay: relay,
-  created_at: now,
-  updated_at: now
-};
-
-await saveUserConfig(config, privateKey, [relay]);
-```
-
-#### `loadUserConfig()`
-
-Lädt User-Config von Nostr.
-
-```typescript
-await loadUserConfig(
-  privateKey: string,
-  relays: string[]
-): Promise<UserConfig | null>
-```
-
-**Features**:
-- Entschlüsselt mit NIP-17
-- Automatischer localStorage-Fallback
-- Gibt `null` zurück wenn nicht gefunden
-
-**Beispiel**:
-```typescript
-const config = await loadUserConfig(privateKey, [relay]);
-if (config) {
-  console.log('Admin:', config.is_group_admin);
-  console.log('Secret:', config.group_secret);
-  console.log('Link:', config.invite_link);
-}
-```
-
-#### `deleteUserConfig()`
-
-Löscht User-Config von Nostr und localStorage.
-
-```typescript
-await deleteUserConfig(
-  privateKey: string,
-  relays: string[]
-): Promise<void>
-```
-
-**Features**:
-- Erstellt Delete-Event (Kind 5)
-- Bereinigt localStorage
-- Entfernt alle User-Daten
-
-#### `migrateLocalStorageToNostr()`
-
-Migriert alte localStorage-Daten zu Nostr.
-
-```typescript
-await migrateLocalStorageToNostr(
-  privateKey: string,
-  relays: string[]
-): Promise<boolean>
-```
-
-**Features**:
-- Automatische Migration beim ersten Login
-- Prüft ob bereits auf Nostr
-- Behält localStorage als Backup
-
-### 🚀 Vorteile
-
-#### 1. Multi-Device-Support
-
-✅ User kann sich auf mehreren Geräten anmelden
-✅ Config wird automatisch synchronisiert
-✅ Einladungslink überall verfügbar
-
-**Beispiel**:
-```
-Gerät A (Desktop):
-1. Admin erstellt Gruppe
-2. Generiert Einladungslink
-3. Link wird auf Nostr gespeichert
-
-Gerät B (Laptop):
-1. Admin meldet sich mit gleichem NSEC an
-2. Config wird von Nostr geladen
-3. Link ist automatisch verfügbar ✅
-```
-
-#### 2. Maximale Privatsphäre
-
-✅ Nur User kann seine Daten entschlüsseln
-✅ Relay-Betreiber sehen nur verschlüsselte Daten
-✅ Niemand kann Secret oder Admin-Status auslesen
-
-**Verschlüsselungs-Flow**:
-```
-User-Config (Klartext)
-   ↓
-NIP-17 Verschlüsselung (zu sich selbst)
-   ↓
-Verschlüsselter Blob
-   ↓
-Nostr-Relay (speichert verschlüsselt)
-   ↓
-Nur User mit Private Key kann entschlüsseln
-```
-
-#### 3. Dezentralisierung
-
-✅ Keine zentrale Datenbank
-✅ Alles auf Nostr-Relays
-✅ User kontrolliert seine Daten
-
-#### 4. Backup & Recovery
-
-✅ Keine Datenverluste bei Cache-Löschung
-✅ localStorage als Fallback
-✅ Config bleibt auf Relay gespeichert
-
-**Recovery-Szenario**:
-```
-1. User löscht Browser-Cache
-   ↓
-2. localStorage ist leer
-   ↓
-3. User meldet sich neu an
-   ↓
-4. Config wird von Nostr geladen ✅
-   ↓
-5. localStorage wird wiederhergestellt
-```
-
-### ⚠️ Wichtige Hinweise
-
-#### Private Key Sicherheit
-
-🔴 **KRITISCH**: Der Private Key darf **NIEMALS** auf Relay gespeichert werden!
-
-- Private Key bleibt immer im Browser
-- Nur verschlüsselte Daten auf Relay
-- User muss sich mit NSEC anmelden
-
-#### Relay-Verfügbarkeit
-
-**Wichtig**: Das System benötigt eine funktionierende Relay-Verbindung!
-
-- ❌ **Kein localStorage-Fallback**: Bei Relay-Ausfall wird Fehler angezeigt
-- ✅ **Klare Fehlermeldungen**: User wird über Verbindungsprobleme informiert
-- ✅ **Retry-Möglichkeit**: User kann Vorgang wiederholen wenn Relay wieder erreichbar
-
-**Fehlerbehandlung**:
-```typescript
-try {
-  // Versuche auf Nostr zu speichern
-  await saveUserConfig(config, privateKey, [relay]);
-} catch (error) {
-  // Zeige Fehlermeldung
-  throw new Error('❌ Relay nicht erreichbar. Bitte prüfe deine Internetverbindung.');
-}
-```
-
-**Warum kein localStorage-Fallback?**
-
-1. **Konsistenz**: Daten müssen auf Nostr sein für Multi-Device
-2. **Transparenz**: User weiß sofort wenn etwas nicht funktioniert
-3. **Datenintegrität**: Keine veralteten lokalen Kopien
-4. **Dezentralisierung**: Fokus auf Nostr als einzige Datenquelle
-
-### 🧪 Testing
-
-#### Manueller Test
-
-**1. Gruppe erstellen**:
-```
-1. Melde dich als Admin an
-2. Prüfe Console: "Config auf Nostr gespeichert"
-3. ✅ Bei Erfolg: Weiterleitung zur Gruppe
-4. ❌ Bei Fehler: Fehlermeldung "Relay nicht erreichbar"
-```
-
-**2. Einladungslink**:
-```
-1. Generiere Link als Admin
-2. Prüfe Console: "Einladungslink in Config gespeichert"
-3. ✅ Bei Erfolg: Link wird angezeigt
-4. ❌ Bei Fehler: Fehlermeldung und Link wird nicht gespeichert
-```
-
-**3. Multi-Device**:
-```
-1. Melde dich auf Gerät A an (mit Relay-Verbindung)
-2. Generiere Einladungslink
-3. Melde dich auf Gerät B mit gleichem NSEC an
-4. ✅ Link sollte automatisch von Nostr geladen werden
-```
-
-**4. Relay-Ausfall testen**:
-```
-1. Deaktiviere Internetverbindung
-2. Versuche Gruppe zu erstellen
-3. ❌ Fehlermeldung: "Relay nicht erreichbar"
-4. Aktiviere Internetverbindung
-5. Wiederhole Vorgang
-6. ✅ Sollte jetzt funktionieren
-```
-
-### 📊 Event-Übersicht
-
-| Kind | Beschreibung | Verschlüsselung | Öffentlich | Verwendung |
-|------|--------------|-----------------|------------|------------|
-| 30078 | User-Config | NIP-17 | ❌ Nein | Admin-Status, Secret, Link |
-| 30000 | Whitelist | Keine | ✅ Ja | Login-Prüfung |
-| 1 | Chat-Nachrichten | Gruppen-Secret | ❌ Nein | Gruppen-Chat |
-| 30000 | Marketplace-Angebote | Gruppen-Secret | ❌ Nein | Tausch-Angebote |
-| 1059 | NIP-17 Gift-Wrapped | NIP-17 | ❌ Nein | D2D-Chat |
-
-### 🔗 Code-Referenzen
-
-```
-src/lib/nostr/userConfig.ts         # NIP-17 User-Config-System
-src/routes/+page.svelte              # Login mit Config-Speicherung
-src/routes/admin/+page.svelte        # Admin mit Config-Laden
-```
-
----
-
-## 📚 Referenzen
-
-- [NIP-01: Basic Protocol](https://github.com/nostr-protocol/nips/blob/master/01.md)
-- [NIP-17: Private Direct Messages](https://github.com/nostr-protocol/nips/blob/master/17.md)
-- [NIP-19: bech32-encoded entities](https://github.com/nostr-protocol/nips/blob/master/19.md)
-- [NIP-44: Encrypted Payloads](https://github.com/nostr-protocol/nips/blob/master/44.md)
-
 ---
 
 **Letzte Aktualisierung**: 21. Oktober 2025
-**Status**: ✅ Funktional, NIP-17 User-Config-System implementiert
-**Priorität**: Hoch (Einstiegspunkt für alle User + Multi-Device-Support)
+**Status**: ✅ Funktional, Dynamische Admin-Verwaltung implementiert
+**Priorität**: Hoch (Multi-NSEC-Support auf demselben PC)

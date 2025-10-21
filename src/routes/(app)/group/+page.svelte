@@ -67,10 +67,33 @@
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       
-      // Prüfe Admin-Status aus localStorage
-      const isGroupAdmin = localStorage.getItem('is_group_admin') === 'true';
-      const adminPubkey = localStorage.getItem('admin_pubkey');
-      isAdmin = isGroupAdmin && adminPubkey === $userStore.pubkey;
+      // 🔐 NEU: Lade Admin-Status dynamisch von Nostr (nicht aus localStorage!)
+      const group = $groupStore;
+      const userPubkey = $userStore.pubkey;
+      
+      if (group && group.relay && group.secret) {
+        try {
+          const { loadGroupAdmin, deriveSecretHash } = await import('$lib/nostr/groupConfig');
+          const secretHash = await deriveSecretHash(group.secret);
+          const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
+          
+          // Berechne Admin-Status JETZT neu (nicht aus localStorage!)
+          const isCurrentUserAdmin = adminPubkey?.toLowerCase() === userPubkey?.toLowerCase();
+          isAdmin = isCurrentUserAdmin;
+          
+          console.log('🔐 [ADMIN-CHECK-DYNAMIC]', {
+            adminPubkey: adminPubkey?.substring(0, 16) + '...',
+            userPubkey: userPubkey?.substring(0, 16) + '...',
+            isAdmin: isCurrentUserAdmin ? '✅ JA' : '❌ NEIN'
+          });
+        } catch (adminCheckError) {
+          console.warn('⚠️ [ADMIN-CHECK] Konnte Admin-Status nicht laden von Nostr:', adminCheckError);
+          isAdmin = false;
+        }
+      } else {
+        console.warn('⚠️ [ADMIN-CHECK] Gruppe nicht initialisiert');
+        isAdmin = false;
+      }
       
       // Restore tempKeypair
       if ($userStore.tempPrivkey) {

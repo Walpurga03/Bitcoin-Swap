@@ -8,6 +8,7 @@
   import { DEFAULT_RELAYS } from '$lib/config';
   import { deriveChannelId } from '$lib/nostr/crypto';
   import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
+  import { saveGroupConfig, loadGroupAdmin, deriveSecretHash } from '$lib/nostr/groupConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
 
   let mode: 'create' | 'join' = 'create';
@@ -99,20 +100,33 @@
       // Setze User als Admin
       userStore.setUserFromNsec(adminNsec, userName);
       
-      // 🔐 NEU: Speichere Config auf Nostr (NIP-17)
-      console.log('💾 Speichere User-Config auf Nostr...');
-      const config: UserConfig = {
-        is_group_admin: true,
-        admin_pubkey: pubkey,
-        group_secret: finalSecret,
+      // 🔐 NEU: Speichere Gruppen-Config öffentlich (für Admin-Erkennung)
+      console.log('💾 Speichere Gruppen-Config auf Nostr...');
+      const secretHash = await deriveSecretHash(finalSecret);
+      
+      const groupConfigData = {
         relay: relay,
+        admin_pubkey: pubkey,
+        secret_hash: secretHash,
         created_at: Math.floor(Date.now() / 1000),
         updated_at: Math.floor(Date.now() / 1000)
       };
       
-      // Speichere auf Nostr - bei Fehler wird Exception geworfen
-      await saveUserConfig(config, keyValidation.hex!, [relay]);
-      console.log('✅ Config auf Nostr gespeichert');
+      // Publiziere öffentlich
+      await saveGroupConfig(groupConfigData, keyValidation.hex!, [relay]);
+      console.log('✅ Gruppen-Config publiziert');
+
+      // 🔐 Speichere Admin-Status im Browser (nur für schnelle lokale Checks)
+      // Aber: Admin-Status wird primär von Nostr geladen, nicht aus localStorage!
+      localStorage.setItem('is_group_admin', 'true');
+      localStorage.setItem('admin_pubkey', pubkey);
+      localStorage.setItem('group_secret', finalSecret);
+      
+      console.log('💾 [STORAGE] Admin als Admin erkannt nach Erstellung:', {
+        is_group_admin: true,
+        admin_pubkey: pubkey.substring(0, 16) + '...',
+        group_secret: finalSecret.substring(0, 10) + '...'
+      });
 
       // Initialisiere Gruppe
       await groupStore.initialize(finalSecret, relay);
@@ -195,19 +209,25 @@
       // Prüfe Whitelist (außer für Admin)
       const channelId = await deriveChannelId(secret);
       
-      // 🔐 NEU: Admin-Pubkey aus Config oder localStorage
-      let storedAdminPubkey = existingConfig?.admin_pubkey || localStorage.getItem('admin_pubkey');
+      // 🔐 NEU: Lade Admin-Pubkey von öffentlicher Gruppen-Config
+      console.log('📥 Lade Admin-Pubkey von Nostr...');
+      const secretHash = await deriveSecretHash(secret);
+      let adminPubkey = await loadGroupAdmin(secretHash, [relay]);
+      
+      if (!adminPubkey) {
+        throw new Error('❌ Admin-Pubkey nicht gefunden. Diese Gruppe scheint nicht zu existieren.');
+      }
+      
+      console.log('✅ Admin-Pubkey geladen:', adminPubkey.substring(0, 16) + '...');
       
       // Prüfe ob User der Admin ist
-      const isAdmin = storedAdminPubkey && storedAdminPubkey.toLowerCase() === pubkey.toLowerCase();
+      const isAdmin = adminPubkey.toLowerCase() === pubkey.toLowerCase();
+      
+      console.log('🔐 Admin-Status:', isAdmin ? 'JA ✅' : 'NEIN');
       
       if (!isAdmin) {
         // Nur für normale User: Whitelist-Prüfung
-        if (!storedAdminPubkey) {
-          throw new Error('Admin-Pubkey nicht gefunden. Bitte kontaktiere den Gruppen-Admin.');
-        }
-
-        const whitelist = await loadWhitelist([relay], storedAdminPubkey, channelId);
+        const whitelist = await loadWhitelist([relay], adminPubkey, channelId);
         
         if (!whitelist || whitelist.pubkeys.length === 0) {
           throw new Error('Whitelist ist leer. Bitte kontaktiere den Administrator.');
@@ -227,21 +247,17 @@
 
       // Setze User
       userStore.setUserFromNsec(joinNsec, userName);
-
-      // 🔐 NEU: Speichere/Update Config auf Nostr
-      console.log('💾 Speichere User-Config auf Nostr...');
-      const config: UserConfig = {
-        is_group_admin: isAdmin,
-        admin_pubkey: storedAdminPubkey || pubkey,
-        group_secret: secret,
-        relay: relay,
-        created_at: existingConfig?.created_at || Math.floor(Date.now() / 1000),
-        updated_at: Math.floor(Date.now() / 1000)
-      };
       
-      // Speichere auf Nostr - bei Fehler wird Exception geworfen
-      await saveUserConfig(config, keyValidation.hex!, [relay]);
-      console.log('✅ Config auf Nostr gespeichert');
+      // Speichere Admin-Status im Browser
+      localStorage.setItem('is_group_admin', isAdmin ? 'true' : 'false');
+      localStorage.setItem('admin_pubkey', adminPubkey);
+      localStorage.setItem('group_secret', secret);
+      
+      console.log('💾 [STORAGE] Admin-Status gespeichert:', {
+        is_group_admin: isAdmin,
+        admin_pubkey: adminPubkey.substring(0, 16) + '...',
+        group_secret: secret.substring(0, 10) + '...'
+      });
 
       // Initialisiere Gruppe
       await groupStore.initialize(secret, relay);

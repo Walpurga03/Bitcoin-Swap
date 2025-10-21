@@ -2,10 +2,10 @@
   import { onMount } from 'svelte';
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
-  import { loadWhitelist, saveWhitelist, addToWhitelist, removeFromWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
+  import { loadWhitelist, addToWhitelist, removeFromWhitelist, type WhitelistData } from '$lib/nostr/whitelist';
   import { validatePublicKey } from '$lib/security/validation';
   import { createInviteLink } from '$lib/utils';
-  import { saveUserConfig, loadUserConfig } from '$lib/nostr/userConfig';
+  import { saveUserConfig } from '$lib/nostr/userConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
   // @ts-ignore
   import { goto } from '$app/navigation';
@@ -20,7 +20,6 @@
   let inviteLink = '';
 
   onMount(async () => {
-    // Prüfe ob User eingeloggt ist
     const user = $userStore;
     const group = $groupStore;
     
@@ -29,57 +28,43 @@
       return;
     }
 
-    if (!group || !group.relay) {
+    if (!group || !group.relay || !group.secret) {
       error = 'Gruppe nicht initialisiert';
       setTimeout(() => goto('/group'), 2000);
       return;
     }
 
-    // 🔐 NEU: Versuche Config von Nostr zu laden
-    let userConfig: UserConfig | null = null;
-    if (user.privateKey) {
-      try {
-        console.log('📥 Lade User-Config von Nostr...');
-        userConfig = await loadUserConfig(user.privateKey, [group.relay]);
-        if (userConfig) {
-          console.log('✅ Config von Nostr geladen');
-          // Setze Einladungslink aus Config
-          if (userConfig.invite_link) {
-            inviteLink = userConfig.invite_link;
-          }
-        }
-      } catch (configError) {
-        // Config existiert nicht oder Relay nicht erreichbar
-        console.log('ℹ️ Keine Config gefunden oder Relay nicht erreichbar');
-        // Zeige Warnung aber blockiere nicht den Zugriff
-        error = '⚠️ Warnung: Config konnte nicht von Nostr geladen werden. Relay möglicherweise nicht erreichbar.';
-        setTimeout(() => error = '', 5000);
-      }
-    }
-
-    // Prüfe ob User Admin ist (aus Config oder localStorage)
-    const isGroupAdmin = userConfig?.is_group_admin || localStorage.getItem('is_group_admin') === 'true';
-    const adminPubkey = userConfig?.admin_pubkey || localStorage.getItem('admin_pubkey');
+    console.log('🔐 [ADMIN-PAGE] Admin-Seitenzugriff prüfen...');
     
-    if (!isGroupAdmin || adminPubkey !== user.pubkey) {
-      error = 'Zugriff verweigert. Du bist kein Administrator.';
+    try {
+      const { loadGroupAdmin, deriveSecretHash } = await import('$lib/nostr/groupConfig');
+      const secretHash = await deriveSecretHash(group.secret);
+      const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
+      
+      console.log('🔐 [ADMIN-PAGE] Admin-Status:', {
+        adminPubkey: adminPubkey?.substring(0, 16) + '...',
+        userPubkey: user.pubkey?.substring(0, 16) + '...',
+        isAdmin: adminPubkey?.toLowerCase() === user.pubkey?.toLowerCase()
+      });
+      
+      if (!adminPubkey || adminPubkey.toLowerCase() !== user.pubkey?.toLowerCase()) {
+        console.log('❌ [ADMIN-PAGE] Zugriff verweigert - kein Admin');
+        error = 'Zugriff verweigert. Du bist kein Administrator.';
+        setTimeout(() => goto('/group'), 2000);
+        return;
+      }
+
+      console.log('✅ [ADMIN-PAGE] Admin erkannt - Zugriff erlaubt');
+      isAdmin = true;
+      await loadWhitelistData(adminPubkey);
+    } catch (e: any) {
+      console.error('❌ [ADMIN-PAGE] Fehler beim Prüfen des Admin-Status:', e);
+      error = e.message || 'Fehler beim Prüfen des Admin-Status';
       setTimeout(() => goto('/group'), 2000);
-      return;
-    }
-
-    isAdmin = true;
-    await loadWhitelistData();
-    
-    // Fallback: Lade gespeicherten Einladungslink aus localStorage (falls nicht in Config)
-    if (!inviteLink) {
-      const savedLink = localStorage.getItem('invite_link');
-      if (savedLink) {
-        inviteLink = savedLink;
-      }
     }
   });
 
-  async function loadWhitelistData() {
+  async function loadWhitelistData(adminPubkey: string) {
     try {
       loading = true;
       error = '';
@@ -90,18 +75,10 @@
         return;
       }
 
-      // Hole Admin-Pubkey aus localStorage
-      const adminPubkey = localStorage.getItem('admin_pubkey');
-      if (!adminPubkey) {
-        error = 'Admin-Pubkey nicht gefunden';
-        return;
-      }
-
       console.log('📋 Lade Whitelist für Gruppe:', group.channelId.substring(0, 16) + '...');
       whitelist = await loadWhitelist([group.relay], adminPubkey, group.channelId);
       
       if (!whitelist) {
-        // Erstelle neue leere Whitelist für diese Gruppe
         whitelist = {
           pubkeys: [],
           updated_at: Math.floor(Date.now() / 1000),
@@ -130,7 +107,6 @@
         return;
       }
 
-      // Validiere Public Key
       const validation = validatePublicKey(newPubkey);
       if (!validation.valid) {
         error = validation.error || 'Ungültiger Public Key';
@@ -155,7 +131,6 @@
         return;
       }
 
-      // Prüfe ob bereits vorhanden
       if (whitelist.pubkeys.includes(validation.hex!)) {
         error = 'Public Key ist bereits in der Whitelist';
         return;
@@ -163,12 +138,11 @@
 
       saving = true;
 
-      // Füge hinzu und speichere (mit channelId)
       const result = await addToWhitelist(validation.hex!, user.privateKey, [group.relay], group.channelId);
 
       if (result) {
-        // Lade Whitelist neu
-        await loadWhitelistData();
+        const adminPubkey = whitelist.admin_pubkey;
+        await loadWhitelistData(adminPubkey);
         success = `Public Key hinzugefügt: ${newPubkey.substring(0, 20)}...`;
         newPubkey = '';
       } else {
@@ -207,12 +181,11 @@
 
       saving = true;
 
-      // Entferne und speichere (mit channelId)
       const result = await removeFromWhitelist(pubkey, user.privateKey, [group.relay], group.channelId);
 
       if (result) {
-        // Lade Whitelist neu
-        await loadWhitelistData();
+        const adminPubkey = whitelist.admin_pubkey;
+        await loadWhitelistData(adminPubkey);
         success = `Public Key entfernt: ${pubkey.substring(0, 20)}...`;
       } else {
         error = 'Fehler beim Entfernen';
@@ -226,7 +199,9 @@
   }
 
   async function handleRefresh() {
-    await loadWhitelistData();
+    if (whitelist) {
+      await loadWhitelistData(whitelist.admin_pubkey);
+    }
   }
 
   function formatPubkey(hex: string): string {
@@ -248,7 +223,7 @@
       const group = $groupStore;
       const user = $userStore;
       
-      if (!group || !group.relay) {
+      if (!group || !group.relay || !group.secret) {
         error = 'Gruppe nicht initialisiert';
         return;
       }
@@ -258,31 +233,19 @@
         return;
       }
 
-      // Hole Secret aus localStorage
-      const secret = localStorage.getItem('group_secret');
-      if (!secret) {
-        error = 'Secret nicht gefunden. Bitte melde dich neu an.';
-        return;
-      }
-
-      // Generiere Link mit aktueller Domain
       const domain = window.location.origin;
-      inviteLink = createInviteLink(domain, group.relay, secret);
+      inviteLink = createInviteLink(domain, group.relay, group.secret);
       
-      // 🔐 NEU: Speichere Link in User-Config auf Nostr
-      console.log('💾 Speichere Einladungslink in User-Config...');
-      
-      const adminPubkey = localStorage.getItem('admin_pubkey');
-      if (!adminPubkey) {
-        error = 'Admin-Pubkey nicht gefunden';
+      if (!whitelist) {
+        error = 'Whitelist nicht geladen';
         return;
       }
 
       const config: UserConfig = {
         is_group_admin: true,
-        admin_pubkey: adminPubkey,
-        group_secret: secret,
-        invite_link: inviteLink,  // 🔐 Link in Config speichern
+        admin_pubkey: whitelist.admin_pubkey,
+        group_secret: group.secret,
+        invite_link: inviteLink,
         relay: group.relay,
         created_at: Math.floor(Date.now() / 1000),
         updated_at: Math.floor(Date.now() / 1000)
@@ -290,12 +253,10 @@
 
       try {
         await saveUserConfig(config, user.privateKey, [group.relay]);
-        console.log('✅ Einladungslink in Config gespeichert');
         success = 'Einladungslink generiert und auf Nostr gespeichert!';
       } catch (configError: any) {
-        console.error('❌ Config konnte nicht auf Nostr gespeichert werden:', configError);
-        error = configError.message || '❌ Relay nicht erreichbar. Link konnte nicht gespeichert werden.';
-        inviteLink = ''; // Reset Link da Speicherung fehlgeschlagen
+        error = configError.message || 'Relay nicht erreichbar.';
+        inviteLink = '';
       }
     } catch (e: any) {
       error = `Fehler beim Generieren: ${e.message}`;
@@ -310,19 +271,8 @@
 <div class="admin-container">
   <div class="admin-header">
     <h1>🔐 Whitelist-Verwaltung</h1>
-    <button class="btn-secondary" on:click={() => goto('/group')}>
-      ← Zurück zur Gruppe
-    </button>
+    <button class="btn-secondary" on:click={() => goto('/group')}>← Zurück</button>
   </div>
-
-  {#if $groupStore && $groupStore.channelId}
-    <div class="group-info">
-      <h3>📍 Aktuelle Gruppe</h3>
-      <p><strong>Channel ID:</strong> <code>{$groupStore.channelId.substring(0, 16)}...{$groupStore.channelId.substring($groupStore.channelId.length - 8)}</code></p>
-      <p><strong>Relay:</strong> {$groupStore.relay}</p>
-      <p class="hint">Diese Whitelist gilt nur für diese Gruppe. Andere Gruppen haben separate Whitelists.</p>
-    </div>
-  {/if}
 
   {#if error}
     <div class="alert alert-error">{error}</div>
@@ -339,7 +289,6 @@
     </div>
   {:else if isAdmin && whitelist}
     <div class="admin-content">
-      <!-- Add Section -->
       <div class="add-section">
         <h2>Public Key hinzufügen</h2>
         <div class="add-form">
@@ -359,10 +308,9 @@
         </div>
       </div>
 
-      <!-- Whitelist Section -->
       <div class="whitelist-section">
         <div class="section-header">
-          <h2>Whitelist ({whitelist.pubkeys.length} Einträge)</h2>
+          <h2>Whitelist ({whitelist.pubkeys.length})</h2>
           <button class="btn-secondary" on:click={handleRefresh} disabled={saving}>
             🔄 Aktualisieren
           </button>
@@ -371,23 +319,14 @@
         {#if whitelist.pubkeys.length === 0}
           <div class="empty-state">
             <p>Keine Public Keys in der Whitelist</p>
-            <p class="hint">Füge Public Keys hinzu, um Benutzern Zugriff zu gewähren</p>
           </div>
         {:else}
           <div class="pubkey-list">
             {#each whitelist.pubkeys as pubkey}
               <div class="pubkey-item">
-                <div class="pubkey-info">
-                  <button
-                    class="pubkey-hex"
-                    on:click={() => copyToClipboard(pubkey)}
-                    type="button"
-                    title="In Zwischenablage kopieren"
-                  >
-                    {formatPubkey(pubkey)}
-                  </button>
-                  <span class="copy-hint">Klicken zum Kopieren</span>
-                </div>
+                <button class="pubkey-hex" on:click={() => copyToClipboard(pubkey)}>
+                  {formatPubkey(pubkey)}
+                </button>
                 <button
                   class="btn-danger"
                   on:click={() => handleRemovePubkey(pubkey)}
@@ -401,53 +340,20 @@
         {/if}
       </div>
 
-      <!-- Invite Link Section -->
       <div class="invite-section">
         <div class="section-header">
           <h2>🔗 Einladungslink</h2>
-          {#if !inviteLink}
-            <button class="btn-primary" on:click={generateInviteLink}>
-              ✨ Link generieren
-            </button>
-          {:else}
-            <button class="btn-secondary" on:click={generateInviteLink}>
-              🔄 Neu generieren
-            </button>
-          {/if}
+          <button class="btn-primary" on:click={generateInviteLink}>
+            {inviteLink ? '🔄 Neu generieren' : '✨ Generieren'}
+          </button>
         </div>
         
         {#if inviteLink}
           <div class="invite-link-container">
-            <div class="invite-link-display">
-              <code class="invite-link-text">{inviteLink}</code>
-            </div>
-            <button class="btn-secondary" on:click={copyInviteLink}>
-              📋 Kopieren
-            </button>
+            <code class="invite-link-text">{inviteLink}</code>
+            <button class="btn-secondary" on:click={copyInviteLink}>📋 Kopieren</button>
           </div>
-          <p class="hint">
-            💡 Dieser Link ist permanent gespeichert. Teile ihn mit Benutzern, die du zur Gruppe einladen möchtest.
-            Sie müssen sich mit ihrem nsec anmelden und werden gegen die Whitelist geprüft.
-          </p>
-        {:else}
-          <p class="hint">
-            ℹ️ Generiere einen Einladungslink, um neue Benutzer zur Gruppe einzuladen.
-            Der Link wird automatisch gespeichert und bleibt verfügbar.
-          </p>
         {/if}
-      </div>
-
-      <!-- Info Section -->
-      <div class="info-section">
-        <h3>ℹ️ Informationen</h3>
-        <ul>
-          <li>Die Whitelist wird als Nostr Event (Kind 30000) auf dem Relay gespeichert</li>
-          <li>Nur du als Admin kannst die Whitelist bearbeiten</li>
-          <li>Änderungen werden sofort auf dem Relay gespeichert</li>
-          <li>Benutzer müssen sich neu einloggen, um Änderungen zu sehen</li>
-          <li>Generiere Einladungslinks für neue Benutzer über den "Einladungslink" Bereich</li>
-          <li>Letzte Aktualisierung: {new Date(whitelist.updated_at * 1000).toLocaleString('de-DE')}</li>
-        </ul>
       </div>
     </div>
   {/if}
@@ -467,41 +373,6 @@
     margin-bottom: 1.5rem;
   }
 
-  .group-info {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .group-info h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.125rem;
-    color: var(--primary-color);
-  }
-
-  .group-info p {
-    margin: 0.5rem 0;
-    font-size: 0.875rem;
-  }
-
-  .group-info code {
-    background: var(--bg-secondary);
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.8125rem;
-  }
-
-  .group-info .hint {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(59, 130, 246, 0.2);
-    color: var(--text-muted);
-    font-style: italic;
-  }
-
   .admin-header h1 {
     margin: 0;
     font-size: 1.75rem;
@@ -515,8 +386,7 @@
 
   .add-section,
   .whitelist-section,
-  .invite-section,
-  .info-section {
+  .invite-section {
     background: var(--bg-secondary);
     border-radius: 0.5rem;
     padding: 1.5rem;
@@ -524,8 +394,7 @@
 
   .add-section h2,
   .whitelist-section h2,
-  .invite-section h2,
-  .info-section h3 {
+  .invite-section h2 {
     margin: 0 0 1rem 0;
     font-size: 1.25rem;
   }
@@ -541,7 +410,6 @@
     border: 1px solid var(--border-color);
     border-radius: 0.375rem;
     font-family: 'Courier New', monospace;
-    font-size: 0.875rem;
   }
 
   .section-header {
@@ -557,11 +425,6 @@
     color: var(--text-muted);
   }
 
-  .empty-state .hint {
-    font-size: 0.875rem;
-    margin-top: 0.5rem;
-  }
-
   .pubkey-list {
     display: flex;
     flex-direction: column;
@@ -570,7 +433,7 @@
 
   .pubkey-item {
     display: flex;
-    justify-content: space-between;
+    gap: 0.75rem;
     align-items: center;
     padding: 1rem;
     background: var(--bg-primary);
@@ -578,80 +441,38 @@
     border-radius: 0.375rem;
   }
 
-  .pubkey-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
   .pubkey-hex {
+    flex: 1;
     font-family: 'Courier New', monospace;
     font-size: 0.875rem;
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    background: var(--bg-secondary);
-    border: 1px solid transparent;
-    border-radius: 0.25rem;
-    transition: all 0.2s;
-    color: inherit;
+    padding: 0.5rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    color: var(--primary-color);
   }
 
   .pubkey-hex:hover {
-    background: var(--border-color);
+    text-decoration: underline;
   }
 
-  .pubkey-hex:focus {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
-  }
-
-  .copy-hint {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
   .invite-link-container {
     display: flex;
     gap: 0.75rem;
     align-items: center;
-    margin-bottom: 1rem;
-  }
-
-  .invite-link-display {
-    flex: 1;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    padding: 0.75rem;
-    overflow-x: auto;
   }
 
   .invite-link-text {
+    flex: 1;
     font-family: 'Courier New', monospace;
     font-size: 0.875rem;
     color: var(--primary-color);
     word-break: break-all;
-  }
-
-  .hint {
-    font-size: 0.875rem;
-    color: var(--text-muted);
-    line-height: 1.5;
     padding: 0.75rem;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05));
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 0.375rem;
-    border: 1px solid rgba(59, 130, 246, 0.2);
-  }
-
-
-  .info-section ul {
-    margin: 0;
-    padding-left: 1.5rem;
-  }
-
-  .info-section li {
-    margin: 0.5rem 0;
-    font-size: 0.875rem;
-    color: var(--text-muted);
   }
 
   .alert {
@@ -708,7 +529,7 @@
   }
 
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--primary-hover);
+    opacity: 0.9;
   }
 
   .btn-secondary {
@@ -734,35 +555,5 @@
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  @media (max-width: 640px) {
-    .admin-container {
-      padding: 1rem;
-    }
-
-    .admin-header {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-
-    .add-form {
-      flex-direction: column;
-    }
-
-    .pubkey-item {
-      flex-direction: column;
-      gap: 0.75rem;
-      align-items: flex-start;
-    }
-
-    .invite-link-container {
-      flex-direction: column;
-    }
-
-    .invite-link-display {
-      width: 100%;
-    }
   }
 </style>
