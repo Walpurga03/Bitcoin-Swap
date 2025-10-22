@@ -19,8 +19,9 @@
   let newPubkey = '';
   let isAdmin = false;
   let inviteLink = '';
-  let linkType: 'multi-relay' | 'alias' | 'full' = 'multi-relay';
+  let linkType: 'multi-relay' | 'alias' | 'full' | 'custom' = 'multi-relay';
   let selectedAlias = 1;
+  let customRelayUrl = '';
 
   onMount(async () => {
     const user = $userStore;
@@ -245,8 +246,24 @@
       } else if (linkType === 'alias') {
         // Relay-Alias
         inviteLink = createInviteLink(domain, group.secret, selectedAlias);
+      } else if (linkType === 'custom') {
+        // Custom Relay-URL
+        if (!customRelayUrl.trim()) {
+          error = 'Bitte gib eine Relay-URL ein';
+          return;
+        }
+        
+        // Validiere Custom Relay
+        const { validateRelayUrl } = await import('$lib/security/validation');
+        const validation = validateRelayUrl(customRelayUrl);
+        if (!validation.valid) {
+          error = validation.error || 'Ungültige Relay-URL';
+          return;
+        }
+        
+        inviteLink = createInviteLink(domain, group.secret, customRelayUrl);
       } else {
-        // Vollständige Relay-URL (Legacy)
+        // Vollständige Relay-URL (aus GroupStore - das Relay, mit dem die Gruppe erstellt wurde)
         inviteLink = createInviteLink(domain, group.secret, group.relay);
       }
       
@@ -385,9 +402,26 @@
           {/if}
           
           <label>
+            <input type="radio" bind:group={linkType} value="custom" />
+            <span>� Eigenes Relay</span>
+            <small>Gib deine eigene Relay-URL an → volle Kontrolle</small>
+          </label>
+          
+          {#if linkType === 'custom'}
+            <div class="custom-relay-input">
+              <input
+                type="text"
+                bind:value={customRelayUrl}
+                placeholder="wss://relay.example.com"
+                class="input"
+              />
+            </div>
+          {/if}
+          
+          <label>
             <input type="radio" bind:group={linkType} value="full" />
-            <span>📡 Vollständige Relay-URL (Legacy)</span>
-            <small>Relay sichtbar im Link → niedrige Privacy, aber sofortiger Zugriff</small>
+            <span>📡 Gruppen-Relay verwenden</span>
+            <small>Relay aus Gruppenerstellung → niedrige Privacy, aber garantiert erreichbar</small>
           </label>
         </div>
         
@@ -662,6 +696,21 @@
     border-radius: 0.375rem;
     background: var(--bg-primary);
     color: var(--text-primary);
+  }
+
+  .custom-relay-input {
+    margin-left: 1.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .custom-relay-input .input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Courier New', monospace;
   }
 
   .full-width {
