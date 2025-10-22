@@ -29,10 +29,27 @@ export function parseInviteLink(url: string): InviteLinkData | null {
 
 /**
  * Erstelle einen Einladungslink
+ * 
+ * @param domain - Die Domain (z.B. https://example.com)
+ * @param secret - Das Gruppen-Secret
+ * @param relay - (Optional) Relay-URL oder Relay-Alias-Nummer
+ * @returns Einladungslink im Format ?secret=... oder ?r=1&secret=...
  */
-export function createInviteLink(domain: string, relay: string, secret: string): string {
-  const encodedRelay = encodeURIComponent(relay);
+export function createInviteLink(domain: string, secret: string, relay?: string | number): string {
   const encodedSecret = encodeURIComponent(secret);
+  
+  // Kein Relay → Multi-Relay-Fallback (empfohlen)
+  if (relay === undefined || relay === null) {
+    return `${domain}/?secret=${encodedSecret}`;
+  }
+  
+  // Relay-Alias (Nummer)
+  if (typeof relay === 'number') {
+    return `${domain}/?r=${relay}&secret=${encodedSecret}`;
+  }
+  
+  // Legacy: vollständige Relay-URL (für Abwärtskompatibilität)
+  const encodedRelay = encodeURIComponent(relay);
   return `${domain}/?relay=${encodedRelay}&secret=${encodedSecret}`;
 }
 

@@ -7,6 +7,7 @@
   import { createInviteLink } from '$lib/utils';
   import { saveUserConfig } from '$lib/nostr/userConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
+  import { RELAY_ALIASES } from '$lib/config';
   // @ts-ignore
   import { goto } from '$app/navigation';
 
@@ -18,6 +19,8 @@
   let newPubkey = '';
   let isAdmin = false;
   let inviteLink = '';
+  let linkType: 'multi-relay' | 'alias' | 'full' = 'multi-relay';
+  let selectedAlias = 1;
 
   onMount(async () => {
     const user = $userStore;
@@ -234,7 +237,18 @@
       }
 
       const domain = window.location.origin;
-      inviteLink = createInviteLink(domain, group.relay, group.secret);
+      
+      // Generiere Link basierend auf gewähltem Typ
+      if (linkType === 'multi-relay') {
+        // Kein Relay → Multi-Relay-Fallback
+        inviteLink = createInviteLink(domain, group.secret);
+      } else if (linkType === 'alias') {
+        // Relay-Alias
+        inviteLink = createInviteLink(domain, group.secret, selectedAlias);
+      } else {
+        // Vollständige Relay-URL (Legacy)
+        inviteLink = createInviteLink(domain, group.secret, group.relay);
+      }
       
       if (!whitelist) {
         error = 'Whitelist nicht geladen';
@@ -343,10 +357,43 @@
       <div class="invite-section">
         <div class="section-header">
           <h2>🔗 Einladungslink</h2>
-          <button class="btn-primary" on:click={generateInviteLink}>
-            {inviteLink ? '🔄 Neu generieren' : '✨ Generieren'}
-          </button>
         </div>
+        
+        <div class="link-type-selector">
+          <label>
+            <input type="radio" bind:group={linkType} value="multi-relay" />
+            <span>🌐 Multi-Relay (empfohlen)</span>
+            <small>Kein Relay im Link → beste Privacy, automatische Suche auf mehreren Relays</small>
+          </label>
+          
+          <label>
+            <input type="radio" bind:group={linkType} value="alias" />
+            <span>🔢 Relay-Alias (kurz)</span>
+            <small>Kurzer Link mit Index (z.B. ?r=1) → mittlere Privacy</small>
+          </label>
+          
+          {#if linkType === 'alias'}
+            <div class="alias-selector">
+              <select bind:value={selectedAlias}>
+                <option value={1}>Alias 1 (relay.damus.io)</option>
+                <option value={2}>Alias 2 (relay.nostr.band)</option>
+                <option value={3}>Alias 3 (nos.lol)</option>
+                <option value={4}>Alias 4 (relay.snort.social)</option>
+                <option value={5}>Alias 5 (nostr.wine)</option>
+              </select>
+            </div>
+          {/if}
+          
+          <label>
+            <input type="radio" bind:group={linkType} value="full" />
+            <span>📡 Vollständige Relay-URL (Legacy)</span>
+            <small>Relay sichtbar im Link → niedrige Privacy, aber sofortiger Zugriff</small>
+          </label>
+        </div>
+        
+        <button class="btn-primary full-width" on:click={generateInviteLink}>
+          {inviteLink ? '🔄 Neu generieren' : '✨ Link generieren'}
+        </button>
         
         {#if inviteLink}
           <div class="invite-link-container">
@@ -555,5 +602,69 @@
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .link-type-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .link-type-selector label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .link-type-selector label:hover {
+    border-color: var(--primary-color);
+    background: var(--bg-secondary);
+  }
+
+  .link-type-selector input[type="radio"] {
+    display: none;
+  }
+
+  .link-type-selector label:has(input:checked) {
+    border-color: var(--primary-color);
+    background: rgba(255, 0, 110, 0.05);
+  }
+
+  .link-type-selector span {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .link-type-selector small {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-left: 1.75rem;
+  }
+
+  .alias-selector {
+    margin-left: 1.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .alias-selector select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .full-width {
+    width: 100%;
   }
 </style>
