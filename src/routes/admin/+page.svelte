@@ -19,9 +19,6 @@
   let newPubkey = '';
   let isAdmin = false;
   let inviteLink = '';
-  let linkType: 'multi-relay' | 'alias' | 'full' | 'custom' = 'multi-relay';
-  let selectedAlias = 1;
-  let customRelayUrl = '';
 
   onMount(async () => {
     const user = $userStore;
@@ -225,72 +222,19 @@
   async function generateInviteLink() {
     try {
       const group = $groupStore;
-      const user = $userStore;
       
       if (!group || !group.relay || !group.secret) {
         error = 'Gruppe nicht initialisiert';
         return;
       }
 
-      if (!user || !user.privateKey) {
-        error = 'Nicht eingeloggt';
-        return;
-      }
-
+      // Generiere Link mit Gruppen-Relay (so wie die Gruppe erstellt wurde)
       const domain = window.location.origin;
+      inviteLink = createInviteLink(domain, group.secret, group.relay);
       
-      // Generiere Link basierend auf gewähltem Typ
-      if (linkType === 'multi-relay') {
-        // Kein Relay → Multi-Relay-Fallback
-        inviteLink = createInviteLink(domain, group.secret);
-      } else if (linkType === 'alias') {
-        // Relay-Alias
-        inviteLink = createInviteLink(domain, group.secret, selectedAlias);
-      } else if (linkType === 'custom') {
-        // Custom Relay-URL
-        if (!customRelayUrl.trim()) {
-          error = 'Bitte gib eine Relay-URL ein';
-          return;
-        }
-        
-        // Validiere Custom Relay
-        const { validateRelayUrl } = await import('$lib/security/validation');
-        const validation = validateRelayUrl(customRelayUrl);
-        if (!validation.valid) {
-          error = validation.error || 'Ungültige Relay-URL';
-          return;
-        }
-        
-        inviteLink = createInviteLink(domain, group.secret, customRelayUrl);
-      } else {
-        // Vollständige Relay-URL (aus GroupStore - das Relay, mit dem die Gruppe erstellt wurde)
-        inviteLink = createInviteLink(domain, group.secret, group.relay);
-      }
-      
-      if (!whitelist) {
-        error = 'Whitelist nicht geladen';
-        return;
-      }
-
-      const config: UserConfig = {
-        is_group_admin: true,
-        admin_pubkey: whitelist.admin_pubkey,
-        group_secret: group.secret,
-        invite_link: inviteLink,
-        relay: group.relay,
-        created_at: Math.floor(Date.now() / 1000),
-        updated_at: Math.floor(Date.now() / 1000)
-      };
-
-      try {
-        await saveUserConfig(config, user.privateKey, [group.relay]);
-        success = 'Einladungslink generiert und auf Nostr gespeichert!';
-      } catch (configError: any) {
-        error = configError.message || 'Relay nicht erreichbar.';
-        inviteLink = '';
-      }
+      success = 'Link generiert! ✅';
     } catch (e: any) {
-      error = `Fehler beim Generieren: ${e.message}`;
+      error = e.message || 'Fehler beim Generieren des Links';
     }
   }
 
@@ -376,57 +320,13 @@
           <h2>🔗 Einladungslink</h2>
         </div>
         
-        <div class="link-type-selector">
-          <label>
-            <input type="radio" bind:group={linkType} value="multi-relay" />
-            <span>🌐 Multi-Relay (empfohlen)</span>
-            <small>Kein Relay im Link → beste Privacy, automatische Suche auf mehreren Relays</small>
-          </label>
-          
-          <label>
-            <input type="radio" bind:group={linkType} value="alias" />
-            <span>🔢 Relay-Alias (kurz)</span>
-            <small>Kurzer Link mit Index (z.B. ?r=1) → mittlere Privacy</small>
-          </label>
-          
-          {#if linkType === 'alias'}
-            <div class="alias-selector">
-              <select bind:value={selectedAlias}>
-                <option value={1}>Alias 1 (relay.damus.io)</option>
-                <option value={2}>Alias 2 (relay.nostr.band)</option>
-                <option value={3}>Alias 3 (nos.lol)</option>
-                <option value={4}>Alias 4 (relay.snort.social)</option>
-                <option value={5}>Alias 5 (nostr.wine)</option>
-              </select>
-            </div>
-          {/if}
-          
-          <label>
-            <input type="radio" bind:group={linkType} value="custom" />
-            <span>� Eigenes Relay</span>
-            <small>Gib deine eigene Relay-URL an → volle Kontrolle</small>
-          </label>
-          
-          {#if linkType === 'custom'}
-            <div class="custom-relay-input">
-              <input
-                type="text"
-                bind:value={customRelayUrl}
-                placeholder="wss://relay.example.com"
-                class="input"
-              />
-            </div>
-          {/if}
-          
-          <label>
-            <input type="radio" bind:group={linkType} value="full" />
-            <span>📡 Gruppen-Relay verwenden</span>
-            <small>Relay aus Gruppenerstellung → niedrige Privacy, aber garantiert erreichbar</small>
-          </label>
-        </div>
+        <p class="hint-text">
+          Der Einladungslink wurde bereits bei der Gruppenerstellung generiert.
+          Du kannst ihn hier erneut anzeigen und kopieren.
+        </p>
         
         <button class="btn-primary full-width" on:click={generateInviteLink}>
-          {inviteLink ? '🔄 Neu generieren' : '✨ Link generieren'}
+          {inviteLink ? '🔄 Erneut anzeigen' : '👁️ Link anzeigen'}
         </button>
         
         {#if inviteLink}
@@ -633,84 +533,16 @@
     background-color: rgba(239, 68, 68, 0.2);
   }
 
+
+  .hint-text {
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .link-type-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .link-type-selector label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 1rem;
-    background: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    border-radius: 0.5rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .link-type-selector label:hover {
-    border-color: var(--primary-color);
-    background: var(--bg-secondary);
-  }
-
-  .link-type-selector input[type="radio"] {
-    display: none;
-  }
-
-  .link-type-selector label:has(input:checked) {
-    border-color: var(--primary-color);
-    background: rgba(255, 0, 110, 0.05);
-  }
-
-  .link-type-selector span {
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .link-type-selector small {
-    color: var(--text-muted);
-    font-size: 0.875rem;
-    margin-left: 1.75rem;
-  }
-
-  .alias-selector {
-    margin-left: 1.75rem;
-    margin-top: 0.5rem;
-  }
-
-  .alias-selector select {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-  }
-
-  .custom-relay-input {
-    margin-left: 1.75rem;
-    margin-top: 0.5rem;
-  }
-
-  .custom-relay-input .input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'Courier New', monospace;
   }
 
   .full-width {

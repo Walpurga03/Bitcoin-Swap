@@ -9,17 +9,22 @@
   import { deriveChannelId } from '$lib/nostr/crypto';
   import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
   import { saveGroupConfig, loadGroupAdmin, deriveSecretHash, loadGroupConfigFromRelays } from '$lib/nostr/groupConfig';
+  import { createInviteLink } from '$lib/utils';
   import type { UserConfig } from '$lib/nostr/userConfig';
 
   let mode: 'create' | 'join' = 'create';
   
   // Create Group Form
   let adminNsec = '';
-  let selectedRelay = DEFAULT_RELAYS[0];
-  let customRelay = '';
-  let useCustomRelay = false;
   let groupSecret = '';
   let autoGenerateSecret = true;
+  
+  // Link-Generierung
+  let linkType: 'multi' | 'alias' | 'custom' | 'full' = 'multi';
+  let selectedAlias: number = 1;
+  let customLinkRelay = '';
+  let generatedInviteLink = '';
+  let showLinkSuccess = false;
   
   // Join Group Form (für normale User)
   let joinNsec = '';
@@ -62,12 +67,8 @@
         throw new Error(keyValidation.error || 'Ungültiger Private Key');
       }
 
-      // Bestimme Relay
-      const relay = useCustomRelay ? customRelay : selectedRelay;
-      const relayValidation = validateRelayUrl(relay);
-      if (!relayValidation.valid) {
-        throw new Error(relayValidation.error || 'Ungültige Relay-URL');
-      }
+      // Verwende Standard-Relay für Admin-Login/Whitelist
+      const relay = DEFAULT_RELAYS[0];
 
       // Generiere Secret falls nötig
       let finalSecret = groupSecret.trim();
@@ -139,8 +140,30 @@
         channelId: channelId.substring(0, 16) + '...'
       });
 
-      // Weiterleitung zur Gruppen-Seite
-      await goto('/group');
+      // Generiere Einladungslink basierend auf gewähltem Typ
+      const domain = window.location.origin;
+      let relayForLink: string | number | undefined;
+      
+      if (linkType === 'multi') {
+        relayForLink = undefined; // Kein Relay → Multi-Relay-Fallback
+      } else if (linkType === 'alias') {
+        relayForLink = selectedAlias; // Zahl 1-5
+      } else if (linkType === 'custom') {
+        relayForLink = customLinkRelay; // Custom Relay-URL
+      } else if (linkType === 'full') {
+        relayForLink = relay; // Gruppen-Relay
+      }
+      
+      generatedInviteLink = createInviteLink(domain, finalSecret, relayForLink);
+      showLinkSuccess = true;
+      
+      console.log('🔗 Einladungslink generiert:', {
+        type: linkType,
+        relay: relayForLink,
+        link: generatedInviteLink.substring(0, 50) + '...'
+      });
+
+      // KEIN Auto-Redirect mehr → User muss Link kopieren
     } catch (e: any) {
       error = e.message || 'Ein Fehler ist aufgetreten';
     } finally {
@@ -340,54 +363,6 @@
         </div>
 
         <div class="form-group">
-          <label for="relay">Relay auswählen *</label>
-          <div class="relay-options">
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={useCustomRelay}
-                value={false}
-                disabled={loading}
-              />
-              Standard-Relay
-            </label>
-            {#if !useCustomRelay}
-              <select
-                id="relay"
-                class="input"
-                bind:value={selectedRelay}
-                disabled={loading}
-              >
-                {#each DEFAULT_RELAYS as relay}
-                  <option value={relay}>{relay}</option>
-                {/each}
-              </select>
-            {/if}
-          </div>
-          
-          <div class="relay-options">
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={useCustomRelay}
-                value={true}
-                disabled={loading}
-              />
-              Eigenes Relay
-            </label>
-            {#if useCustomRelay}
-              <input
-                type="text"
-                class="input"
-                bind:value={customRelay}
-                placeholder="wss://relay.example.com"
-                disabled={loading}
-              />
-            {/if}
-          </div>
-        </div>
-
-        <div class="form-group">
           <label for="secret">Gruppen-Secret *</label>
           <div class="secret-input">
             <input
@@ -418,6 +393,83 @@
           <small>Das Secret wird für die Verschlüsselung verwendet (min. 8 Zeichen)</small>
         </div>
 
+        <div class="form-group">
+          <p class="form-label">Einladungslink-Typ *</p>
+          <div class="link-type-options">
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={linkType}
+                value="multi"
+                disabled={loading}
+              />
+              <div>
+                <strong>Multi-Relay (empfohlen)</strong>
+                <small>Höchste Privatsphäre - kein Relay im Link</small>
+              </div>
+            </label>
+
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={linkType}
+                value="alias"
+                disabled={loading}
+              />
+              <div>
+                <strong>Relay-Alias</strong>
+                <small>Kurzer Link mit Alias-Nummer</small>
+              </div>
+            </label>
+            {#if linkType === 'alias'}
+              <select
+                class="input alias-select"
+                bind:value={selectedAlias}
+                disabled={loading}
+              >
+                {#each Object.entries(RELAY_ALIASES) as [num, relay]}
+                  <option value={parseInt(num)}>{num}: {relay}</option>
+                {/each}
+              </select>
+            {/if}
+
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={linkType}
+                value="custom"
+                disabled={loading}
+              />
+              <div>
+                <strong>Eigenes Relay im Link</strong>
+                <small>Spezifisches Relay angeben</small>
+              </div>
+            </label>
+            {#if linkType === 'custom'}
+              <input
+                type="text"
+                class="input"
+                bind:value={customLinkRelay}
+                placeholder="wss://relay.example.com"
+                disabled={loading}
+              />
+            {/if}
+
+            <label class="radio-label">
+              <input
+                type="radio"
+                bind:group={linkType}
+                value="full"
+                disabled={loading}
+              />
+              <div>
+                <strong>Gruppen-Relay</strong>
+                <small>Verwendet das oben gewählte Gruppen-Relay</small>
+              </div>
+            </label>
+          </div>
+        </div>
+
         {#if loadingProfile}
           <div class="info-message">
             ⏳ Lade dein Nostr-Profil...
@@ -438,6 +490,41 @@
           {loading ? '⏳ Erstelle Gruppe...' : loadingProfile ? 'Lade Profil...' : '🚀 Gruppe erstellen'}
         </button>
       </form>
+
+      <!-- Erfolgs-Box nach Gruppenerstellung -->
+      {#if showLinkSuccess && generatedInviteLink}
+        <div class="success-box">
+          <h3>✅ Gruppe erfolgreich erstellt!</h3>
+          <p>Kopiere den Einladungslink und teile ihn mit den Teilnehmern:</p>
+          
+          <div class="link-display">
+            <input
+              type="text"
+              class="input link-input"
+              value={generatedInviteLink}
+              readonly
+            />
+            <button
+              type="button"
+              class="btn btn-secondary"
+              on:click={() => {
+                navigator.clipboard.writeText(generatedInviteLink);
+                alert('Link kopiert! ✅');
+              }}
+            >
+              📋 Kopieren
+            </button>
+          </div>
+          
+          <button
+            type="button"
+            class="btn btn-primary"
+            on:click={() => goto('/group')}
+          >
+            Zur Gruppe →
+          </button>
+        </div>
+      {/if}
     {:else}
       <!-- Join Group Form -->
       <form on:submit|preventDefault={handleJoinGroup}>
@@ -622,10 +709,6 @@
     margin-top: 0.5rem;
     color: var(--text-muted);
     font-size: 0.875rem;
-  }
-
-  .relay-options {
-    margin-bottom: 0.75rem;
   }
 
   .radio-label {
