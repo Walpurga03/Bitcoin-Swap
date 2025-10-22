@@ -1,458 +1,567 @@
-# Anmelde-System — Dezentrale Admin-Verwaltung
+## 🎯 Konzept-Übersicht##
 
-Kurzüberblick
+**Ziel:** Ein klarer, dreistufiger Workflow für Gruppenerstellung und Zugriffskontrolle.
 
-Das Anmelde-System verwendet Nostr als Single Source of Truth. Eine Gruppe wird durch ein Secret identifiziert. Der Administrator (Admin) wird über seinen Public Key (admin_pubkey) in einer öffentlichen GroupConfig (Nostr-Event, Kind 30000) bekannt gemacht. Beim Login vergleicht die App den aktuellen Benutzer-Public-Key mit dem in der GroupConfig gespeicherten admin_pubkey und entscheidet so über Admin-Rechte.
+### Die drei Phasen:### Die drei Phasen:
 
-Ziel dieser Seite: klare, technisch präzise Beschreibung der Funktionsweise, Sicherheits-Highlights und Entwicklerreferenz.
+1. **Gruppenerstellung (nur Admin)** → Admin erstellt Gruppe mit Secret und Relay
+
+2. **Whitelist-Verwaltung (nur Admin)** → Admin erstellt Whitelist, erhält Einladungslink
+
+3. **Login & Zugang (alle User)** → User nutzen Link, melden sich an, Zugang wird geprüft
+
+------
+
+## 📋 Phase 1: Gruppenerstellung (Admin-Seite)##
+
+**Wer:** Nur der Admin | 
+**Wo:** Startseite / Create-Gruppe-Seite
+
+
+**Eingaben:**
+
+- NSEC (Private Key des Admins)
+
+- Secret (Gruppen-Passwort, min. 16 Zeichen)
+
+- Relay-Auswahl (welcher Nostr-Server genutzt wird)
+
+
+**Was die App macht:**
+1. Admin meldet sich mit NSEC an
+
+2. Secret wird validiert (Länge, Sicherheit)
+
+3. Relay wird ausgewählt
+
+4. GroupConfig-Event (Kind 30000) wird auf das gewählte Relay publiziert
+
+5. **Wichtig:** Noch KEINE Whitelist!
+
+
+**Dann:** Admin → direkt in den Angebotsraum → sieht Button **"Whitelist erstellen"**
+
+------
+
+
+## 📋 Phase 2: Whitelist-Verwaltung (Admin im Angebotsraum)
+
+
+**Wer:** Nur der Admin
+**Wo:** Angebotsraum
+
+
+
+**Admin sieht Button:**
+
+- Falls keine Whitelist: **"Whitelist erstellen"**
+
+- Falls vorhanden: **"Whitelist verwalten"**
+
+
+
+**Im Whitelist-Modal:**
+
+1. NPUBs hinzufügen (Eingabefeld + "Hinzufügen"-Button)
+
+2. Liste aller erlaubten NPUBs (mit "Löschen"-Button)
+
+3. Einladungslink: `https://domain/?secret=xyz`
+
+4. QR-Code anzeigen
+
+5. Buttons: "Link kopieren", "Fertig"
+
+------
+
+
+
+## 📋 Phase 3: Login & Zugang (User-Seite)
+
+
+
+**Wer:** Alle User
+**Wo:** Login-Seite (vom Einladungslink/QR)
+
+
+**Ablauf:**
+
+
+**1. User öffnet Link/QR-Code**
+
+- Link enthält nur das Secret
+
+- App lädt Login-Seite
+
+
+**2. Login-Formular mit Sicherheitshinweis:***
+
+
+🔒 **Empfehlung:** "Erstelle ein neues Schlüsselpaar nur für diese App"🔒 
+
+
+**Option A: Neues Schlüsselpaar generieren**
+
+- Button: "🔑 Neues Schlüsselpaar erstellen"
+
+- App generiert NSEC + NPUB
+
+- Anzeige mit Kopieren-Button
+
+- Hinweis: "Speichere deinen NSEC sicher!"
+
+
+**Option B: Bestehendes NSEC**
+
+- Eingabefeld + Warnung: "⚠️ Nur separates NSEC verwenden"
+
+- Button: "Anmelden"
+
+
+**3. App prüft Zugang:**
+
+- Secret aus Link → SHA-256-Hash → Event suchen
+
+- GroupConfig laden → Admin-NPUB + Relay auslesen
+
+- Whitelist laden
+
+- **Prüfung 1:** Ist User = Admin? → JA: Zugang mit Admin-Rechten
+
+- **Prüfung 2:** Steht User auf Whitelist? → JA: Zugang als Teilnehmer
+
+- **Sonst:** Zugang verweigert
+
+
+
+**4. Nach erfolgreicher Anmeldung:**
+
+- → Angebotsraum
+
+- Admin sieht: "Whitelist verwalten"-Button
+
+- User sieht: Nur Angebote (kein Button)
+
+
+------
+
+
+
+## 🔧 Technische Unterschiede zur aktuellen Implementierung
+
+
+
+| Aktuell | Neu |### Was sich ändert:
+
+|---------|-----|
+
+| Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → Angebotsraum → "Whitelist erstellen"-Button || Aktuell | Neu |
+
+| Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow ||---------|-----|
+
+| Einladungslink bei Gruppenerstellung | Einladungslink erst wenn Whitelist erstellt || Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → in Angebotsraum → "Whitelist erstellen"-Button |
+
+| Admin-Seite = separate Route `/admin` | Whitelist-Verwaltung = Modal im Angebotsraum || Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow |
+
+| Join-Seite: "Create" und "Join"-Tabs | Login-Seite: NUR Login-Formular || Einladungslink wird bei Gruppenerstellung generiert | Einladungslink wird erst generiert, wenn Whitelist erstellt wird |
+
+| Admin-Seite ist separate Route `/admin` | Whitelist-Verwaltung ist Modal/Overlay im Angebotsraum |
+
+**Was bleibt gleich:**| Join-Seite hat "Create" und "Join"-Tabs | Login-Seite hat NUR Login-Formular (keine "Create"-Option) |
+
+- ✅ Secret-Hash für Gruppenerkennung
+
+- ✅ Admin-Verifizierung über Signatur### Was bleibt gleich:
+
+- ✅ Whitelist als Nostr-Event
+
+- ✅ Nostr-Event-Struktur (Kind 30000)- ✅ Secret-Hash für Gruppenerkennung
+
+- ✅ Admin-Verifizierung über Signatur
+
+---- ✅ Whitelist als Nostr-Event
+
+- ✅ Nostr-Event-Struktur (Kind 30000)
+
+## 🎨 UI/UX-Flow
 
 ---
 
-1) Terminologie
+### Admin-Flow:
 
-- Secret: Das geheimer Kennwort der Gruppe (vom Admin erstellt). Wird nicht auf Relay gespeichert — nur dessen Hash.
-- secretHash: SHA-256(secret) — dient als eindeutige Gruppen-ID im Nostr-Event-Tag `d`.
-- GroupConfig: Öffentliches Nostr-Event (Kind 30000) mit admin_pubkey und Relay-Info.
-- NSEC: Privater Nostr-Key (Private Key) des Users.
-
----
-
-2) Ablauf — Kurzfassung
-
-1. **Admin erstellt Gruppe:**
-   - Admin wählt Secret (min. 8 Zeichen)
-   - Admin wählt Link-Typ (Multi-Relay, Alias oder Custom)
-   
-2. **Multi-Relay-Replikation:**
-   - App berechnet `secretHash = SHA256(secret)`
-   - GroupConfig-Event (Kind 30000) wird auf **alle 5 Standard-Relays parallel geschrieben**
-   - Content: `{ admin_pubkey, relay, created_at, updated_at }`
-   - Tags: `['d', secretHash]` für eindeutige Identifikation
-
-3. **Einladungslink generiert:**
-   - Multi-Relay: `?secret=<secret>` (kein Relay im Link)
-   - Alias: `?r=1&secret=<secret>` (Relay-Index 1-5)
-   - Custom: `?relay=wss://custom&secret=<secret>` (spezifisches Relay)
-
-4. **Nutzer öffnet Link:**
-   - App extrahiert `secret` aus URL
-   - Bei Multi-Relay/Alias: parallele Suche auf 5 Relays
-   - Bei Custom: primär auf custom Relay, Fallback auf 5 Standard-Relays
-   
-5. **Admin-Verifizierung:**
-   - App lädt GroupConfig via `loadGroupConfigFromRelays(secret, relays)`
-   - Vergleicht `admin_pubkey` mit `user.pubkey` (case-insensitive)
-   - Match → `isAdmin = true` | Kein Match → Whitelist prüfen
-
----
-
-2.1) Technische Details — Gruppenerstellung mit Multi-Relay-Replikation
-
-**Architektur-Prinzip:** Vollständige Redundanz auf allen konfigurierten Relays für maximale Ausfallsicherheit.
-
-**Schritt-für-Schritt (Code-Perspektive):**
-
-1. **Benutzereingabe & Validierung:**
-   ```
-   - Admin gibt NSEC (Private Key) ein → validiert mit validatePrivateKey()
-   - Secret wird generiert (auto) oder manuell eingegeben (min. 8 Zeichen)
-   - Link-Typ gewählt: 'multi' | 'alias' | 'custom'
-   ```
-
-2. **Key-Derivation & Profil-Laden:**
-   ```
-   pubkey = getPublicKey(privateKeyHex)
-   profile = await fetchUserProfile(pubkey)  // optional, für Display-Name
-   ```
-
-3. **Secret-Hash berechnen:**
-   ```typescript
-   secretHash = await deriveSecretHash(secret)
-   // → SHA-256 in hex, dient als eindeutige Gruppen-ID im Nostr-Tag 'd'
-   ```
-
-4. **GroupConfig-Objekt erstellen:**
-   ```typescript
-   const groupConfigData = {
-     relay: DEFAULT_RELAYS[0],  // Standard-Relay für Referenz
-     admin_pubkey: pubkey,       // Admin's öffentlicher Key
-     secret_hash: secretHash,    // SHA-256(secret)
-     created_at: Math.floor(Date.now() / 1000),
-     updated_at: Math.floor(Date.now() / 1000)
-   };
-   ```
-
-5. **Multi-Relay-Publikation (KRITISCH):**
-   ```typescript
-   await saveGroupConfig(
-     groupConfigData, 
-     privateKeyHex, 
-     GROUP_CONFIG_RELAYS  // Array mit 5 Relays
-   );
-   ```
-   
-   **Was passiert intern:**
-   - Nostr-Event Kind 30000 (Replaceable Event) wird erstellt
-   - Event wird mit Admin's Private Key signiert
-   - Event wird **parallel** auf alle 5 Relays geschrieben:
-     * wss://relay.damus.io
-     * wss://relay.nostr.band
-     * wss://nos.lol
-     * wss://relay.snort.social
-     * wss://nostr.wine
-   - Jeder Relay speichert identische Kopie
-   - Fehler auf einzelnen Relays werden toleriert (Promise.allSettled)
-
-6. **GroupStore initialisieren:**
-   ```typescript
-   await groupStore.initialize(secret, relay);
-   // Setzt lokalen State für Channel-ID, Relay-Verbindung
-   ```
-
-7. **Link-Generierung basierend auf Typ:**
-   ```typescript
-   const domain = window.location.origin;
-   let relayForLink: string | number | undefined;
-   
-   if (linkType === 'multi') {
-     relayForLink = undefined;  // → ?secret=abc123
-   } else if (linkType === 'alias') {
-     relayForLink = selectedAlias;  // → ?r=1&secret=abc123
-   } else if (linkType === 'custom') {
-     relayForLink = customLinkRelay;  // → ?relay=wss://...&secret=abc123
-   }
-   
-   inviteLink = createInviteLink(domain, secret, relayForLink);
-   ```
-
-8. **Erfolgs-Anzeige:**
-   - Link wird in UI angezeigt (Copy-Button)
-   - Admin kann Link teilen
-   - **Kein Auto-Redirect** → Admin muss Link explizit kopieren
-
-**Wichtige Implementierungsdetails:**
-
-- **Atomarität:** GroupConfig-Schreiben ist **nicht** atomar über alle Relays. Wenn 3/5 Relays erfolgreich sind, gilt die Gruppe als erstellt. Der erste erfolgreiche Write bestimmt die Existenz.
-  
-- **Konsistenz:** Alle Relays erhalten **identisches Event** (gleiche Signatur, gleicher Inhalt). Updates (Whitelist) werden ebenfalls auf alle 5 Relays repliziert.
-
-- **Fehlertoleranz:** 
-  ```typescript
-  // In saveGroupConfig:
-  const results = await Promise.allSettled(
-    relays.map(r => publishToRelay(event, r))
-  );
-  // Mindestens 1 erfolgreicher Write genügt
-  ```
-
-- **Event-Format (Nostr Kind 30000):**
-  ```json
-  {
-    "kind": 30000,
-    "pubkey": "<admin_pubkey_hex>",
-    "created_at": 1729594800,
-    "tags": [
-      ["d", "<secretHash_hex>"]
-    ],
-    "content": "{\"relay\":\"wss://relay.damus.io\",\"admin_pubkey\":\"<hex>\",\"secret_hash\":\"<hex>\",\"created_at\":1729594800,\"updated_at\":1729594800}",
-    "sig": "<signature_hex>"
-  }
-  ```
-
-**Warum Multi-Relay-Replikation?**
-
-1. **Ausfallsicherheit:** Gruppe funktioniert auch wenn 2-3 Relays offline sind
-2. **Dezentralisierung:** Keine Single-Point-of-Failure
-3. **Censorship-Resistance:** Schwieriger, Gruppe zu blockieren
-4. **Performance:** Paralleles Laden → schnellste Antwort gewinnt
-5. **Privacy (bei Multi-Relay-Link):** Relay nicht im Link sichtbar
-
----
-
-3) Sicherheits- und Datenschutz-Hinweise
-
-- Private Keys (NSEC) verbleiben im Client und werden niemals an Dritte oder Server übertragen.
-- Die GroupConfig (mit admin_pubkey) ist öffentlich. Das bedeutet: wer Admin ist, ist transparent.
-- Der Einladungslink enthält das Secret in der URL — treat as password: nicht in Logs, keine öffentlichen Chats, per HTTPS übermitteln.
-- localStorage ist unverschlüsselt; Secrets sollten wenn möglich in `sessionStorage` gehalten oder nur kurzzeitig zwischengespeichert werden.
-- Relay-Ausfall: Admin-Status und Whitelist können nicht geladen werden. Implementiere Fallback-Strategien (Cache, Retry, Multi-Relay).
-
----
-
-4) Konkrete Empfehlungen
-
-- Erzwinge minimale Secret-Länge ≥ 16 Zeichen.
-- Cache `admin_pubkey` clientseitig mit kurzer TTL (z. B. 5 Minuten) zur Reduktion von Relay-Requests.
-- Zeige Relay-Status (online/connecting/offline) im UI.
-- Implementiere einen Multi-Relay-Fallback: versuche eine konfigurierbare Relay-Liste.
-
----
-
-5) Pseudonymer / dedizierter Admin-Account (Empfehlung)
-
-- Warum: Die GroupConfig macht die Admin-Public-Key sichtbar. Um persönliche Verknüpfungen zu minimieren, ist es sinnvoll, für Admin-Aufgaben ein separates, pseudonymes Keypair zu verwenden statt des persönlichen Haupt-Keys.
-- Wie (kurz): Erzeuge ein neues Nostr-Keypair (npub/nsec). Nutze dieses Keypair nur für die Administrator-Aufgaben (Gruppe erstellen, Whitelist verwalten). Bewahre das `nsec` sicher (offline oder in einem Passwort-Manager) und teile nur den Einladungslink (`?secret=...`) — nicht den nsec.
-- Praktische Schritte:
-   1. Erzeuge Keypair lokal (Wallet/Tool): notiere `npub` und `nsec`.
-   2. Melde dich im Tausch‑Netzwerk mit dem pseudonymen Key an und erstelle die Gruppe.
-   3. Verwende das pseudonyme Keypair nur für Admin‑Operationen; führe normale Nutzeraktionen mit einem separaten Key aus.
-
-Hinweis: Dieses Muster reduziert die Wahrscheinlichkeit, dass dein persönliches Hauptkonto mit Admin‑Aktivitäten verknüpft wird, ohne die Verifizierbarkeit der GroupConfig zu beeinträchtigen.
-
-6) Hashing von Secret + Relay im Link — Idee und Bewertung
-
-Idee: Anstatt `?relay=...&secret=...` im Link zu zeigen, erzeugt der Ersteller einen Token = H(secret || relay) (z. B. SHA-256 über Secret + Relay-URL) und verteilt nur `?token=<hex>` im Link. Der Client müsste dann den Token auflösen, um Secret und/oder Relay zu erhalten.
-
-Bewertung — Vorteile:
-- Versteckt Relay-URL und Secret in der Link‑Repräsentation (keine Klartext‑Relay‑URL in Browser‑History).
-
-Bewertung — Nachteile und praktische Probleme:
-- Keine Geheimhaltung ohne Auflösungsmechanismus: Ein Token alleine sagt dem Client nichts — der Client benötigt eine Methode, um Token → (secret, relay) aufzulösen. Dazu gibt es zwei Optionen:
-   1. Zentraler Resolver/Service (Token → Daten): macht das System nicht mehr vollständig dezentral und schafft einen neuen Vertrauens-/Ausfallpunkt.
-   2. Verteilte Auflösung durch Brute‑Force/Vergleich: wenn der Client nur eine kleine Relay‑Liste hat, kann er Hashes vergleichen — das ist ineffizient und unsicher.
-- Wenn Secret im Token enthalten ist, verliert man den Nutzen: Entweder der Token ist reversibel (keine Sicherheit) oder der Client muss zusätzliche Informationen haben.
-- Komplexere UX: Nutzer erwarten, dass ein Link die Gruppe sofort öffnen kann; Token‑Auflösung erhöht Komplexität und Fehlerquellen.
-
-Empfehlung:
-- Für echte Dezentralität und Privacy ist es einfacher und robuster, die Relay‑URL aus dem Link zu entfernen und stattdessen Multi‑Relay‑Fallback im Client zu verwenden (siehe oben). Das vermeidet zentrale Dienste und bewahrt Privacy ohne zusätzlichen Auflösungs‑Service.
-- Wenn ihr unbedingt Relay/Secret im Link verschleiern wollt, ist ein Token+zentraler Resolver möglich, aber das ist ein Architekturtradeoff (weniger dezentral, zusätzlicher Vertrauenspunkt).
-
-Praktische Alternative (Komfort + Privacy): Benutze kurze Alias/Index‑Parameter (`?r=1`) kombiniert mit einer gepflegten Client‑Relay‑Liste, oder verschlüssele Relay‑Info clientseitig per passphrase und gib die Entschlüsselungs‑Anleitung separat weiter.
-
-7) Umsetzung: Multi‑Relay‑System — Implementierungsstatus ✅
-
-**Status:** VOLLSTÄNDIG IMPLEMENTIERT (seit Commit 2025-10-22)
-
-**Was wurde umgesetzt:**
-
-1. **Vollständige Multi-Relay-Replikation:**
-   - GroupConfig wird auf **alle 5 Relays** geschrieben (nicht nur auf einen)
-   - Whitelist-Updates (add/remove) ebenfalls auf alle 5 Relays
-   - Konfiguration in `src/lib/config.ts`:
-     ```typescript
-     export const GROUP_CONFIG_RELAYS = [
-       'wss://relay.damus.io',
-       'wss://relay.nostr.band',
-       'wss://nos.lol',
-       'wss://relay.snort.social',
-       'wss://nostr.wine'
-     ];
-     ```
-
-2. **Drei Link-Formate unterstützt:**
-   - **Multi-Relay (empfohlen):** `?secret=abc123` 
-     → Kein Relay im Link, Client sucht auf allen 5 Relays parallel
-   - **Relay-Alias:** `?r=1&secret=abc123`
-     → Kurzer Link, Alias-Mapping in `RELAY_ALIASES`
-   - **Custom Relay:** `?relay=wss://custom&secret=abc123`
-     → Spezifisches Relay, aber Daten trotzdem auf allen 5 Standard-Relays
-
-3. **Parallele Relay-Suche implementiert:**
-   - `loadGroupConfigFromRelays(secret, relays)` in `src/lib/nostr/groupConfig.ts`
-   - Suchalgorithmus: Promise.allSettled → alle Relays parallel abfragen
-   - Erstes valides Ergebnis (signaturgeprüft) wird verwendet
-   - Bei mehreren Ergebnissen: neuestes `updated_at` gewinnt
-
-**Architekturübersicht (aktueller Stand):**
+## 🎨 UI/UX-Flow (Schritt für Schritt)
 
 ```
-[Gruppenerstellung]
-     ↓
-secretHash = SHA256(secret)
-     ↓
-GroupConfig-Event (Kind 30000) erstellt
-     ↓
-PARALLEL auf 5 Relays geschrieben
-     ├─→ relay.damus.io      ✅
-     ├─→ relay.nostr.band    ✅
-     ├─→ nos.lol             ✅
-     ├─→ relay.snort.social  ✅
-     └─→ nostr.wine          ✅
-     
-[Link-Generierung]
-     ↓
-Admin wählt Link-Typ (Multi/Alias/Custom)
-     ↓
-Link wird generiert: ?secret=... (kein Relay bei Multi-Relay)
-     ↓
-Admin teilt Link
 
-[Join-Flow]
-     ↓
-Nutzer öffnet Link mit ?secret=...
-     ↓
-Client extrahiert secret → berechnet secretHash
-     ↓
-PARALLEL-SUCHE auf allen 5 Relays
-     ├─→ relay.damus.io      → Event gefunden? ✓
-     ├─→ relay.nostr.band    → Event gefunden? ✓
-     ├─→ nos.lol             → Event gefunden? ✓
-     ├─→ relay.snort.social  → Timeout ✗
-     └─→ nostr.wine          → Event gefunden? ✓
-     ↓
-Erstes valides Event wird verwendet
-     ↓
-admin_pubkey extrahiert → Vergleich mit user.pubkey
-     ↓
-Admin-Status bestimmt (isAdmin = true/false)
+1. Startseite → [Gruppe erstellen]### Admin-Flow:
+
+   - NSEC eingeben
+
+   - Secret festlegen```
+
+   - Relay auswählen1. Startseite
+
+   ↓   ↓
+
+2. Angebotsraum (leer) → [Whitelist erstellen - Button]   [Gruppe erstellen]
+
+   ↓   - NSEC eingeben
+
+3. Whitelist-Modal   - Secret festlegen
+
+   - NPUB hinzufügen   - Relay auswählen
+
+   - Einladungslink + QR-Code   - Button: "Gruppe erstellen"
+
+   ↓   ↓
+
+4. Angebotsraum (mit Whitelist)2. Angebotsraum (leer, noch keine Whitelist)
+
+   - Button: "Whitelist verwalten" (jederzeit)   ↓
+
+```   [Whitelist erstellen - Button sichtbar]
+
+   - Klick öffnet Whitelist-Modal
+
+### User-Flow:   ↓
+
+3. Whitelist-Modal
+
+```   - NPUB hinzufügen
+
+1. Einladungslink / QR-Code erhalten   - Einladungslink anzeigen
+
+   ↓   - QR-Code anzeigen
+
+2. Login-Seite   - Button: "Fertig"
+
+   🔒 Sicherheitshinweis   ↓
+
+   → Option A: Schlüsselpaar generieren4. Angebotsraum (mit Whitelist)
+
+   → Option B: NSEC eingeben   - Button: "Whitelist verwalten" (weiterhin sichtbar)
+
+   ↓   - Admin kann jederzeit Whitelist bearbeiten
+
+3. Zugang wird geprüft```
+
+   - Admin? → Ja/Nein
+
+   - Whitelist? → Ja/Nein### User-Flow:
+
+   ↓
+
+4a. Zugang erlaubt → Angebotsraum```
+
+    Admin: + Whitelist-Button1. User erhält Einladungslink / QR-Code
+
+    User: nur Angebote   ↓
+
+    ↓2. Login-Seite öffnet sich automatisch
+
+4b. Zugang verweigert → Fehlermeldung   ↓
+
+```   [Sicherheitshinweis]
+
+   "🔒 Empfehlung: Erstelle ein neues Schlüsselpaar nur für diese App"
+
+---   ↓
+
+   [Login-Formular - Zwei Optionen]
+
+## 🔐 Sicherheits-Konzept   Option A: Button "Neues Schlüsselpaar generieren"
+
+   Option B: Eingabefeld "NSEC eingeben" + Warnung
+
+**Admin-Rechte:**   ↓
+
+- Nur Admin kann Whitelist bearbeiten3. Zugang wird geprüft
+
+- Prüfung: `user.npub === groupConfig.admin_pubkey`   - Admin? → Ja/Nein
+
+- Admin-NPUB ist öffentlich in GroupConfig   - Auf Whitelist? → Ja/Nein
+
+   ↓
+
+**Whitelist-Prüfung:**4a. Zugang erlaubt → Angebotsraum
+
+- Jeder Login prüft: Steht NPUB auf Whitelist?    - Admin: sieht "Whitelist verwalten"-Button
+
+- Änderungen werden live synchronisiert    - User: sieht nur Angebote
+
+    ↓
+
+**Secret-Sicherheit:**4b. Zugang verweigert → Fehlermeldung
+
+- Secret wird **nie im Klartext** gespeichert → nur SHA-256-Hash    - "Du bist nicht auf der Whitelist"
+
+- SHA-256 = Einweg-Funktion (Hash → Secret unmöglich)    - "Kontaktiere den Admin"
+
+- Ohne originales Secret: Kein Gruppenzugang```
+
+- Secret steht nur: Im Einladungslink + bei Admin/Usern
+
+- Best Practice: Min. 8 Zeichen, zufällig---
+
+
+
+---## 🔐 Sicherheits-Konzept
+
+
+
+## 🔍 Technische Details: Nostr-Events**Admin-Rechte:**
+
+- Nur Admin kann Whitelist bearbeiten
+
+### GroupConfig-Event (Kind 30000):- Prüfung: `user.npub === groupConfig.admin_pubkey`
+
+```json- Admin-NPUB ist öffentlich in GroupConfig
+
+{
+
+  "kind": 30000,**Whitelist-Prüfung:**
+
+  "pubkey": "<admin_npub_hex>",- Jeder Login prüft: Steht NPUB auf Whitelist?
+
+  "created_at": 1729612800,- Änderungen werden live synchronisiert
+
+  "tags": [["d", "<sha256_hash_des_secrets>"]],
+
+  "content": "{\"admin_pubkey\": \"npub1...\", \"relay\": \"wss://...\"}",**Secret-Sicherheit:**
+
+  "sig": "<signatur>"- Secret wird **nie im Klartext** gespeichert → nur SHA-256-Hash
+
+}- SHA-256 = Einweg-Funktion (Hash → Secret unmöglich)
+
+```- Ohne originales Secret: Keine Gruppenzugang
+
+- Secret steht nur: Im Einladungslink + bei Admin/Usern
+
+**Felder:**- Best Practice: Min. 8 Zeichen, zufällig
+
+- `kind: 30000` = Replaceable Event (überschreibbar)
+
+- `pubkey` = Admin (wer hat Event erstellt?)---
+
+- `tags: ["d", "hash"]` = Identifier (Secret-Hash, so findet App das Event)
+
+- `content` = JSON mit admin_pubkey, relay, timestamp (öffentlich!)## � Technische Details: Nostr-Events im Detail
+
+- `sig` = Signatur (beweist: vom Admin erstellt)
+
+### GroupConfig-Event (Kind 30000):
+
+**Wichtig:**```
+
+- Event ist **öffentlich lesbar**{
+
+- Secret wird als **SHA-256-Hash** gespeichert (nie Klartext!)  "kind": 30000,
+
+- Beispiel: `"mein-passwort"` → `"a3f5b8c2..."`  "pubkey": "<admin_npub_hex>",
+
+  "created_at": 1729612800,
+
+### Whitelist-Event (Kind 30000):  "tags": [
+
+```json    ["d", "<sha256_hash_des_secrets>"]
+
+{  ],
+
+  "kind": 30000,  "content": "{
+
+  "pubkey": "<admin_npub_hex>",    \"admin_pubkey\": \"npub1...\",
+
+  "tags": [["d", "<sha256_hash>_whitelist"]],    \"relay\": \"wss://relay.example.com\",
+
+  "content": "{\"allowed_pubkeys\": [\"npub1...\", \"npub2...\"]}",    \"created_at\": 1729612800
+
+  "sig": "<signatur>"  }",
+
+}  "sig": "<signatur_des_admins>"
+
+```}
+
 ```
 
-**Implementierte Funktionen:**
+**Unterschiede:**
 
-**Implementierter Code (vereinfacht):**
+- `tags: ["d", "hash_whitelist"]` = Suffix "_whitelist" (gehört zur Gruppe)**Erklärung:**
 
-```typescript
-// src/lib/nostr/groupConfig.ts
-export async function loadGroupConfigFromRelays(
-  secret: string, 
-  relays: string[]
-): Promise<NostrEvent | null> {
-  const secretHash = await deriveSecretHash(secret);
-  
-  // Parallel auf allen Relays suchen
-  const queries = relays.map(relay => 
-    queryRelayForReplaceable(relay, 30000, secretHash)
-  );
-  const results = await Promise.allSettled(queries);
-  
-  // Valide Events sammeln (Signatur prüfen)
-  const validEvents: NostrEvent[] = [];
-  for (const result of results) {
-    if (result.status === 'fulfilled' && result.value) {
-      const event = result.value;
-      if (verifySignature(event)) {
-        validEvents.push(event);
-      }
-    }
-  }
-  
-  // Nichts gefunden
-  if (validEvents.length === 0) return null;
-  
-  // Bei mehreren: neuestes Event gewinnt
-  validEvents.sort((a, b) => b.created_at - a.created_at);
-  return validEvents[0];
-}
+- `content` = Liste erlaubter NPUBs- `kind: 30000` = Replaceable Event (kann überschrieben werden)
+
+- Auch öffentlich, aber nur Admin kann signieren- `pubkey` = Öffentlicher Schlüssel des Admins (wer hat das Event erstellt?)
+
+- `tags: ["d", "hash"]` = Identifier-Tag mit Secret-Hash (so findet App das Event)
+
+### Wie findet die App die Events?- `content` = JSON mit Gruppen-Infos (öffentlich lesbar!)
+
+- `sig` = Signatur (beweist: wurde wirklich vom Admin erstellt)
+
+**Login-Ablauf:**
+
+1. User öffnet: `?secret=mein-passwort`### Whitelist-Event (Kind 30000):
+
+2. App berechnet: `hash = SHA256("mein-passwort")````
+
+3. App fragt Relays: Event mit `d`-Tag = `hash`?{
+
+4. Relay antwortet: GroupConfig-Event  "kind": 30000,
+
+5. App liest: `relay`, `admin_pubkey`  "pubkey": "<admin_npub_hex>",
+
+6. App fragt Relay: Event mit `d`-Tag = `hash_whitelist`?  "created_at": 1729612900,
+
+7. Relay antwortet: Whitelist-Event  "tags": [
+
+8. App prüft: Admin oder auf Whitelist?    ["d", "<sha256_hash_des_secrets>_whitelist"]
+
+  ],
+
+**Warum öffentlich?**  "content": "{
+
+- Nostr = öffentliche Events    \"allowed_pubkeys\": [
+
+- Jeder kann lesen, **nur Admin kann signieren**      \"npub1abc...\",
+
+- Ohne Secret (nur Hash sichtbar) → kein Zugang      \"npub1def...\",
+
+- Sicherheit = Secret, nicht Event-Geheimhaltung      \"npub1ghi...\"
+
+    ]
+
+---  }",
+
+  "sig": "<signatur_des_admins>"
+
+## 📊 Offene Fragen}
+
 ```
 
-```typescript
-// src/routes/+page.svelte (Gruppenerstellung)
-async function handleCreateGroup() {
-  // ... Validierung, Profil laden ...
-  
-  const secretHash = await deriveSecretHash(secret);
-  const groupConfigData = {
-    relay: DEFAULT_RELAYS[0],
-    admin_pubkey: pubkey,
-    secret_hash: secretHash,
-    created_at: Math.floor(Date.now() / 1000),
-    updated_at: Math.floor(Date.now() / 1000)
-  };
-  
-  // ✅ KRITISCH: Auf ALLE Relays schreiben
-  await saveGroupConfig(
-    groupConfigData, 
-    privateKeyHex, 
-    GROUP_CONFIG_RELAYS  // 5 Relays
-  );
-  
-  console.log('✅ GroupConfig auf', GROUP_CONFIG_RELAYS.length, 'Relays publiziert');
-  
-  // Link generieren basierend auf gewähltem Typ
-  const inviteLink = createInviteLink(domain, secret, relayForLink);
-}
-```
+1. **Schlüsselpaar-Generierung:** `nostr-tools` oder `@noble/secp256k1`? → Empfehlung: `nostr-tools`
 
-```typescript
-// src/routes/admin/+page.svelte (Whitelist-Update)
-async function handleAddPubkey() {
-  // ✅ Whitelist-Update auf ALLE Relays
-  const result = await addToWhitelist(
-    pubkeyHex, 
-    adminPrivateKey, 
-    GROUP_CONFIG_RELAYS,  // 5 Relays
-    channelId
-  );
-}
-```
+2. **Whitelist-UI:** Modal im Angebotsraum oder separate `/admin`-Route? → Empfehlung: Modal**Erklärung:**
 
-**Implementierte Features:**
+3. **Whitelist leer:** Niemand außer Admin oder jeder mit Link? → Empfehlung: Nur Admin (sicherer)- Gleicher `kind: 30000`
 
-1. **Relay-Alias-Mapping (`?r=1`):**
-   ```typescript
-   // src/lib/config.ts
-   export const RELAY_ALIASES: { [key: number]: string } = {
-     1: 'wss://relay.damus.io',
-     2: 'wss://relay.nostr.band',
-     3: 'wss://nos.lol',
-     4: 'wss://relay.snort.social',
-     5: 'wss://nostr.wine'
-   };
-   ```
-   - Vorteil: Kurze Links (`?r=1&secret=...`)
-   - Relay nicht im Klartext sichtbar
-   - Mapping client-seitig, einfach aktualisierbar
+4. **QR-Code Library:** `qrcode` oder `qr-code-styling`? → Empfehlung: `qrcode`- `tags: ["d", "hash_whitelist"]` = Identifier mit "_whitelist"-Suffix (gehört zur gleichen Gruppe)
 
-2. **Join-Flow mit automatischem Fallback:**
-   ```typescript
-   // src/routes/+page.svelte
-   async function handleJoinGroup() {
-     const relayParam = url.searchParams.get('relay');
-     const relayAliasParam = url.searchParams.get('r');
-     const secret = url.searchParams.get('secret');
-     
-     let relaysToUse: string[] = [];
-     
-     if (relayParam) {
-       // Custom Relay angegeben → primär nutzen, aber Fallback zu Standard-Relays
-       relaysToUse = [relayParam];
-     } else if (relayAliasParam) {
-       // Alias → über Mapping auflösen
-       const aliasRelay = RELAY_ALIASES[parseInt(relayAliasParam)];
-       relaysToUse = aliasRelay ? [aliasRelay] : GROUP_CONFIG_RELAYS;
-     } else {
-       // Multi-Relay → alle 5 Standard-Relays
-       relaysToUse = GROUP_CONFIG_RELAYS;
-     }
-     
-     const config = await loadGroupConfigFromRelays(secret, relaysToUse);
-   }
-   ```
+5. **QR-Code Style:** Schwarz-weiß, farbig, mit Logo? → Empfehlung: Schwarz-weiß- `content` = Liste aller erlaubten NPUBs (auch öffentlich!)
 
-3. **UI-Flows & Fehlerfälle:**
-   - ✅ GroupConfig gefunden → Admin-Check durchführen
-   - ✅ GroupConfig nicht gefunden → Error: "Gruppe nicht gefunden"
-   - ✅ Relay-Timeout → Automatischer Fallback auf andere Relays
-   - ✅ Info-Modal erklärt alle 3 Link-Typen mit Vor-/Nachteilen
+6. **NSEC-Speicherung:** LocalStorage oder jedes Mal eingeben?- Nur Admin kann dieses Event erstellen/ändern (durch Signatur verifiziert)
 
-4. **Whitelist-Replikation:**
-   ```typescript
-   // Alle Whitelist-Änderungen auf allen Relays
-   await addToWhitelist(pubkey, privateKey, GROUP_CONFIG_RELAYS, channelId);
-   await removeFromWhitelist(pubkey, privateKey, GROUP_CONFIG_RELAYS, channelId);
-   ```
 
-**Vorteile der aktuellen Implementierung:**
 
-| Feature | Status | Nutzen |
-|---------|--------|--------|
-| Multi-Relay-Replikation | ✅ | Ausfallsicherheit, Censorship-Resistance |
-| Parallele Relay-Suche | ✅ | Performance, schnellste Antwort gewinnt |
-| Privacy (Multi-Relay-Link) | ✅ | Kein Relay im Link sichtbar |
-| Relay-Alias-System | ✅ | Kurze Links, anpassbar |
-| Custom Relay Support | ✅ | Flexibilität für spezielle Setups |
-| Automatischer Fallback | ✅ | Robustheit bei Relay-Ausfällen |
+---### Wie findet die App die Events?
 
-**Offene Punkte / Zukünftige Verbesserungen:**
 
-- [ ] **Caching:** GroupConfig lokal cachen (TTL 5 Min.) für Offline-Nutzung
-- [ ] **Unit-Tests:** Tests für `loadGroupConfigFromRelays` (happy path, timeouts, invalid signatures)
-- [ ] **Retry-Logik:** Exponential backoff bei fehlgeschlagenen Relay-Requests
-- [ ] **Relay-Health-Monitoring:** UI-Indikator für Relay-Status (online/offline)
-- [ ] **Migration-Helper:** Alte Links mit `?relay=...` automatisch zu Multi-Relay konvertieren
-- [ ] **Konflikt-Resolution:** Wenn mehrere Relays unterschiedliche Versionen haben (aktuell: neueste gewinnt)
 
-**Zusammenfassung:**
+## ✅ Implementierungs-Schritte**Beim Login:**
 
-Das Multi-Relay-System ist **vollständig implementiert** und funktional. Alle Gruppendaten werden redundant auf 5 Relays gespeichert. Der Admin kann zwischen 3 Link-Typen wählen, wobei Multi-Relay (ohne Relay im Link) die beste Balance aus Privacy und Robustheit bietet. Das System ist dezentral, zensurresistent und ausfallsicher.
+1. User öffnet Link: `?secret=mein-geheimes-passwort`
 
+1. **UI:**2. App berechnet: `hash = SHA256("mein-geheimes-passwort")`
+
+   - Gruppenerstellung: "Join"-Tab entfernen3. App fragt Relays: "Gib mir Event mit `d`-Tag = `hash`"
+
+   - Angebotsraum: "Whitelist verwalten"-Button4. Relay antwortet mit GroupConfig-Event
+
+   - Login: Sicherheitshinweis + Keypair-Generator + NSEC-Eingabe5. App liest aus Event: `relay`, `admin_pubkey`
+
+6. App fragt gleichen Relay: "Gib mir Event mit `d`-Tag = `hash_whitelist`"
+
+2. **Whitelist-Modal:**7. Relay antwortet mit Whitelist-Event
+
+   - NPUB hinzufügen/löschen8. App prüft: Ist User Admin oder auf Whitelist?
+
+   - Einladungslink mit Copy-Button
+
+   - QR-Code anzeigen**Warum öffentlich?**
+
+- Nostr-Relays speichern alle Events öffentlich
+
+3. **Routing:**- Jeder kann Events lesen, aber **nur der Admin kann GroupConfig/Whitelist signieren**
+
+   - Nach Gruppenerstellung → `/group` (Angebotsraum)- Ohne Secret (nur Hash sichtbar) kann niemand anderes die Gruppe nutzen
+
+   - Nach Login (erfolgreich) → `/group`- Sicherheit liegt im Secret, nicht in der Geheimhaltung der Event-Struktur
+
+   - Nach Login (verweigert) → Fehlermeldung
+
+---
+
+4. **Zugriffskontrolle:**
+
+   - Angebotsraum: Admin- oder Whitelist-Prüfung## �📊 Offene Fragen / Entscheidungen
+
+   - Whitelist-Button: Nur für Admin sichtbar
+
+### 1. Schlüsselpaar-Generierung: Welche Library?
+
+---- **Option A:** `nostr-tools` (Standard Nostr-Library)
+
+- **Option B:** Eigene Implementierung mit `@noble/secp256k1`
+
+## 📝 Fragen an dich- **Empfehlung:** `nostr-tools` (bereits im Projekt vorhanden)
+
+
+
+1. **Schlüsselpaar-Generierung:** Welche Library? (nostr-tools empfohlen)### 2. Whitelist-Modal oder separate Seite?
+
+2. **Whitelist-UI:** Modal oder separate Seite?- **Option A:** Modal/Overlay im Angebotsraum (User bleibt auf gleicher Seite)
+
+3. **Whitelist leer:** Was passiert?- **Option B:** Separate `/admin`-Route (wie bisher)
+
+4. **QR-Code:** Welche Library + Style?- **Empfehlung:** Modal für bessere UX
+
+5. **NSEC-Speicherung:** LocalStorage oder nicht?
+
+### 3. Was wenn Whitelist leer ist?
+
+**Bereit für Implementation?** Sag Bescheid! 🚀- **Option A:** Gruppe ohne Whitelist = niemand außer Admin darf rein
+
+- **Option B:** Gruppe ohne Whitelist = jeder mit Link darf rein
+- **Empfehlung:** Option A (sicherer)
+
+### 4. QR-Code-Generator?
+- Welche Library? (z.B. `qrcode`, `qr-code-styling`)
+- Wo anzeigen? (Modal, Download-Button?)
+- **Empfehlung:** `qrcode` Library, Anzeige im Whitelist-Modal
+
+### 5. QR-Code: Welcher Style?
+- Schwarz-weiß, farbig, mit Logo?
+- **Empfehlung:** Schwarz-weiß (beste Kompatibilität)
+
+---
+
+## ✅ Implementierungs-Schritte
+
+1. **UI:**
+   - Gruppenerstellung: "Join"-Tab entfernen
+   - Angebotsraum: "Whitelist verwalten"-Button
+   - Login: Sicherheitshinweis + Keypair-Generator + NSEC-Eingabe
+
+2. **Whitelist-Modal:**
+   - NPUB hinzufügen/löschen
+   - Einladungslink mit Copy-Button
+   - QR-Code anzeigen
+
+3. **Routing:**
+   - Nach Gruppenerstellung → `/group` (Angebotsraum)
+   - Nach Login (erfolgreich) → `/group`
+   - Nach Login (verweigert) → Fehlermeldung
+
+4. **Zugriffskontrolle:**
+   - Angebotsraum: Admin- oder Whitelist-Prüfung
+   - Whitelist-Button: Nur für Admin sichtbar
+
+---
+
+## 📝 Fragen an dich
+
+1. **Schlüsselpaar-Generierung:** Welche Library? (nostr-tools empfohlen)
+2. **Whitelist-UI:** Modal oder separate Seite?
+3. **Whitelist leer:** Was passiert?
+4. **QR-Code:** Welche Library + Style?
+5. **NSEC-Speicherung:** LocalStorage oder nicht?
+
+**Bereit für Implementation?** Sag Bescheid! 🚀

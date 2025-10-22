@@ -7,6 +7,8 @@
   import { dealStore, dealRooms } from '$lib/stores/dealStore';
   import { formatTimestamp, truncatePubkey } from '$lib/utils';
   import { generateTempKeypair } from '$lib/nostr/crypto';
+  import WhitelistModal from '$lib/components/WhitelistModal.svelte';
+  
   let isAdmin = false;
 
   let offerInput = '';
@@ -17,6 +19,7 @@
   let expandedOffers: Set<string> = new Set();
   let myInterests: Set<string> = new Set();
   let autoRefreshInterval: ReturnType<typeof setInterval>;
+  let showWhitelistModal = false;
 
   // Prüfe ob User bereits ein aktives Angebot hat
   $: hasActiveOffer = tempKeypair && $marketplaceOffers.some(
@@ -353,7 +356,7 @@
         </button>
       {/if}
       {#if isAdmin}
-        <button class="btn btn-admin" on:click={() => goto('/admin')}>
+        <button class="btn btn-admin" on:click={() => showWhitelistModal = true}>
           🔐 Whitelist verwalten
         </button>
       {/if}
@@ -1312,3 +1315,6 @@
     }
   }
 </style>
+
+<!-- Whitelist Modal -->
+<WhitelistModal bind:show={showWhitelistModal} onClose={() => showWhitelistModal = false} />

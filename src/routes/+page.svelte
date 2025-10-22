@@ -9,8 +9,8 @@
   import { deriveChannelId } from '$lib/nostr/crypto';
   import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
   import { saveGroupConfig, loadGroupAdmin, deriveSecretHash, loadGroupConfigFromRelays } from '$lib/nostr/groupConfig';
-  import { createInviteLink } from '$lib/utils';
   import type { UserConfig } from '$lib/nostr/userConfig';
+  import { getPublicKey, nip19 } from 'nostr-tools';
 
   let mode: 'create' | 'join' = 'create';
   
@@ -19,13 +19,10 @@
   let groupSecret = '';
   let autoGenerateSecret = true;
   
-  // Link-Generierung
-  let linkType: 'multi' | 'alias' | 'custom' = 'multi';
-  let selectedAlias: number = 1;
-  let customLinkRelay = '';
-  let generatedInviteLink = '';
-  let showLinkSuccess = false;
-  let showInfoModal = false;
+  // Keypair-Generator für Login
+  let showKeypairGenerator = false;
+  let generatedNsec = '';
+  let generatedNpub = '';
   
   // Join Group Form (für normale User)
   let joinNsec = '';
@@ -41,6 +38,15 @@
     if ($userStore.isAuthenticated) {
       goto('/group');
     }
+    
+    // Prüfe ob Einladungslink in URL (dann zeige Join-Modus)
+    const params = new URLSearchParams(window.location.search);
+    const secret = params.get('secret');
+    if (secret) {
+      mode = 'join';
+      // Extrahiere Link automatisch
+      inviteLink = window.location.href;
+    }
   });
 
   function generateRandomSecret(): string {
@@ -55,6 +61,31 @@
   function handleGenerateSecret() {
     groupSecret = generateRandomSecret();
     autoGenerateSecret = false;
+  }
+
+  function handleGenerateKeypair() {
+    // Generiere neues Keypair mit nostr-tools
+    const privateKeyBytes = new Uint8Array(32);
+    crypto.getRandomValues(privateKeyBytes);
+    const privateKeyHex = Array.from(privateKeyBytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    const publicKeyHex = getPublicKey(privateKeyHex as any);
+    
+    // Konvertiere zu bech32 Format (nip19 erwartet Uint8Array)
+    generatedNsec = nip19.nsecEncode(privateKeyBytes);
+    generatedNpub = nip19.npubEncode(publicKeyHex);
+    
+    // Zeige Generator
+    showKeypairGenerator = true;
+    
+    // Setze NSEC ins Eingabefeld
+    joinNsec = generatedNsec;
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
   }
 
   async function handleCreateGroup() {
@@ -141,28 +172,8 @@
         channelId: channelId.substring(0, 16) + '...'
       });
 
-      // Generiere Einladungslink basierend auf gewähltem Typ
-      const domain = window.location.origin;
-      let relayForLink: string | number | undefined;
-      
-      if (linkType === 'multi') {
-        relayForLink = undefined; // Kein Relay → Multi-Relay-Fallback
-      } else if (linkType === 'alias') {
-        relayForLink = selectedAlias; // Zahl 1-5
-      } else if (linkType === 'custom') {
-        relayForLink = customLinkRelay; // Custom Relay-URL
-      }
-      
-      generatedInviteLink = createInviteLink(domain, finalSecret, relayForLink);
-      showLinkSuccess = true;
-      
-      console.log('🔗 Einladungslink generiert:', {
-        type: linkType,
-        relay: relayForLink,
-        link: generatedInviteLink.substring(0, 50) + '...'
-      });
-
-      // KEIN Auto-Redirect mehr → User muss Link kopieren
+      // Navigiere direkt zum Angebotsraum (Link wird später im WhitelistModal generiert)
+      await goto('/group');
     } catch (e: any) {
       error = e.message || 'Ein Fehler ist aufgetreten';
     } finally {
@@ -323,24 +334,6 @@
     <h1>🛒 Bitcoin Tausch Netzwerk</h1>
     <p class="subtitle">Dezentraler Gruppen-Chat mit Nostr</p>
 
-    <!-- Mode Toggle -->
-    <div class="mode-toggle">
-      <button
-        class="mode-btn"
-        class:active={mode === 'create'}
-        on:click={() => mode = 'create'}
-      >
-        🆕 Neue Gruppe erstellen
-      </button>
-      <button
-        class="mode-btn"
-        class:active={mode === 'join'}
-        on:click={() => mode = 'join'}
-      >
-        🔗 Gruppe beitreten
-      </button>
-    </div>
-
     {#if mode === 'create'}
       <!-- Create Group Form -->
       <form on:submit|preventDefault={handleCreateGroup}>
@@ -392,80 +385,6 @@
           <small>Das Secret wird für die Verschlüsselung verwendet (min. 8 Zeichen)</small>
         </div>
 
-        <div class="form-group">
-          <div class="form-label-with-info">
-            <p class="form-label">Einladungslink-Typ *</p>
-            <button 
-              type="button" 
-              class="btn-info"
-              on:click={() => showInfoModal = true}
-              title="Erklärung der Link-Typen"
-            >
-              ℹ️ Info
-            </button>
-          </div>
-          <div class="link-type-options">
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={linkType}
-                value="multi"
-                disabled={loading}
-              />
-              <div>
-                <strong>Multi-Relay (empfohlen)</strong>
-                <small>Höchste Privatsphäre - kein Relay im Link</small>
-              </div>
-            </label>
-
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={linkType}
-                value="alias"
-                disabled={loading}
-              />
-              <div>
-                <strong>Relay-Alias</strong>
-                <small>Kurzer Link mit Alias-Nummer</small>
-              </div>
-            </label>
-            {#if linkType === 'alias'}
-              <select
-                class="input alias-select"
-                bind:value={selectedAlias}
-                disabled={loading}
-              >
-                {#each Object.entries(RELAY_ALIASES) as [num, relay]}
-                  <option value={parseInt(num)}>{num}: {relay}</option>
-                {/each}
-              </select>
-            {/if}
-
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={linkType}
-                value="custom"
-                disabled={loading}
-              />
-              <div>
-                <strong>Eigenes Relay im Link</strong>
-                <small>Spezifisches Relay angeben</small>
-              </div>
-            </label>
-            {#if linkType === 'custom'}
-              <input
-                type="text"
-                class="input"
-                bind:value={customLinkRelay}
-                placeholder="wss://relay.example.com"
-                disabled={loading}
-              />
-            {/if}
-          </div>
-        </div>
-
         {#if loadingProfile}
           <div class="info-message">
             ⏳ Lade dein Nostr-Profil...
@@ -486,113 +405,52 @@
           {loading ? '⏳ Erstelle Gruppe...' : loadingProfile ? 'Lade Profil...' : '🚀 Gruppe erstellen'}
         </button>
       </form>
-
-      <!-- Erfolgs-Box nach Gruppenerstellung -->
-      {#if showLinkSuccess && generatedInviteLink}
-        <div class="success-box">
-          <h3>✅ Gruppe erfolgreich erstellt!</h3>
-          <p>Kopiere den Einladungslink und teile ihn mit den Teilnehmern:</p>
-          
-          <div class="link-display">
-            <input
-              type="text"
-              class="input link-input"
-              value={generatedInviteLink}
-              readonly
-            />
-            <button
-              type="button"
-              class="btn btn-secondary"
-              on:click={() => {
-                navigator.clipboard.writeText(generatedInviteLink);
-                alert('Link kopiert! ✅');
-              }}
-            >
-              📋 Kopieren
-            </button>
-          </div>
-          
-          <button
-            type="button"
-            class="btn btn-primary"
-            on:click={() => goto('/group')}
-          >
-            Zur Gruppe →
-          </button>
-        </div>
-      {/if}
-
-      <!-- Info-Modal für Link-Typen -->
-      {#if showInfoModal}
-        <div 
-          class="modal-overlay" 
-          on:click={() => showInfoModal = false}
-          on:keydown={(e) => e.key === 'Escape' && (showInfoModal = false)}
-          role="button"
-          tabindex="-1"
-        >
-          <div 
-            class="modal-content" 
-            role="dialog"
-            aria-labelledby="modal-title"
-          >
-            <div class="modal-header">
-              <h3 id="modal-title">🔗 Einladungslink-Typen Erklärung</h3>
-              <button class="modal-close" on:click={() => showInfoModal = false}>✕</button>
-            </div>
-            
-            <div class="modal-body">
-              <div class="info-section">
-                <h4>🌐 Multi-Relay (empfohlen)</h4>
-                <p><strong>Link-Format:</strong> <code>?secret=abc123</code></p>
-                <p><strong>Wie funktioniert es?</strong></p>
-                <ul>
-                  <li>Kein Relay im Link sichtbar → <strong>höchste Privatsphäre</strong></li>
-                  <li>App sucht automatisch auf 5 vordefinierten Relays parallel</li>
-                  <li>Funktioniert auch wenn ein Relay offline ist</li>
-                </ul>
-                <p class="recommendation">✅ Beste Wahl für maximale Privacy und Robustheit</p>
-              </div>
-
-              <div class="info-section">
-                <h4>🔢 Relay-Alias</h4>
-                <p><strong>Link-Format:</strong> <code>?r=1&secret=abc123</code></p>
-                <p><strong>Wie funktioniert es?</strong></p>
-                <ul>
-                  <li>Kurze Zahl (1-5) verweist auf vordefiniertes Relay</li>
-                  <li>Kürzerer Link als vollständige URL</li>
-                  <li>Relay-Zuordnung im Code hinterlegt</li>
-                </ul>
-                <p class="recommendation">⚖️ Guter Kompromiss: kurz & ausreichend privat</p>
-              </div>
-
-              <div class="info-section">
-                <h4>🛠️ Eigenes Relay im Link</h4>
-                <p><strong>Link-Format:</strong> <code>?relay=wss://custom.relay&secret=abc123</code></p>
-                <p><strong>Wie funktioniert es?</strong></p>
-                <ul>
-                  <li>Du gibst ein spezifisches Relay im Link an</li>
-                  <li>Relay-URL steht im Klartext im Link (niedrige Privacy)</li>
-                  <li>Gruppendaten werden trotzdem auf alle Standard-Relays repliziert</li>
-                  <li>Nützlich wenn Nutzer ein bestimmtes Relay bevorzugen</li>
-                </ul>
-                <p class="recommendation">⚠️ Niedrigere Privacy - aber volle Kontrolle über primäres Relay</p>
-              </div>
-
-              <div class="info-note">
-                <strong>💡 Wichtig:</strong> Unabhängig vom Link-Typ werden alle Gruppen-Daten (GroupConfig & Whitelist) 
-                automatisch auf 5 Relays repliziert. Das garantiert Ausfallsicherheit - wenn ein Relay offline ist, 
-                funktioniert die Gruppe weiterhin. Multi-Relay-Links bieten die beste Privacy!
-              </div>
-            </div>
-          </div>
-        </div>
-      {/if}
     {:else}
       <!-- Join Group Form -->
       <form on:submit|preventDefault={handleJoinGroup}>
         <h2>Gruppe beitreten</h2>
         <p class="info">Trete einer bestehenden Gruppe mit einem Einladungslink bei.</p>
+
+        <!-- Sicherheitshinweis -->
+        <div class="security-warning">
+          <h3>🔒 Sicherheitsempfehlung</h3>
+          <p><strong>Erstelle ein neues Schlüsselpaar nur für diese App!</strong></p>
+          <p>Nutze nicht deinen Haupt-NSEC, den du für andere Nostr-Apps verwendest.</p>
+          
+          <button 
+            type="button" 
+            class="btn btn-secondary"
+            on:click={handleGenerateKeypair}
+            disabled={loading}
+          >
+            🔑 Neues Schlüsselpaar generieren
+          </button>
+        </div>
+
+        {#if showKeypairGenerator && generatedNsec}
+          <div class="keypair-display">
+            <h4>✅ Neues Schlüsselpaar erstellt</h4>
+            <div class="key-item">
+              <span class="key-label">NSEC (Private Key) - Sicher speichern!</span>
+              <div class="key-copy">
+                <code>{generatedNsec}</code>
+                <button type="button" class="btn-copy" on:click={() => copyToClipboard(generatedNsec)}>
+                  📋 Kopieren
+                </button>
+              </div>
+            </div>
+            <div class="key-item">
+              <span class="key-label">NPUB (Public Key)</span>
+              <div class="key-copy">
+                <code>{generatedNpub}</code>
+                <button type="button" class="btn-copy" on:click={() => copyToClipboard(generatedNpub)}>
+                  📋 Kopieren
+                </button>
+              </div>
+            </div>
+            <small class="warning">⚠️ Speichere deinen NSEC sicher (z.B. Passwort-Manager)! Ohne ihn verlierst du den Zugang.</small>
+          </div>
+        {/if}
 
         <div class="form-group">
           <label for="invite-link">Einladungslink *</label>
@@ -619,7 +477,7 @@
             required
             disabled={loading}
           />
-          <small>Dein Private Key wird nur lokal gespeichert</small>
+          <small>⚠️ Nur verwenden, wenn du ein separates NSEC für diese App hast</small>
         </div>
 
         {#if loadingProfile}
@@ -647,9 +505,9 @@
     <div class="info-box">
       <h3>ℹ️ Hinweise</h3>
       <ul>
-        <li><strong>Neue Gruppe:</strong> Du wirst automatisch Admin und kannst die Whitelist verwalten</li>
-        <li><strong>Gruppe beitreten:</strong> Du benötigst einen Einladungslink vom Admin (Format: <code>?secret=...</code> oder <code>?r=1&secret=...</code>)</li>
-        <li><strong>Multi-Relay:</strong> Falls kein Relay im Link angegeben ist, werden automatisch mehrere Relays durchsucht</li>
+        <li><strong>Neue Gruppe:</strong> Du wirst automatisch Admin und kannst die Whitelist im Angebotsraum verwalten</li>
+        <li><strong>Gruppe beitreten:</strong> Du benötigst einen Einladungslink vom Admin (Format: <code>?secret=...</code>)</li>
+        <li><strong>Einladungslink:</strong> Admin erstellt den Link nach Gruppenerstellung im Whitelist-Modal</li>
         <li><strong>Sicherheit:</strong> Dein Private Key verlässt niemals deinen Browser</li>
         <li><strong>Verschlüsselung:</strong> Alle Nachrichten sind Ende-zu-Ende verschlüsselt</li>
       </ul>
@@ -668,13 +526,21 @@
   }
 
   .card {
-    max-width: 600px;
+    max-width: 900px;
     width: 100%;
     background: linear-gradient(135deg, var(--surface-color) 0%, var(--surface-elevated) 100%);
     border-radius: 1rem;
-    padding: 2rem;
+    padding: 2.5rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
+  }
+
+  /* Responsive: auf kleinen Bildschirmen schmaler */
+  @media (max-width: 768px) {
+    .card {
+      max-width: 600px;
+      padding: 1.5rem;
+    }
   }
 
   h1 {
@@ -691,37 +557,6 @@
     text-align: center;
     color: var(--text-muted);
     margin: 0 0 2rem 0;
-  }
-
-  .mode-toggle {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
-    background: var(--bg-color);
-    padding: 0.5rem;
-    border-radius: 0.75rem;
-  }
-
-  .mode-btn {
-    padding: 0.75rem 1rem;
-    border: none;
-    border-radius: 0.5rem;
-    background: transparent;
-    color: var(--text-muted);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .mode-btn.active {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-    color: white;
-    box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
-  }
-
-  .mode-btn:hover:not(.active) {
-    background: var(--surface-color);
   }
 
   h2 {
@@ -774,18 +609,6 @@
     font-size: 0.875rem;
   }
 
-  .radio-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-weight: normal;
-  }
-
-  .radio-label input[type="radio"] {
-    width: auto;
-  }
-
   .checkbox-label {
     display: flex;
     align-items: center;
@@ -805,155 +628,6 @@
 
   .secret-input .input {
     flex: 1;
-  }
-
-  .form-label-with-info {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-  }
-
-  .form-label-with-info .form-label {
-    margin: 0;
-  }
-
-  .btn-info {
-    padding: 0.375rem 0.75rem;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .btn-info:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  /* Modal Styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-    backdrop-filter: blur(4px);
-  }
-
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 1rem;
-    max-width: 700px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border-color);
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .modal-header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: var(--text-primary);
-  }
-
-  .modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    transition: color 0.2s;
-  }
-
-  .modal-close:hover {
-    color: var(--text-primary);
-  }
-
-  .modal-body {
-    padding: 1.5rem;
-  }
-
-  .info-section {
-    margin-bottom: 1.5rem;
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border-radius: 0.5rem;
-    border-left: 3px solid var(--primary-color);
-  }
-
-  .info-section h4 {
-    margin: 0 0 0.75rem 0;
-    color: var(--text-primary);
-    font-size: 1.125rem;
-  }
-
-  .info-section p {
-    margin: 0.5rem 0;
-    color: var(--text-primary);
-  }
-
-  .info-section code {
-    background: var(--bg-primary);
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.875rem;
-    color: var(--primary-color);
-  }
-
-  .info-section ul {
-    margin: 0.5rem 0;
-    padding-left: 1.5rem;
-  }
-
-  .info-section li {
-    margin: 0.375rem 0;
-    color: var(--text-secondary);
-  }
-
-  .recommendation {
-    margin-top: 0.75rem;
-    padding: 0.5rem;
-    background: var(--bg-primary);
-    border-radius: 0.375rem;
-    font-weight: 500;
-    font-size: 0.9375rem;
-  }
-
-  .info-note {
-    background: linear-gradient(135deg, rgba(255, 0, 110, 0.1), rgba(127, 0, 255, 0.1));
-    padding: 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--primary-color);
-    color: var(--text-primary);
-  }
-
-  .info-note strong {
-    color: var(--primary-color);
   }
 
   .btn {
@@ -1046,6 +720,99 @@
     color: var(--text-muted);
   }
 
+  .security-warning {
+    background: linear-gradient(135deg, rgba(255, 165, 0, 0.1) 0%, rgba(255, 165, 0, 0.05) 100%);
+    border: 2px solid rgba(255, 165, 0, 0.3);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .security-warning h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    color: var(--accent-color);
+  }
+
+  .security-warning p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+  }
+
+  .security-warning .btn {
+    margin-top: 1rem;
+    width: 100%;
+  }
+
+  .keypair-display {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .keypair-display h4 {
+    margin: 0 0 1rem 0;
+    color: #10b981;
+    font-size: 1rem;
+  }
+
+  .key-item {
+    margin-bottom: 1rem;
+  }
+
+  .key-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-color);
+  }
+
+  .key-copy {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .key-copy code {
+    flex: 1;
+    background: var(--bg-color);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    word-break: break-all;
+    border: 1px solid var(--border-color);
+  }
+
+  .btn-copy {
+    padding: 0.5rem 1rem;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .btn-copy:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+  }
+
+  .keypair-display .warning {
+    display: block;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 0.5rem;
+    color: #ef4444;
+    font-size: 0.875rem;
+  }
+
   @media (max-width: 640px) {
     .card {
       padding: 1.5rem;
@@ -1055,12 +822,16 @@
       font-size: 1.5rem;
     }
 
-    .mode-toggle {
-      grid-template-columns: 1fr;
-    }
-
     .secret-input {
       flex-direction: column;
+    }
+
+    .key-copy {
+      flex-direction: column;
+    }
+
+    .btn-copy {
+      width: 100%;
     }
   }
 </style>
