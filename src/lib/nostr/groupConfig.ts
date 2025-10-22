@@ -170,3 +170,83 @@ export async function loadGroupAdmin(
     return null;
   }
 }
+
+/**
+ * Lade Gruppen-Konfiguration von mehreren Relays (Multi-Relay-Fallback)
+ * Sucht parallel auf allen angegebenen Relays und gibt das erste valide Ergebnis zurück
+ * 
+ * @param secret - Das Gruppen-Secret (wird gehasht)
+ * @param relays - Liste von Relay-URLs zum Durchsuchen
+ * @returns GroupConfig oder null wenn nichts gefunden
+ */
+export async function loadGroupConfigFromRelays(
+  secret: string,
+  relays: string[]
+): Promise<GroupConfig | null> {
+  try {
+    const secretHash = await deriveSecretHash(secret);
+    console.log('📥 Multi-Relay-Lookup für Secret-Hash:', secretHash.substring(0, 16) + '...');
+    console.log('📡 Durchsuche', relays.length, 'Relays...');
+    
+    const pool = initPool();
+    
+    // Query parallel auf allen Relays
+    const queries = relays.map(async (relay) => {
+      try {
+        const events = await pool.querySync(
+          [relay],
+          {
+            kinds: [30000],
+            '#d': [`bitcoin-group-config:${secretHash}`],
+            limit: 1
+          }
+        );
+        
+        if (events.length > 0) {
+          const event = events[0];
+          // Verify signature
+          if (verifyEvent(event)) {
+            console.log('✅ Valides Event gefunden auf:', relay);
+            return { relay, event };
+          }
+        }
+        return null;
+      } catch (err) {
+        console.warn('⚠️ Fehler bei Relay', relay, ':', err);
+        return null;
+      }
+    });
+    
+    // Warte auf alle Queries (parallel)
+    const results = await Promise.allSettled(queries);
+    
+    // Sammle valide Events
+    const validResults: Array<{ relay: string; event: Event }> = [];
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        validResults.push(result.value);
+      }
+    }
+    
+    if (validResults.length === 0) {
+      console.warn('⚠️ Keine GroupConfig auf', relays.length, 'Relays gefunden');
+      return null;
+    }
+    
+    // Wähle neuestes Event (höchste created_at)
+    validResults.sort((a, b) => b.event.created_at - a.event.created_at);
+    const best = validResults[0];
+    
+    console.log('✅ Beste GroupConfig von Relay:', best.relay);
+    console.log('📊 Gefunden auf', validResults.length, 'von', relays.length, 'Relays');
+    
+    // Parse und validiere Content
+    const config = JSON.parse(best.event.content) as GroupConfig;
+    GroupConfigSchema.parse(config);
+    
+    return config;
+  } catch (error) {
+    console.error('❌ Fehler beim Multi-Relay-Lookup:', error);
+    return null;
+  }
+}

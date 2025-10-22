@@ -5,10 +5,10 @@
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
   import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
-  import { DEFAULT_RELAYS } from '$lib/config';
+  import { DEFAULT_RELAYS, GROUP_CONFIG_RELAYS, RELAY_ALIASES } from '$lib/config';
   import { deriveChannelId } from '$lib/nostr/crypto';
   import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
-  import { saveGroupConfig, loadGroupAdmin, deriveSecretHash } from '$lib/nostr/groupConfig';
+  import { saveGroupConfig, loadGroupAdmin, deriveSecretHash, loadGroupConfigFromRelays } from '$lib/nostr/groupConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
 
   let mode: 'create' | 'join' = 'create';
@@ -155,11 +155,42 @@
     try {
       // Parse Einladungslink
       const url = new URL(inviteLink);
-      const relay = url.searchParams.get('relay');
+      const relayParam = url.searchParams.get('relay');
+      const relayAliasParam = url.searchParams.get('r');
       const secret = url.searchParams.get('secret');
 
-      if (!relay || !secret) {
-        throw new Error('Ungültiger Einladungslink');
+      if (!secret) {
+        throw new Error('Ungültiger Einladungslink - Secret fehlt');
+      }
+
+      // Bestimme Relay-Liste
+      let relaysToUse: string[] = [];
+      
+      // Option 1: Relay direkt angegeben (Legacy-Support)
+      if (relayParam) {
+        const relayValidation = validateRelayUrl(relayParam);
+        if (!relayValidation.valid) {
+          throw new Error(relayValidation.error || 'Ungültige Relay-URL');
+        }
+        relaysToUse = [relayParam];
+        console.log('📡 Verwende Relay aus Link:', relayParam);
+      }
+      // Option 2: Relay-Alias (z.B. ?r=1)
+      else if (relayAliasParam) {
+        const aliasNum = parseInt(relayAliasParam, 10);
+        const aliasRelay = RELAY_ALIASES[aliasNum];
+        if (aliasRelay) {
+          relaysToUse = [aliasRelay];
+          console.log('📡 Verwende Relay-Alias', aliasNum, '→', aliasRelay);
+        } else {
+          console.warn('⚠️ Unbekannter Relay-Alias:', aliasNum, '- verwende Multi-Relay-Fallback');
+          relaysToUse = GROUP_CONFIG_RELAYS;
+        }
+      }
+      // Option 3: Kein Relay angegeben → Multi-Relay-Fallback
+      else {
+        relaysToUse = GROUP_CONFIG_RELAYS;
+        console.log('📡 Kein Relay im Link → Multi-Relay-Fallback mit', relaysToUse.length, 'Relays');
       }
 
       // Validiere NSEC
@@ -168,25 +199,18 @@
         throw new Error(keyValidation.error || 'Ungültiger Private Key');
       }
 
-      // Validiere Relay
-      const relayValidation = validateRelayUrl(relay);
-      if (!relayValidation.valid) {
-        throw new Error(relayValidation.error || 'Ungültige Relay-URL');
+      // 🔐 Lade GroupConfig (mit Multi-Relay-Fallback)
+      console.log('📥 Lade GroupConfig...');
+      const groupConfig = await loadGroupConfigFromRelays(secret, relaysToUse);
+      
+      if (!groupConfig) {
+        throw new Error('❌ Gruppe nicht gefunden. Bitte prüfe den Link oder kontaktiere den Admin.');
       }
-
-      // 🔐 NEU: Versuche Config von Nostr zu laden
-      console.log('📥 Versuche Config von Nostr zu laden...');
-      let existingConfig: UserConfig | null = null;
-      try {
-        existingConfig = await loadUserConfig(keyValidation.hex!, [relay]);
-        if (existingConfig) {
-          console.log('✅ Config von Nostr geladen');
-        }
-      } catch (configError) {
-        // Config existiert nicht oder Relay nicht erreichbar
-        // Fahre trotzdem fort mit Login (Config wird beim Speichern erstellt)
-        console.log('ℹ️ Keine existierende Config gefunden, wird beim Speichern erstellt');
-      }
+      
+      console.log('✅ GroupConfig geladen von Relay:', groupConfig.relay);
+      
+      // Extrahiere Relay aus Config für weitere Nutzung
+      const relay = groupConfig.relay;
 
       // Lade Profil
       loadingProfile = true;
@@ -209,16 +233,9 @@
       // Prüfe Whitelist (außer für Admin)
       const channelId = await deriveChannelId(secret);
       
-      // 🔐 NEU: Lade Admin-Pubkey von öffentlicher Gruppen-Config
-      console.log('📥 Lade Admin-Pubkey von Nostr...');
-      const secretHash = await deriveSecretHash(secret);
-      let adminPubkey = await loadGroupAdmin(secretHash, [relay]);
-      
-      if (!adminPubkey) {
-        throw new Error('❌ Admin-Pubkey nicht gefunden. Diese Gruppe scheint nicht zu existieren.');
-      }
-      
-      console.log('✅ Admin-Pubkey geladen:', adminPubkey.substring(0, 16) + '...');
+      // 🔐 Extrahiere Admin-Pubkey aus GroupConfig
+      const adminPubkey = groupConfig.admin_pubkey;
+      console.log('✅ Admin-Pubkey aus GroupConfig:', adminPubkey.substring(0, 16) + '...');
       
       // Prüfe ob User der Admin ist
       const isAdmin = adminPubkey.toLowerCase() === pubkey.toLowerCase();
@@ -481,7 +498,8 @@
       <h3>ℹ️ Hinweise</h3>
       <ul>
         <li><strong>Neue Gruppe:</strong> Du wirst automatisch Admin und kannst die Whitelist verwalten</li>
-        <li><strong>Gruppe beitreten:</strong> Du benötigst einen Einladungslink vom Admin</li>
+        <li><strong>Gruppe beitreten:</strong> Du benötigst einen Einladungslink vom Admin (Format: <code>?secret=...</code> oder <code>?r=1&secret=...</code>)</li>
+        <li><strong>Multi-Relay:</strong> Falls kein Relay im Link angegeben ist, werden automatisch mehrere Relays durchsucht</li>
         <li><strong>Sicherheit:</strong> Dein Private Key verlässt niemals deinen Browser</li>
         <li><strong>Verschlüsselung:</strong> Alle Nachrichten sind Ende-zu-Ende verschlüsselt</li>
       </ul>

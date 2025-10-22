@@ -1,169 +1,144 @@
-# 🔐 Anmelde-System - Analyse & Kritische Übersicht
+# Anmelde-System — Dezentrale Admin-Verwaltung
 
-## 🎯 Was ist das System?
+Kurzüberblick
 
-**Dezentrales Gruppen-Login** ohne zentrale Authentifizierung. Admin erstellt Gruppe → verteilt Einladungslink → System prüft automatisch über Nostr ob User in Whitelist ist.
+Das Anmelde-System verwendet Nostr als Single Source of Truth. Eine Gruppe wird durch ein Secret identifiziert. Der Administrator (Admin) wird über seinen Public Key (admin_pubkey) in einer öffentlichen GroupConfig (Nostr-Event, Kind 30000) bekannt gemacht. Beim Login vergleicht die App den aktuellen Benutzer-Public-Key mit dem in der GroupConfig gespeicherten admin_pubkey und entscheidet so über Admin-Rechte.
 
-**Kernmechanismus**: Admin-Status = `pubkey vom Relay === aktueller pubkey` (wird bei jedem Login neu berechnet)
-
----
-
-## 💡 HAUPTFEATURE: Dynamische Admin-Verwaltung
-
-### ✅ Das Problem (vorher)
-Admin A erstellt Gruppe → localStorage speichert `is_group_admin='true'` → Admin B loggt sich auf gleichem PC ein → **Admin B ist fälschlicherweise Admin!** ❌
-
-### ✅ Die Lösung (jetzt)
-Admin-Status wird **nicht gespeichert**, sondern **bei jedem Login neu berechnet**: `admin_pubkey (von Nostr) === current_pubkey` → funktioniert korrekt mit mehreren NSECs ✅
+Ziel dieser Seite: klare, technisch präzise Beschreibung der Funktionsweise, Sicherheits-Highlights und Entwicklerreferenz.
 
 ---
 
-## 🏆 Features & Architektur
+1) Terminologie
 
-| Feature | Status | Details |
-|---------|--------|---------|
-| **Dynamische Admin-Verwaltung** | ✅ | Multi-NSEC-sicher: pubkey vs. admin_pubkey Vergleich (neu bei jedem Login) |
-| **Einladungslinks** | ✅ | URL: `?relay=wss://...&secret=xyz` |
-| **Whitelist** | ✅ | Public Keys auf Nostr (Kind 30000), nur Admin editierbar |
-| **Admin-Bypass** | ✅ | Admin braucht nicht in Whitelist zu sein |
-| **Profil-Laden** | ✅ | Automatisch von Nostr (Kind 0) |
-
-### Speicherung & Sichtbarkeit
-
-| Daten | Ort | Schutz | Zweck |
-|-------|-----|--------|-------|
-| **Private Key** | Browser localStorage | ❌ Unverschlüsselt | Authentifizierung (KRITISCH) |
-| **Group Secret** | Browser localStorage | ❌ Unverschlüsselt | Gruppe identifizieren |
-| **Admin-Pubkey** | Nostr (öffentlich) | ✅ Signiert | Admin-Erkennung |
-| **Whitelist** | Nostr (öffentlich) | ✅ Signiert | Zugriffskontrolle |
-
-### Admin-Erkennung (das Herzstück!)
-
-```
-Bei Login/Mount:
-1. Hash = SHA256(group_secret)
-2. Lade GroupConfig von Nostr: { admin_pubkey, ... }
-3. Vergleich: admin_pubkey === user_pubkey?
-   ✅ JA → isAdmin = true
-   ❌ NEIN → isAdmin = false
-```
-
-**Vorteil**: Funktioniert mit mehreren NSECs (kein localStorage-Konflikt)
-**Nachteil**: Braucht Online-Relay
+- Secret: Das geheimer Kennwort der Gruppe (vom Admin erstellt). Wird nicht auf Relay gespeichert — nur dessen Hash.
+- secretHash: SHA-256(secret) — dient als eindeutige Gruppen-ID im Nostr-Event-Tag `d`.
+- GroupConfig: Öffentliches Nostr-Event (Kind 30000) mit admin_pubkey und Relay-Info.
+- NSEC: Privater Nostr-Key (Private Key) des Users.
 
 ---
 
-## ⚠️ SICHERHEIT & LIMITATIONEN
+2) Ablauf
 
-### Kritische Punkte
-
-| Problem | Status | Workaround |
-|---------|--------|-----------|
-| **Relay offline** | 🔴 Blockiert Admin-Panel | Fallback zu localStorage (geplant) |
-| **Admin-Pubkey öffentlich** | 🟠 Jeder sieht Admin | Secret ist SHA-256 hash geschützt |
-| **Secret im URL sichtbar** | 🟠 Browser-History risiko | HTTPS schützt; treat like password |
-| **localStorage unverschlüsselt** | 🟡 Browser-Addons Risiko | Gilt für alle Browser-Wallets |
+1. Admin erstellt Gruppe: Secret wählen, Relay wählen.
+2. App berechnet secretHash = SHA256(secret) und erstellt ein signiertes GroupConfig-Event (Kind 30000) auf dem Relay:
+   - tags: `['d', secretHash]`
+   - content: { admin_pubkey, relay, created_at }
+3. Admin teilt Einladungslink: `https://domain/?relay=<wss://...>&secret=<secret>`
+4. Nutzer öffnet Link, verbindet Wallet / gibt NSEC frei.
+5. App: deriveSecretHash(secret) → loadGroupConfig(secretHash) → hole admin_pubkey.
+6. App vergleicht admin_pubkey mit user.pubkey (case-insensitive).
+   - Treffer → isAdmin = true
+   - Kein Treffer → isAdmin = false → ggf. Whitelist prüfen
 
 ---
 
-## 🟢 OPTIMIERUNGSVORSCHLÄGE
+3) Sicherheits- und Datenschutz-Hinweise
 
-### 1. Offline-Fallback (PRIORITÄT 1)
-**Status**: ⚠️ Nicht implementiert, aber möglich
+- Private Keys (NSEC) verbleiben im Client und werden niemals an Dritte oder Server übertragen.
+- Die GroupConfig (mit admin_pubkey) ist öffentlich. Das bedeutet: wer Admin ist, ist transparent.
+- Der Einladungslink enthält das Secret in der URL — treat as password: nicht in Logs, keine öffentlichen Chats, per HTTPS übermitteln.
+- localStorage ist unverschlüsselt; Secrets sollten wenn möglich in `sessionStorage` gehalten oder nur kurzzeitig zwischengespeichert werden.
+- Relay-Ausfall: Admin-Status und Whitelist können nicht geladen werden. Implementiere Fallback-Strategien (Cache, Retry, Multi-Relay).
 
-```typescript
-// Fallback bei Relay-Fehler
-async function getAdminStatus(secretHash, relay) {
-  try {
-    return await loadGroupAdmin(secretHash, [relay]);  // Nostr
-  } catch (relayError) {
-    console.warn('⚠️ Relay offline, nutze Cache');
-    const cached = localStorage.getItem('admin_pubkey');
-    if (cached) return cached;  // Fallback zu lokaler Kopie
-    throw new Error('Kein Relay + kein lokaler Cache');
-  }
+---
+
+4) Konkrete Empfehlungen
+
+- Erzwinge minimale Secret-Länge ≥ 16 Zeichen.
+- Cache `admin_pubkey` clientseitig mit kurzer TTL (z. B. 5 Minuten) zur Reduktion von Relay-Requests.
+- Zeige Relay-Status (online/connecting/offline) im UI.
+- Implementiere einen Multi-Relay-Fallback: versuche eine konfigurierbare Relay-Liste.
+
+---
+
+5) Pseudonymer / dedizierter Admin-Account (Empfehlung)
+
+- Warum: Die GroupConfig macht die Admin-Public-Key sichtbar. Um persönliche Verknüpfungen zu minimieren, ist es sinnvoll, für Admin-Aufgaben ein separates, pseudonymes Keypair zu verwenden statt des persönlichen Haupt-Keys.
+- Wie (kurz): Erzeuge ein neues Nostr-Keypair (npub/nsec). Nutze dieses Keypair nur für die Administrator-Aufgaben (Gruppe erstellen, Whitelist verwalten). Bewahre das `nsec` sicher (offline oder in einem Passwort-Manager) und teile nur den Einladungslink (`?secret=...`) — nicht den nsec.
+- Praktische Schritte:
+   1. Erzeuge Keypair lokal (Wallet/Tool): notiere `npub` und `nsec`.
+   2. Melde dich im Tausch‑Netzwerk mit dem pseudonymen Key an und erstelle die Gruppe.
+   3. Verwende das pseudonyme Keypair nur für Admin‑Operationen; führe normale Nutzeraktionen mit einem separaten Key aus.
+
+Hinweis: Dieses Muster reduziert die Wahrscheinlichkeit, dass dein persönliches Hauptkonto mit Admin‑Aktivitäten verknüpft wird, ohne die Verifizierbarkeit der GroupConfig zu beeinträchtigen.
+
+6) Hashing von Secret + Relay im Link — Idee und Bewertung
+
+Idee: Anstatt `?relay=...&secret=...` im Link zu zeigen, erzeugt der Ersteller einen Token = H(secret || relay) (z. B. SHA-256 über Secret + Relay-URL) und verteilt nur `?token=<hex>` im Link. Der Client müsste dann den Token auflösen, um Secret und/oder Relay zu erhalten.
+
+Bewertung — Vorteile:
+- Versteckt Relay-URL und Secret in der Link‑Repräsentation (keine Klartext‑Relay‑URL in Browser‑History).
+
+Bewertung — Nachteile und praktische Probleme:
+- Keine Geheimhaltung ohne Auflösungsmechanismus: Ein Token alleine sagt dem Client nichts — der Client benötigt eine Methode, um Token → (secret, relay) aufzulösen. Dazu gibt es zwei Optionen:
+   1. Zentraler Resolver/Service (Token → Daten): macht das System nicht mehr vollständig dezentral und schafft einen neuen Vertrauens-/Ausfallpunkt.
+   2. Verteilte Auflösung durch Brute‑Force/Vergleich: wenn der Client nur eine kleine Relay‑Liste hat, kann er Hashes vergleichen — das ist ineffizient und unsicher.
+- Wenn Secret im Token enthalten ist, verliert man den Nutzen: Entweder der Token ist reversibel (keine Sicherheit) oder der Client muss zusätzliche Informationen haben.
+- Komplexere UX: Nutzer erwarten, dass ein Link die Gruppe sofort öffnen kann; Token‑Auflösung erhöht Komplexität und Fehlerquellen.
+
+Empfehlung:
+- Für echte Dezentralität und Privacy ist es einfacher und robuster, die Relay‑URL aus dem Link zu entfernen und stattdessen Multi‑Relay‑Fallback im Client zu verwenden (siehe oben). Das vermeidet zentrale Dienste und bewahrt Privacy ohne zusätzlichen Auflösungs‑Service.
+- Wenn ihr unbedingt Relay/Secret im Link verschleiern wollt, ist ein Token+zentraler Resolver möglich, aber das ist ein Architekturtradeoff (weniger dezentral, zusätzlicher Vertrauenspunkt).
+
+Praktische Alternative (Komfort + Privacy): Benutze kurze Alias/Index‑Parameter (`?r=1`) kombiniert mit einer gepflegten Client‑Relay‑Liste, oder verschlüssele Relay‑Info clientseitig per passphrase und gib die Entschlüsselungs‑Anleitung separat weiter.
+
+7) Umsetzung: Relay aus dem Link entfernen und Multi‑Relay‑Fallback
+
+Ziel: Der Einladungslink enthält kein `relay=` mehr. Der Client löst die GroupConfig ausschließlich über eine konfigurierbare Relay‑Liste auf. Das erhöht Privacy, hält das System dezentral und vermeidet zentrale Resolver.
+
+Architekturübersicht:
+- Client hat eine konfigurierbare, ggf. update‑fähige Relay‑Liste (z. B. in `src/lib/config.ts`).
+- Beim Öffnen eines Links mit `?secret=...` berechnet der Client `secretHash = sha256(secret)` und sucht die GroupConfig parallel auf mehreren Relays.
+- Gefundene Events werden signaturgeprüft; das erste valide Ergebnis (oder das vertrauenswürdigste aus mehreren) wird verwendet.
+- Falls nichts gefunden wird, zeigt der Client einen Hinweis und erlaubt manuelle Relay‑Angabe oder das Verwenden eines Alias (`?r=1` → Client‑Mapping).
+
+Pseudocode (TypeScript‑Stil, Beispiel für `loadGroupConfig`):
+
+```ts
+async function loadGroupConfigFromRelays(secret: string, relays: string[]) {
+   const secretHash = sha256Hex(secret);
+   // query multiple relays in parallel
+   const queries = relays.map(r => queryRelayForReplaceable(r, 30000, secretHash));
+   const results = await Promise.allSettled(queries);
+
+   // collect valid events, verify signatures
+   const valid = [] as Event[];
+   for (const res of results) {
+      if (res.status === 'fulfilled' && res.value) {
+         const ev = res.value;
+         if (verifySignature(ev)) valid.push(ev);
+      }
+   }
+
+   // choose best event (e.g. newest valid)
+   if (valid.length === 0) return null;
+   valid.sort((a,b) => b.created_at - a.created_at);
+   return valid[0];
 }
 ```
 
-**Nutzen**: App funktioniert auch wenn Relay kurzzeitig offline ist
-**Implementierungsaufwand**: Niedrig (30min)
+Alias/Index (`?r=1`)‑Option:
+- Der Link kann optional `?r=1&secret=...` enthalten. Der Client hält ein Mapping `{ 1: 'wss://relay.primary' }` in der Konfiguration.
+- Vorteil: kurze Links, Relay nicht direkt sichtbar. Nachteil: Mapping muss verteilt/aktualisiert werden.
 
----
+UI‑Flows / Fehlerfälle:
+- Wenn GroupConfig gefunden: normale Anmeldung prüfen (admin_pubkey vs user.pubkey).
+- Wenn nicht gefunden und kein Alias: UI zeigt "Gruppe nicht gefunden — Relay angeben oder den Ersteller kontaktieren".
+- Wenn Relay‑Requests fehlschlagen: retry/backoff + Fallback‑Relays anzeigen.
 
-### 2. Admin-Status Caching (PRIORITÄT 2)
-Aktuell: Jedes Mount = 1 Nostr-Query
-Mit Cache: Nur 1 Query alle 5 Minuten
+Caching & Offline:
+- Cache zuletzt erfolgreiche `secretHash -> GroupConfig` Antworten lokal (TTL z. B. 5 Minuten). Das reduziert Relay‑Load und ermöglicht begrenzte Offline‑Nutzung.
+- Achtung: Cached GroupConfig ist öffentlich; cache‑Inhalte sollten bei sicherheitsrelevanten Aktionen verifiziert werden (z. B. Re‑check bevor kritische Admin‑Änderung).
 
-**Nutzen**: Weniger Relay-Last, schnelleres UI
-**Aufwand**: 1-2h
+Testing & Migration:
+- Schreibe Unit‑Tests für `loadGroupConfigFromRelays` (happy path, no‑result, invalid signatures, relay timeouts).
+- UX: Führe eine Migrationshilfe ein, die vorhandene Links mit `relay=` erkennt und beim ersten Öffnen in die neue Flow (Multi‑Relay) überführt.
 
----
+Nächste Schritte im Projekt (Vorschlag):
+1. Entferne Relay‑Parsing aus Link‑Handler (`src/routes/+page.svelte`), akzeptiere optional `r=` Alias.
+2. Implementiere `loadGroupConfigFromRelays` in `src/lib/nostr/groupConfig.ts` und exportiere es.
+3. Ergänze `src/lib/config.ts` mit einer konfigurierbaren Relay‑Liste und optionalem Alias‑Mapping.
+4. Füge Tests und UI‑Fehlermeldungen hinzu.
 
-### 3. sessionStorage statt localStorage (PRIORITÄT 2)
-Aktuell: Secrets dauerhaft in localStorage (unsicher)
-Besser: sessionStorage wird beim Browser-Close gelöscht
+Mit diesen Änderungen ist der Link sauber (nur `?secret=...` oder `?r=1&secret=...`) und die Client‑Logik übernimmt die Relay‑Auflösung dezentral, robust und datenschutzfreundlich.
 
-**Nutzen**: Höhere Sicherheit auf Shared PCs
-**Aufwand**: 30min
-
----
-
-### 4. Relay-Status Indikator (PRIORITÄT 3)
-Aktuell: Relay-Status nur in Console logs sichtbar
-Besser: UI-Indikator zeigt Relay-Verbindungsstatus
-
-**Nutzen**: User weiß wieso Admin-Panel fehlt
-**Aufwand**: 45min
-
----
-
-### 5. Secret-Mindestlänge (PRIORITÄT 2)
-Aktuell: 8 Zeichen (zu kurz, bruteforcebar)
-Besser: 16-64 Zeichen erzwingen
-
-**Nutzen**: Verhindert Bruteforce-Attacken
-**Aufwand**: 15min
-
----
-
-### 6. Bessere Error-Recovery (PRIORITÄT 2)
-Aktuell: Relay-Fehler → sofort Redirect (zu hart)
-Besser: 3x Retry mit 2sec Abstand vor Abbruch
-
-**Nutzen**: Temporary Network Issues nicht gleich blockiert
-**Aufwand**: 45min
-
----
-
-## 📊 Performance-Metriken
-
-| Metrik | Aktuell | Mit Optimierungen |
-|--------|---------|------------------|
-| Requests pro Session | ~5-10 (ein je Mount) | ~1 (mit Cache) |
-| Admin-Panel Load-Time | ~500-2000ms | ~50-100ms (Cache) |
-| Relay-Last | Hoch (viele Queries) | Niedrig (Cache) |
-| Offline-Support | ❌ Nein | ✅ Mit Fallback |
-| sessionStorage-Ready | ❌ Nein | ✅ Ja |
-
----
-
-## 🛠️ Implementierungs-Roadmap
-
-**SOFORT (diese Woche)**:
-- [ ] Offline-Fallback zu localStorage
-- [ ] sessionStorage für Secrets statt localStorage
-- [ ] Secret-Mindestlänge auf 16 Zeichen erhöhen
-
-**BALD (nächste Woche)**:
-- [ ] Admin-Status Caching (5-Min-TTL)
-- [ ] Relay-Status Indikator im UI
-- [ ] Bessere Error-Recovery beim Admin-Panel
-
-**SPÄTER (Backlog)**:
-- [ ] Multi-Relay-Fallback (mehrere Relays konfigurierbar)
-- [ ] Offline-Queue für Whitelist-Änderungen (speichern → später sync)
-- [ ] Encryption für localStorage (optional)
-
----
-
-## �️ Implementierungs-Roadmap
