@@ -7,7 +7,7 @@
   import { createInviteLink } from '$lib/utils';
   import { saveUserConfig } from '$lib/nostr/userConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
-  import { RELAY_ALIASES } from '$lib/config';
+  import { RELAY_ALIASES, GROUP_CONFIG_RELAYS } from '$lib/config';
   // @ts-ignore
   import { goto } from '$app/navigation';
 
@@ -139,7 +139,8 @@
 
       saving = true;
 
-      const result = await addToWhitelist(validation.hex!, user.privateKey, [group.relay], group.channelId);
+      // Schreibe auf ALLE Multi-Relays für Robustheit
+      const result = await addToWhitelist(validation.hex!, user.privateKey, GROUP_CONFIG_RELAYS, group.channelId);
 
       if (result) {
         const adminPubkey = whitelist.admin_pubkey;
@@ -182,7 +183,8 @@
 
       saving = true;
 
-      const result = await removeFromWhitelist(pubkey, user.privateKey, [group.relay], group.channelId);
+      // Lösche auf ALLEN Multi-Relays
+      const result = await removeFromWhitelist(pubkey, user.privateKey, GROUP_CONFIG_RELAYS, group.channelId);
 
       if (result) {
         const adminPubkey = whitelist.admin_pubkey;

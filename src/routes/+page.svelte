@@ -20,11 +20,12 @@
   let autoGenerateSecret = true;
   
   // Link-Generierung
-  let linkType: 'multi' | 'alias' | 'custom' | 'full' = 'multi';
+  let linkType: 'multi' | 'alias' | 'custom' = 'multi';
   let selectedAlias: number = 1;
   let customLinkRelay = '';
   let generatedInviteLink = '';
   let showLinkSuccess = false;
+  let showInfoModal = false;
   
   // Join Group Form (für normale User)
   let joinNsec = '';
@@ -102,7 +103,7 @@
       userStore.setUserFromNsec(adminNsec, userName);
       
       // 🔐 NEU: Speichere Gruppen-Config öffentlich (für Admin-Erkennung)
-      console.log('💾 Speichere Gruppen-Config auf Nostr...');
+      console.log('💾 Speichere Gruppen-Config auf ALLE Multi-Relays...');
       const secretHash = await deriveSecretHash(finalSecret);
       
       const groupConfigData = {
@@ -113,9 +114,9 @@
         updated_at: Math.floor(Date.now() / 1000)
       };
       
-      // Publiziere öffentlich
-      await saveGroupConfig(groupConfigData, keyValidation.hex!, [relay]);
-      console.log('✅ Gruppen-Config publiziert');
+      // Publiziere auf ALLE GROUP_CONFIG_RELAYS für echte Multi-Relay-Robustheit
+      await saveGroupConfig(groupConfigData, keyValidation.hex!, GROUP_CONFIG_RELAYS);
+      console.log('✅ Gruppen-Config auf', GROUP_CONFIG_RELAYS.length, 'Relays publiziert');
 
       // 🔐 Speichere Admin-Status im Browser (nur für schnelle lokale Checks)
       // Aber: Admin-Status wird primär von Nostr geladen, nicht aus localStorage!
@@ -150,8 +151,6 @@
         relayForLink = selectedAlias; // Zahl 1-5
       } else if (linkType === 'custom') {
         relayForLink = customLinkRelay; // Custom Relay-URL
-      } else if (linkType === 'full') {
-        relayForLink = relay; // Gruppen-Relay
       }
       
       generatedInviteLink = createInviteLink(domain, finalSecret, relayForLink);
@@ -394,7 +393,17 @@
         </div>
 
         <div class="form-group">
-          <p class="form-label">Einladungslink-Typ *</p>
+          <div class="form-label-with-info">
+            <p class="form-label">Einladungslink-Typ *</p>
+            <button 
+              type="button" 
+              class="btn-info"
+              on:click={() => showInfoModal = true}
+              title="Erklärung der Link-Typen"
+            >
+              ℹ️ Info
+            </button>
+          </div>
           <div class="link-type-options">
             <label class="radio-label">
               <input
@@ -454,19 +463,6 @@
                 disabled={loading}
               />
             {/if}
-
-            <label class="radio-label">
-              <input
-                type="radio"
-                bind:group={linkType}
-                value="full"
-                disabled={loading}
-              />
-              <div>
-                <strong>Gruppen-Relay</strong>
-                <small>Verwendet das oben gewählte Gruppen-Relay</small>
-              </div>
-            </label>
           </div>
         </div>
 
@@ -523,6 +519,73 @@
           >
             Zur Gruppe →
           </button>
+        </div>
+      {/if}
+
+      <!-- Info-Modal für Link-Typen -->
+      {#if showInfoModal}
+        <div 
+          class="modal-overlay" 
+          on:click={() => showInfoModal = false}
+          on:keydown={(e) => e.key === 'Escape' && (showInfoModal = false)}
+          role="button"
+          tabindex="-1"
+        >
+          <div 
+            class="modal-content" 
+            role="dialog"
+            aria-labelledby="modal-title"
+          >
+            <div class="modal-header">
+              <h3 id="modal-title">🔗 Einladungslink-Typen Erklärung</h3>
+              <button class="modal-close" on:click={() => showInfoModal = false}>✕</button>
+            </div>
+            
+            <div class="modal-body">
+              <div class="info-section">
+                <h4>🌐 Multi-Relay (empfohlen)</h4>
+                <p><strong>Link-Format:</strong> <code>?secret=abc123</code></p>
+                <p><strong>Wie funktioniert es?</strong></p>
+                <ul>
+                  <li>Kein Relay im Link sichtbar → <strong>höchste Privatsphäre</strong></li>
+                  <li>App sucht automatisch auf 5 vordefinierten Relays parallel</li>
+                  <li>Funktioniert auch wenn ein Relay offline ist</li>
+                </ul>
+                <p class="recommendation">✅ Beste Wahl für maximale Privacy und Robustheit</p>
+              </div>
+
+              <div class="info-section">
+                <h4>🔢 Relay-Alias</h4>
+                <p><strong>Link-Format:</strong> <code>?r=1&secret=abc123</code></p>
+                <p><strong>Wie funktioniert es?</strong></p>
+                <ul>
+                  <li>Kurze Zahl (1-5) verweist auf vordefiniertes Relay</li>
+                  <li>Kürzerer Link als vollständige URL</li>
+                  <li>Relay-Zuordnung im Code hinterlegt</li>
+                </ul>
+                <p class="recommendation">⚖️ Guter Kompromiss: kurz & ausreichend privat</p>
+              </div>
+
+              <div class="info-section">
+                <h4>🛠️ Eigenes Relay im Link</h4>
+                <p><strong>Link-Format:</strong> <code>?relay=wss://custom.relay&secret=abc123</code></p>
+                <p><strong>Wie funktioniert es?</strong></p>
+                <ul>
+                  <li>Du gibst ein spezifisches Relay im Link an</li>
+                  <li>Relay-URL steht im Klartext im Link (niedrige Privacy)</li>
+                  <li>Gruppendaten werden trotzdem auf alle Standard-Relays repliziert</li>
+                  <li>Nützlich wenn Nutzer ein bestimmtes Relay bevorzugen</li>
+                </ul>
+                <p class="recommendation">⚠️ Niedrigere Privacy - aber volle Kontrolle über primäres Relay</p>
+              </div>
+
+              <div class="info-note">
+                <strong>💡 Wichtig:</strong> Unabhängig vom Link-Typ werden alle Gruppen-Daten (GroupConfig & Whitelist) 
+                automatisch auf 5 Relays repliziert. Das garantiert Ausfallsicherheit - wenn ein Relay offline ist, 
+                funktioniert die Gruppe weiterhin. Multi-Relay-Links bieten die beste Privacy!
+              </div>
+            </div>
+          </div>
         </div>
       {/if}
     {:else}
@@ -742,6 +805,155 @@
 
   .secret-input .input {
     flex: 1;
+  }
+
+  .form-label-with-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .form-label-with-info .form-label {
+    margin: 0;
+  }
+
+  .btn-info {
+    padding: 0.375rem 0.75rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .btn-info:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-content {
+    background: var(--bg-primary);
+    border-radius: 1rem;
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover {
+    color: var(--text-primary);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .info-section {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 0.5rem;
+    border-left: 3px solid var(--primary-color);
+  }
+
+  .info-section h4 {
+    margin: 0 0 0.75rem 0;
+    color: var(--text-primary);
+    font-size: 1.125rem;
+  }
+
+  .info-section p {
+    margin: 0.5rem 0;
+    color: var(--text-primary);
+  }
+
+  .info-section code {
+    background: var(--bg-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--primary-color);
+  }
+
+  .info-section ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+  }
+
+  .info-section li {
+    margin: 0.375rem 0;
+    color: var(--text-secondary);
+  }
+
+  .recommendation {
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    background: var(--bg-primary);
+    border-radius: 0.375rem;
+    font-weight: 500;
+    font-size: 0.9375rem;
+  }
+
+  .info-note {
+    background: linear-gradient(135deg, rgba(255, 0, 110, 0.1), rgba(127, 0, 255, 0.1));
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--primary-color);
+    color: var(--text-primary);
+  }
+
+  .info-note strong {
+    color: var(--primary-color);
   }
 
   .btn {
