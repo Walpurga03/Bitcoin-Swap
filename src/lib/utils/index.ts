@@ -146,3 +146,51 @@ export function extractDomain(url: string): string {
     return url;
   }
 }
+
+/**
+ * ============================================
+ * Marketplace: Time Utils
+ * ============================================
+ */
+
+/**
+ * Berechne verbleibende Zeit bis zum Ablauf
+ * 
+ * @param expiresAt - Unix Timestamp (Sekunden) wann das Angebot abläuft
+ * @returns Formatierter String (z.B. "Noch 2 Tage", "Noch 5h", "Abgelaufen")
+ */
+export function getTimeRemaining(expiresAt: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = expiresAt - now;
+  
+  if (remaining <= 0) {
+    return 'Abgelaufen';
+  }
+  
+  const minutes = Math.floor(remaining / 60);
+  const hours = Math.floor(remaining / 3600);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) {
+    return `Noch ${days} Tag${days > 1 ? 'e' : ''}`;
+  } else if (hours > 0) {
+    const remainingMinutes = minutes % 60;
+    return `Noch ${hours}h ${remainingMinutes}m`;
+  } else {
+    return `Noch ${minutes}m`;
+  }
+}
+
+/**
+ * Prüfe ob ein Angebot bald abläuft (< 24h)
+ * 
+ * @param expiresAt - Unix Timestamp (Sekunden)
+ * @returns true wenn < 24h verbleibend
+ */
+export function isExpiringSoon(expiresAt: number): boolean {
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = expiresAt - now;
+  const hoursRemaining = remaining / 3600;
+  
+  return hoursRemaining > 0 && hoursRemaining < 24;
+}

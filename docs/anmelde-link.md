@@ -155,15 +155,19 @@
 
 |---------|-----|
 
-| Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → Angebotsraum → "Whitelist erstellen"-Button || Aktuell | Neu |
+| Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → Angebotsraum → "Whitelist erstellen"-Button |
 
-| Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow ||---------|-----|
+| Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow |
+|---------|-----|
 
-| Einladungslink bei Gruppenerstellung | Einladungslink erst wenn Whitelist erstellt || Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → in Angebotsraum → "Whitelist erstellen"-Button |
+| Einladungslink bei Gruppenerstellung | Einladungslink erst wenn Whitelist erstellt |
+| Gruppenerstellung → direkt zur Gruppe | Gruppenerstellung → in Angebotsraum → "Whitelist erstellen"-Button |
 
-| Admin-Seite = separate Route `/admin` | Whitelist-Verwaltung = Modal im Angebotsraum || Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow |
+| Admin-Seite = separate Route `/admin` | Whitelist-Verwaltung = Modal im Angebotsraum |
+| Whitelist ist optional | Whitelist ist expliziter Schritt im Admin-Workflow |
 
-| Join-Seite: "Create" und "Join"-Tabs | Login-Seite: NUR Login-Formular || Einladungslink wird bei Gruppenerstellung generiert | Einladungslink wird erst generiert, wenn Whitelist erstellt wird |
+| Join-Seite: "Create" und "Join"-Tabs | Login-Seite: NUR Login-Formular |
+| Einladungslink wird bei Gruppenerstellung generiert | Einladungslink wird erst generiert, wenn Whitelist erstellt wird |
 
 | Admin-Seite ist separate Route `/admin` | Whitelist-Verwaltung ist Modal/Overlay im Angebotsraum |
 
@@ -175,11 +179,15 @@
 
 - ✅ Whitelist als Nostr-Event
 
-- ✅ Nostr-Event-Struktur (Kind 30000)- ✅ Secret-Hash für Gruppenerkennung
+- ✅ Nostr-Event-Struktur (Kind 30000)
+
+- ✅ Secret-Hash für Gruppenerkennung
 
 - ✅ Admin-Verifizierung über Signatur
 
----- ✅ Whitelist als Nostr-Event
+---
+
+- ✅ Whitelist als Nostr-Event
 
 - ✅ Nostr-Event-Struktur (Kind 30000)
 

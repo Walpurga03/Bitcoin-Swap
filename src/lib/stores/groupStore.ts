@@ -1,6 +1,13 @@
 import { writable, derived, get } from 'svelte/store';
 import type { GroupConfig, GroupMessage, MarketplaceOffer, OfferReply } from '$lib/nostr/types';
-import { deriveChannelId, deriveKeyFromSecret } from '$lib/nostr/crypto';
+import { 
+  deriveChannelId, 
+  deriveKeyFromSecret,
+  saveTempKeypair,
+  loadTempKeypair,
+  deleteTempKeypair,
+  generateTempKeypair
+} from '$lib/nostr/crypto';
 import { 
   fetchGroupMessages, 
   fetchMarketplaceOffers,
@@ -10,6 +17,18 @@ import {
   sendOfferInterest,
   deleteEvent
 } from '$lib/nostr/client';
+import {
+  createOffer as createOfferMarketplace,
+  deleteOffer as deleteOfferMarketplace,
+  loadOffers,
+  hasActiveOffer as checkActiveOffer
+} from '$lib/nostr/marketplace';
+import {
+  sendInterest,
+  loadInterests,
+  withdrawInterest,
+  getInterestCount
+} from '$lib/nostr/nip17';
 
 // Group Store State
 interface GroupState {

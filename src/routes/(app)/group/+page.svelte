@@ -3,53 +3,80 @@
   // @ts-ignore
   import { goto } from '$app/navigation';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
-  import { groupStore, marketplaceOffers } from '$lib/stores/groupStore';
-  import { dealStore, dealRooms } from '$lib/stores/dealStore';
-  import { formatTimestamp, truncatePubkey } from '$lib/utils';
-  import { generateTempKeypair } from '$lib/nostr/crypto';
+  import { groupStore } from '$lib/stores/groupStore';
+  import { formatTimestamp, truncatePubkey, getTimeRemaining, isExpiringSoon } from '$lib/utils';
+  import { 
+    generateTempKeypair, 
+    saveTempKeypair, 
+    loadTempKeypair, 
+    deleteTempKeypair 
+  } from '$lib/nostr/crypto';
+  import {
+    createOffer as createOfferMarketplace,
+    deleteOffer as deleteOfferMarketplace,
+    loadOffers,
+    type Offer
+  } from '$lib/nostr/marketplace';
+  import {
+    sendInterest as sendInterestNIP17,
+    loadInterests,
+    getInterestCount,
+    type Interest
+  } from '$lib/nostr/nip17';
   import WhitelistModal from '$lib/components/WhitelistModal.svelte';
+  import InterestModal from '$lib/components/InterestModal.svelte';
+  import InterestList from '$lib/components/InterestList.svelte';
   
   let isAdmin = false;
 
+  // Marketplace State
+  let offers: Offer[] = [];
   let offerInput = '';
   let showOfferForm = false;
   let loading = false;
   let error = '';
   let tempKeypair: { privateKey: string; publicKey: string } | null = null;
-  let expandedOffers: Set<string> = new Set();
-  let myInterests: Set<string> = new Set();
-  let autoRefreshInterval: ReturnType<typeof setInterval>;
+  
+  // Modals
   let showWhitelistModal = false;
+  let showInterestModal = false;
+  let showInterestList = false;
+  let selectedOffer: Offer | null = null;
+  
+  // Interests State
+  let interests: Interest[] = [];
+  let interestCounts: Record<string, number> = {};
+  let myInterestOfferIds: Set<string> = new Set();
+  
+  let autoRefreshInterval: ReturnType<typeof setInterval>;
 
-  // Prüfe ob User bereits ein aktives Angebot hat
-  $: hasActiveOffer = tempKeypair && $marketplaceOffers.some(
+  // Prüfe ob User ein aktives Angebot hat
+  $: hasActiveOffer = tempKeypair && offers.some(
     offer => offer.tempPubkey === tempKeypair?.publicKey
   );
 
   // GLOBALE Sperre: Wenn IRGENDEIN Angebot existiert, kann NIEMAND ein neues erstellen
-  $: anyOfferExists = $marketplaceOffers.length > 0;
+  $: anyOfferExists = offers.length > 0;
 
-  // Prüfe ob User aktive Deal-Rooms hat
-  $: hasActiveDeals = $dealRooms.length > 0;
-
-  function hasMyInterest(offer: any): boolean {
-    if (!$userStore.pubkey) return false;
-    if (myInterests.has(offer.id)) return true;
-    return offer.replies.some((r: any) => r.pubkey === $userStore.pubkey);
-  }
-
-  function getMyInterest(offer: any): any | null {
-    if (!$userStore.pubkey) return null;
-    return offer.replies.find((r: any) => r.pubkey === $userStore.pubkey) || null;
-  }
-
-  function toggleOfferExpand(offerId: string) {
-    if (expandedOffers.has(offerId)) {
-      expandedOffers.delete(offerId);
-    } else {
-      expandedOffers.add(offerId);
+  async function loadAllOffers() {
+    if (!$groupStore.relay || !$groupStore.channelId) return;
+    
+    try {
+      console.log('🔍 Relay:', $groupStore.relay);
+      console.log('🔍 Channel ID:', $groupStore.channelId?.substring(0, 16) + '...');
+      
+      const ownTempPubkey = tempKeypair?.publicKey;
+      offers = await loadOffers($groupStore.relay, $groupStore.channelId, ownTempPubkey);
+      
+      // Lade Interest-Counts für alle Angebote
+      for (const offer of offers) {
+        interestCounts[offer.id] = await getInterestCount(offer.tempPubkey, $groupStore.relay);
+      }
+      
+      console.log(`✅ ${offers.length} Angebote geladen`);
+    } catch (e) {
+      console.error('❌ Fehler beim Laden der Angebote:', e);
     }
-    expandedOffers = expandedOffers;
   }
 
   async function copyToClipboard(text: string) {
@@ -70,7 +97,7 @@
     try {
       console.log('🚀 [PAGE] onMount - Lade Daten...');
       
-      // 🔐 NEU: Lade Admin-Status dynamisch von Nostr (nicht aus localStorage!)
+      // 🔐 Lade Admin-Status dynamisch von Nostr
       const group = $groupStore;
       const userPubkey = $userStore.pubkey;
       
@@ -80,59 +107,39 @@
           const secretHash = await deriveSecretHash(group.secret);
           const adminPubkey = await loadGroupAdmin(secretHash, [group.relay]);
           
-          // Berechne Admin-Status JETZT neu (nicht aus localStorage!)
           const isCurrentUserAdmin = adminPubkey?.toLowerCase() === userPubkey?.toLowerCase();
           isAdmin = isCurrentUserAdmin;
           
-          console.log('🔐 [ADMIN-CHECK-DYNAMIC]', {
+          console.log('🔐 [ADMIN-CHECK]', {
             adminPubkey: adminPubkey?.substring(0, 16) + '...',
             userPubkey: userPubkey?.substring(0, 16) + '...',
             isAdmin: isCurrentUserAdmin ? '✅ JA' : '❌ NEIN'
           });
         } catch (adminCheckError) {
-          console.warn('⚠️ [ADMIN-CHECK] Konnte Admin-Status nicht laden von Nostr:', adminCheckError);
+          console.warn('⚠️ [ADMIN-CHECK] Fehler:', adminCheckError);
           isAdmin = false;
         }
-      } else {
-        console.warn('⚠️ [ADMIN-CHECK] Gruppe nicht initialisiert');
-        isAdmin = false;
       }
       
-      // Restore tempKeypair
-      if ($userStore.tempPrivkey) {
-        const { getPublicKeyFromPrivate } = await import('$lib/nostr/crypto');
-        tempKeypair = {
-          privateKey: $userStore.tempPrivkey,
-          publicKey: getPublicKeyFromPrivate($userStore.tempPrivkey)
-        };
-        console.log('✅ [PAGE] tempKeypair wiederhergestellt');
+      // Versuche temp_keypair zu laden (mit Recovery)
+      if ($userStore.privateKey) {
+        tempKeypair = loadTempKeypair($userStore.privateKey);
+        if (tempKeypair) {
+          console.log('✅ [PAGE] temp_keypair wiederhergestellt');
+        }
       }
       
       // Lade Marketplace-Angebote
-      await groupStore.loadOffers();
-      console.log('✅ [PAGE] Marketplace-Angebote geladen');
+      await loadAllOffers();
 
-      // Lade Deal-Rooms
-      await dealStore.loadRooms(
-        $userStore.pubkey!,
-        $groupStore.groupKey!,
-        $groupStore.relay!
-      );
-      console.log('✅ [PAGE] Deal-Rooms geladen:', $dealRooms.length);
-
-      // Auto-Refresh alle 5 Sekunden
+      // Auto-Refresh alle 10 Sekunden
       autoRefreshInterval = setInterval(async () => {
         try {
-          await groupStore.loadOffers();
-          await dealStore.loadRooms(
-            $userStore.pubkey!,
-            $groupStore.groupKey!,
-            $groupStore.relay!
-          );
+          await loadAllOffers();
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
-      }, 5000);
+      }, 10000);
 
     } catch (e: any) {
       console.error('❌ [PAGE] Fehler beim Laden:', e);
@@ -148,6 +155,7 @@
 
   async function createOffer() {
     if (!offerInput.trim()) return;
+    if (!$groupStore.relay || !$groupStore.channelId || !$userStore.privateKey) return;
 
     // GLOBALE Prüfung: Wenn IRGENDEIN Angebot existiert, kann NIEMAND ein neues erstellen
     if (anyOfferExists) {
@@ -159,24 +167,34 @@
       loading = true;
       error = '⏳ Angebot wird erstellt...';
 
+      // Generiere oder lade temp_keypair
       if (!tempKeypair) {
         tempKeypair = generateTempKeypair();
-        userStore.setTempPrivkey(tempKeypair.privateKey);
+        saveTempKeypair(tempKeypair, $userStore.privateKey);
+        console.log('✅ Neuer temp_keypair erstellt & gespeichert');
       }
 
-      await groupStore.createOffer(offerInput, tempKeypair.privateKey);
+      // Erstelle Angebot
+      await createOfferMarketplace(
+        offerInput,
+        tempKeypair,
+        $groupStore.relay,
+        $groupStore.channelId
+      );
       
-      error = '✅ Angebot wird veröffentlicht...';
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await groupStore.loadOffers();
+      error = '✅ Angebot veröffentlicht! Lade Angebote neu...';
+      
+      // Warte 2 Sekunden damit Relay das Event verarbeiten kann
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await loadAllOffers();
       
       offerInput = '';
       showOfferForm = false;
-      error = '';
+      error = '✅ Angebot erfolgreich erstellt!';
       
       setTimeout(() => {
-        alert('✅ Angebot erfolgreich erstellt!');
-      }, 100);
+        error = '';
+      }, 3000);
     } catch (e: any) {
       error = '❌ ' + (e.message || 'Fehler beim Erstellen des Angebots');
     } finally {
@@ -184,77 +202,27 @@
     }
   }
 
-  async function sendInterest(offerId: string) {
-    if (!$userStore.privateKey) return;
-
-    try {
-      loading = true;
-      error = '⏳ Interesse wird gesendet...';
-
-      const userName = $userStore.name || 'Unbekannt';
-      
-      await groupStore.sendInterest(
-        offerId,
-        'Ich habe Interesse an deinem Angebot!',
-        userName,
-        $userStore.privateKey
-      );
-
-      myInterests.add(offerId);
-      myInterests = myInterests;
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await groupStore.loadOffers();
-
-      error = '';
-      alert('✅ Interesse gesendet! Der Anbieter kann jetzt einen Deal-Room mit dir starten.');
-    } catch (e: any) {
-      console.error('❌ [UI] Fehler beim Senden des Interesses:', e);
-      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
-      myInterests.delete(offerId);
-      myInterests = myInterests;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function withdrawInterest(offerId: string, interestId: string) {
-    if (!$userStore.privateKey) return;
-    if (!confirm('Möchtest du dein Interesse wirklich zurückziehen?')) return;
-
-    try {
-      loading = true;
-      error = '';
-
-      await groupStore.deleteInterest(interestId, $userStore.privateKey);
-
-      myInterests.delete(offerId);
-      myInterests = myInterests;
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await groupStore.loadOffers();
-
-      alert('✅ Interesse zurückgezogen.');
-    } catch (e: any) {
-      error = e.message || 'Fehler beim Zurückziehen des Interesses';
-      myInterests.add(offerId);
-      myInterests = myInterests;
-    } finally {
-      loading = false;
-    }
-  }
-
   async function deleteOffer(offerId: string) {
-    if (!tempKeypair?.privateKey) return;
+    if (!tempKeypair?.privateKey || !$groupStore.relay) return;
     if (!confirm('Möchtest du dieses Angebot wirklich löschen?')) return;
 
     try {
       loading = true;
       error = '⏳ Angebot wird gelöscht...';
 
-      await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
+      await deleteOfferMarketplace(
+        offerId,
+        tempKeypair.privateKey,
+        tempKeypair.publicKey,
+        $groupStore.relay
+      );
+      
+      // Lösche temp_keypair
+      deleteTempKeypair();
+      tempKeypair = null;
+      
       await new Promise(resolve => setTimeout(resolve, 500));
-      await groupStore.loadOffers();
+      await loadAllOffers();
       
       error = '';
       alert('✅ Angebot erfolgreich gelöscht!');
@@ -265,64 +233,66 @@
     }
   }
 
-  async function startDealRoom(offerId: string, recipientPubkey: string, recipientName: string) {
-    if (!tempKeypair?.privateKey || !$userStore.privateKey) {
-      alert('❌ Fehler: Keine Keys vorhanden');
-      return;
-    }
+  function openInterestModal(offer: Offer) {
+    selectedOffer = offer;
+    showInterestModal = true;
+  }
 
-    const offer = $marketplaceOffers.find(o => o.id === offerId);
-    if (!offer || offer.tempPubkey !== tempKeypair.publicKey) {
-      alert('❌ Fehler: Dies ist nicht dein Angebot');
-      return;
-    }
-
-    const confirmMessage = `💬 Möchtest du einen Deal-Room mit ${recipientName} starten?\n\n` +
-      `✅ VORTEILE:\n` +
-      `• Privater verschlüsselter Chat nur für euch beide\n` +
-      `• Dein Angebot wird gelöscht\n` +
-      `• Andere User können weiter Angebote erstellen\n` +
-      `• Whitelist bleibt unverändert`;
-    
-    if (!confirm(confirmMessage)) return;
+  async function handleSendInterest(event: CustomEvent<{ message: string }>) {
+    if (!selectedOffer || !$userStore.privateKey || !$userStore.pubkey || !$groupStore.relay) return;
 
     try {
       loading = true;
-      error = '⏳ Deal-Room wird erstellt...';
+      error = '⏳ Interesse wird gesendet...';
+      showInterestModal = false;
 
-      console.log('🏠 [UI] Erstelle Deal-Room...');
-
-      // Erstelle Deal-Room
-      const dealRoom = await dealStore.createRoom(
-        offerId,
-        offer.content,
-        $userStore.pubkey!,
-        recipientPubkey,
-        $groupStore.channelId!,
-        $groupStore.groupKey!,
+      const userName = $userStore.name || 'Anonym';
+      
+      await sendInterestNIP17(
         $userStore.privateKey,
-        $groupStore.relay!
+        $userStore.pubkey,
+        userName,
+        event.detail.message,
+        selectedOffer.tempPubkey,
+        $groupStore.relay
       );
 
-      console.log('✅ [UI] Deal-Room erstellt:', dealRoom.id);
-
-      // Lösche Angebot
-      await groupStore.deleteOffer(offerId, tempKeypair.privateKey);
-      console.log('✅ [UI] Angebot gelöscht');
+      myInterestOfferIds.add(selectedOffer.id);
+      myInterestOfferIds = myInterestOfferIds;
 
       await new Promise(resolve => setTimeout(resolve, 500));
-      await groupStore.loadOffers();
+      await loadAllOffers();
 
       error = '';
-      loading = false;
-
-      // Navigiere zum Deal-Room
-      alert(`✅ Deal-Room erfolgreich erstellt!\n\nDu wirst jetzt zum privaten Chat weitergeleitet.`);
-      goto(`/deal/${dealRoom.id}`);
-
+      alert('✅ Interesse gesendet!');
     } catch (e: any) {
-      console.error('❌ [UI] Fehler beim Deal-Room-Start:', e);
-      error = '❌ ' + (e.message || 'Fehler beim Deal-Room-Start');
+      console.error('❌ Fehler beim Senden des Interesses:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
+      if (selectedOffer) {
+        myInterestOfferIds.delete(selectedOffer.id);
+        myInterestOfferIds = myInterestOfferIds;
+      }
+    } finally {
+      loading = false;
+      selectedOffer = null;
+    }
+  }
+
+  async function openInterestList(offer: Offer) {
+    if (!tempKeypair?.privateKey || !$groupStore.relay) return;
+    
+    try {
+      loading = true;
+      selectedOffer = offer;
+      
+      // Lade Interessen
+      interests = await loadInterests(tempKeypair.privateKey, $groupStore.relay);
+      
+      showInterestList = true;
+      loading = false;
+    } catch (e: any) {
+      console.error('❌ Fehler beim Laden der Interessen:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Laden der Interessen');
       loading = false;
     }
   }
@@ -331,7 +301,6 @@
     if (confirm('Möchtest du dich wirklich abmelden?')) {
       userStore.logout();
       groupStore.clearGroupData();
-      dealStore.reset();
       goto('/');
     }
   }
@@ -350,11 +319,6 @@
       </p>
     </div>
     <div class="header-actions">
-      {#if hasActiveDeals}
-        <button class="btn btn-deals" on:click={() => goto('/deal/' + $dealRooms[0].id)}>
-          💬 Meine Deals ({$dealRooms.length})
-        </button>
-      {/if}
       {#if isAdmin}
         <button class="btn btn-admin" on:click={() => showWhitelistModal = true}>
           🔐 Whitelist verwalten
@@ -419,11 +383,11 @@
     {/if}
 
     <div class="offers-list">
-      {#if loading && $marketplaceOffers.length === 0}
+      {#if loading && offers.length === 0}
         <div class="loading-state">
           <p>⏳ Lade Angebote...</p>
         </div>
-      {:else if $marketplaceOffers.length === 0}
+      {:else if offers.length === 0}
         <div class="empty-state">
           <div class="empty-icon">🛒</div>
           <p><strong>Noch keine Angebote vorhanden</strong></p>
@@ -431,21 +395,21 @@
         </div>
       {:else}
         <div class="offers-count">
-          {$marketplaceOffers.length} {$marketplaceOffers.length === 1 ? 'Angebot' : 'Angebote'}
+          {offers.length} {offers.length === 1 ? 'Angebot' : 'Angebote'}
         </div>
-        {#each $marketplaceOffers as offer (offer.id)}
-          <div class="offer-card card" class:own-offer={offer.tempPubkey === tempKeypair?.publicKey}>
+        {#each offers as offer (offer.id)}
+          <div class="offer-card card" class:own-offer={offer.isOwnOffer}>
             <div class="offer-header">
               <div class="offer-meta">
                 <span class="offer-author">
-                  {#if offer.tempPubkey === tempKeypair?.publicKey}
+                  {#if offer.isOwnOffer}
                     <span class="badge badge-primary">Dein Angebot</span>
                   {:else}
                     <span class="badge badge-secondary">Anonym</span>
                   {/if}
                 </span>
-                <span class="offer-time">
-                  {formatTimestamp(offer.created_at)}
+                <span class="offer-time" class:expiring-soon={isExpiringSoon(offer.expiresAt)}>
+                  ⏰ {getTimeRemaining(offer.expiresAt)}
                 </span>
               </div>
             </div>
@@ -455,18 +419,25 @@
             <div class="offer-footer">
               <div class="offer-info">
                 <span class="offer-id">ID: {truncatePubkey(offer.tempPubkey)}</span>
-                {#if offer.replies.length > 0}
-                  <button 
-                    class="interest-badge"
-                    on:click={() => toggleOfferExpand(offer.id)}
-                  >
-                    💌 {offer.replies.length} {offer.replies.length === 1 ? 'Interessent' : 'Interessenten'}
-                    <span class="expand-icon">{expandedOffers.has(offer.id) ? '▼' : '▶'}</span>
-                  </button>
+                {#if interestCounts[offer.id] > 0}
+                  {#if offer.isOwnOffer}
+                    <button 
+                      class="interest-badge clickable"
+                      on:click={() => openInterestList(offer)}
+                      disabled={loading}
+                    >
+                      💌 {interestCounts[offer.id]} {interestCounts[offer.id] === 1 ? 'Interessent' : 'Interessenten'}
+                      <span class="expand-icon">▶</span>
+                    </button>
+                  {:else}
+                    <span class="interest-badge">
+                      💌 {interestCounts[offer.id]} {interestCounts[offer.id] === 1 ? 'Interessent' : 'Interessenten'}
+                    </span>
+                  {/if}
                 {/if}
               </div>
               <div class="offer-actions">
-                {#if offer.tempPubkey === tempKeypair?.publicKey}
+                {#if offer.isOwnOffer}
                   <button 
                     class="btn btn-danger btn-sm" 
                     on:click={() => deleteOffer(offer.id)}
@@ -474,20 +445,18 @@
                   >
                     🗑️ Löschen
                   </button>
-                {:else if hasMyInterest(offer)}
-                  {@const myInterest = getMyInterest(offer)}
+                {:else if myInterestOfferIds.has(offer.id)}
                   <button 
                     class="btn btn-warning btn-sm" 
-                    on:click={() => withdrawInterest(offer.id, myInterest.id)}
-                    disabled={loading}
-                    title="Interesse zurückziehen"
+                    disabled
+                    title="Du hast bereits Interesse gezeigt"
                   >
                     ✅ Interesse gezeigt
                   </button>
                 {:else}
                   <button 
                     class="btn btn-success btn-sm" 
-                    on:click={() => sendInterest(offer.id)}
+                    on:click={() => openInterestModal(offer)}
                     disabled={loading}
                   >
                     ✋ Interesse zeigen
@@ -495,88 +464,6 @@
                 {/if}
               </div>
             </div>
-
-            {#if expandedOffers.has(offer.id) && offer.replies.length > 0}
-              <div class="interest-list">
-                {#if offer.tempPubkey === tempKeypair?.publicKey}
-                  <div class="interest-header">
-                    <strong>Interessenten:</strong>
-                    <small class="hint-text">💡 Klicke auf "Deal starten" für privaten Chat</small>
-                  </div>
-                  {#each offer.replies as reply (reply.id)}
-                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
-                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
-                    <div class="interest-item">
-                      <div class="interest-meta">
-                        <button
-                          class="interest-name clickable"
-                          on:click={() => copyToClipboard(reply.pubkey)}
-                          title="Klicke zum Kopieren der Public Key: {reply.pubkey}"
-                        >
-                          👤 <strong>{userName}</strong>
-                          <span class="copy-icon">📋</span>
-                        </button>
-                        <span class="interest-time">
-                          {formatTimestamp(reply.created_at)}
-                        </span>
-                      </div>
-                      <div class="interest-actions">
-                        <button
-                          class="interest-pubkey-detail clickable"
-                          on:click={() => copyToClipboard(reply.pubkey)}
-                          title="Klicke zum Kopieren: {reply.pubkey}"
-                        >
-                          🔑 {truncatePubkey(reply.pubkey)}
-                        </button>
-                        <button
-                          class="btn btn-chat btn-sm"
-                          on:click={() => startDealRoom(offer.id, reply.pubkey, userName)}
-                          title="Deal-Room mit {userName} starten"
-                          disabled={loading}
-                        >
-                          🏠 Deal starten
-                        </button>
-                      </div>
-                      {#if message !== userName}
-                        <div class="interest-message">
-                          {message}
-                        </div>
-                      {/if}
-                    </div>
-                  {/each}
-                {:else}
-                  <div class="interest-header">
-                    <strong>Dein Interesse:</strong>
-                  </div>
-                  {#each offer.replies.filter(r => r.pubkey === $userStore.pubkey) as reply (reply.id)}
-                    {@const userName = reply.content.split(':')[0]?.trim() || 'Unbekannt'}
-                    {@const message = reply.content.split(':').slice(1).join(':').trim() || reply.content}
-                    <div class="interest-item own-interest">
-                      <div class="interest-meta">
-                        <span class="interest-name">
-                          👤 <strong>{userName}</strong>
-                        </span>
-                        <span class="interest-time">
-                          {formatTimestamp(reply.created_at)}
-                        </span>
-                      </div>
-                      {#if message !== userName}
-                        <div class="interest-message">
-                          {message}
-                        </div>
-                      {/if}
-                      <div class="interest-status">
-                        ℹ️ Warte auf Deal-Room vom Anbieter...
-                        <br>
-                        <small>Der Anbieter kann einen privaten Deal-Room mit dir starten.</small>
-                        <br><br>
-                        <small>💡 Sobald der Deal-Room erstellt wurde, findest du ihn unter "Meine Deals" im Header.</small>
-                      </div>
-                    </div>
-                  {/each}
-                {/if}
-              </div>
-            {/if}
           </div>
         {/each}
       {/if}
@@ -665,6 +552,7 @@
     box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
   }
 
+  /* .btn-deals für zukünftige Deal-Rooms Feature
   .btn-deals {
     background: linear-gradient(135deg, var(--primary-color), #d90062);
     color: white;
@@ -683,6 +571,7 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(255, 0, 110, 0.5);
   }
+  */
 
   .marketplace-container {
     flex: 1;
@@ -860,6 +749,21 @@
     color: var(--text-muted);
     font-size: 0.8125rem;
   }
+  
+  .offer-time.expiring-soon {
+    color: #f59e0b;
+    font-weight: 600;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
 
   .offer-content {
     margin-bottom: 1rem;
@@ -899,8 +803,11 @@
     border-radius: 0.375rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    cursor: pointer;
     transition: all 0.2s;
+  }
+  
+  .interest-badge.clickable {
+    cursor: pointer;
   }
 
   .interest-badge:hover {
@@ -911,143 +818,6 @@
   .expand-icon {
     font-size: 0.75rem;
     opacity: 0.7;
-  }
-
-  .interest-list {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .interest-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.875rem;
-    margin-bottom: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .hint-text {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: normal;
-  }
-
-  .interest-item {
-    padding: 0.75rem;
-    background-color: rgba(16, 185, 129, 0.05);
-    border-left: 3px solid #10b981;
-    border-radius: 0.375rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .interest-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-    font-size: 0.8125rem;
-  }
-
-  .interest-name {
-    font-weight: 600;
-    color: #10b981;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    background: none;
-    border: none;
-    padding: 0.375rem 0.5rem;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.9375rem;
-  }
-
-  .interest-name:hover {
-    background-color: rgba(16, 185, 129, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .interest-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .interest-pubkey-detail {
-    font-weight: 500;
-    color: var(--text-muted);
-    font-family: monospace;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    background: none;
-    border: none;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.8125rem;
-  }
-
-  .interest-pubkey-detail:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-    color: var(--text-color);
-  }
-
-  .btn-chat {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-    border: none;
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-
-  .btn-chat:hover:not(:disabled) {
-    background: linear-gradient(135deg, #059669, #047857);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-  }
-
-  .copy-icon {
-    opacity: 0;
-    transition: opacity 0.2s;
-    font-size: 0.875rem;
-  }
-
-  .interest-name:hover .copy-icon {
-    opacity: 1;
-  }
-
-  .interest-time {
-    color: var(--text-muted);
-    font-size: 0.75rem;
-  }
-
-  .interest-message {
-    font-size: 0.875rem;
-    color: var(--text-color);
-    line-height: 1.5;
-  }
-
-  .own-interest {
-    background-color: rgba(59, 130, 246, 0.05);
-    border-left-color: #3b82f6;
-  }
-
-  .interest-status {
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    background-color: rgba(59, 130, 246, 0.1);
-    border-radius: 0.25rem;
-    font-size: 0.8125rem;
-    color: #3b82f6;
-    text-align: center;
-    font-weight: 500;
   }
 
   .offer-actions {
@@ -1156,10 +926,10 @@
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin-anim 0.8s linear infinite;
   }
 
-  @keyframes spin {
+  @keyframes spin-anim {
     to {
       transform: rotate(360deg);
     }
@@ -1286,6 +1056,7 @@
       flex: 1;
     }
 
+    /* .interest-actions für zukünftige Features
     .interest-actions {
       flex-direction: column;
     }
@@ -1293,6 +1064,7 @@
     .interest-actions .btn {
       width: 100%;
     }
+    */
   }
 
   /* Small Mobile (max 480px) */
@@ -1317,4 +1089,21 @@
 </style>
 
 <!-- Whitelist Modal -->
-<WhitelistModal bind:show={showWhitelistModal} onClose={() => showWhitelistModal = false} />
+<WhitelistModal 
+  bind:show={showWhitelistModal}
+  onClose={() => showWhitelistModal = false}
+/>
+
+<!-- Interest Modal -->
+<InterestModal 
+  bind:show={showInterestModal}
+  offerContent={selectedOffer?.content || ''}
+  on:send={handleSendInterest}
+/>
+
+<!-- Interest List Modal -->
+<InterestList
+  bind:show={showInterestList}
+  {interests}
+  {loading}
+/>
