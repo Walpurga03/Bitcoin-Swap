@@ -14,13 +14,10 @@ export const GROUP_TAG = 'bitcoin-group';
 
 /**
  * Standard-Relays zur Auswahl
+ * Nur eigener Relay für volle Kontrolle
  */
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://nos.lol',
-  'wss://relay.snort.social',
-  'wss://nostr.wine'
+  'wss://nostr-relay.online'
 ];
 
 /**
@@ -56,36 +53,14 @@ export const EVENT_KINDS = {
 } as const;
 
 /**
- * Populäre Nostr Relays für Profil-Abfragen
+ * Populäre Nostr Relays für Profil-Abfragen (Kind 0 Metadata)
+ * Diese werden NUR verwendet um User-Namen/Profile zu laden
+ * NICHT für Gruppen-Daten!
  */
 export const POPULAR_RELAYS = [
   'wss://relay.damus.io',
   'wss://relay.nostr.band',
   'wss://nos.lol',
-  'wss://relay.snort.social',
+  'wss://relay.primal.net',
   'wss://nostr.wine'
 ];
-
-/**
- * Multi-Relay Konfiguration für GroupConfig-Lookups
- * Diese Relays werden durchsucht, wenn kein Relay im Link angegeben ist
- */
-export const GROUP_CONFIG_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://nos.lol',
-  'wss://relay.snort.social',
-  'wss://nostr.wine'
-];
-
-/**
- * Relay-Aliase für kurze Links
- * Beispiel: ?r=1&secret=xyz statt ?relay=wss://...&secret=xyz
- */
-export const RELAY_ALIASES: Record<number, string> = {
-  1: 'wss://relay.damus.io',
-  2: 'wss://relay.nostr.band',
-  3: 'wss://nos.lol',
-  4: 'wss://relay.snort.social',
-  5: 'wss://nostr.wine'
-};

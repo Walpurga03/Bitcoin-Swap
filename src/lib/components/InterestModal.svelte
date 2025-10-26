@@ -3,11 +3,12 @@
   
   export let show = false;
   export let offerContent = '';
+  export let offerPubkey = ''; // Public Key des Angebotgebers
   
   const dispatch = createEventDispatcher();
   
-  let message = '';
   let sending = false;
+  let message = '';
   
   function close() {
     show = false;
@@ -19,11 +20,14 @@
     
     sending = true;
     try {
-      dispatch('send', { message });
+      dispatch('send', { 
+        message: message.trim() || `Hallo! Ich interessiere mich für dein Angebot: "${offerContent.substring(0, 50)}..."`,
+        recipientPubkey: offerPubkey
+      });
       close();
     } catch (error) {
       console.error('Fehler:', error);
-      alert('❌ Fehler beim Senden des Interesses');
+      alert('❌ Fehler beim Senden der Anfrage');
     } finally {
       sending = false;
     }
@@ -38,7 +42,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="modal-content" on:click|stopPropagation>
       <div class="modal-header">
-        <h2>💌 Interesse zeigen</h2>
+        <h2>💌 Private Anfrage senden</h2>
         <button class="close-btn" on:click={close}>✕</button>
       </div>
       
@@ -48,29 +52,31 @@
           <p class="offer-text">{offerContent}</p>
         </div>
         
-        <div class="form-group">
-          <label for="message">
-            Optionale Nachricht an Anbieter
-            <span class="hint">(Nur Anbieter kann sie lesen)</span>
-          </label>
+        <div class="message-section">
+          <label for="message">📝 Persönliche Nachricht (optional):</label>
           <textarea
             id="message"
             bind:value={message}
-            placeholder="z.B. 'Wann können wir uns treffen?', 'Ich habe auch XMR...'"
-            rows="4"
+            placeholder="z.B. Hallo! Wann und wo können wir uns treffen?"
+            rows="3"
             maxlength="500"
           ></textarea>
-          <div class="char-count">
-            {message.length}/500
+          <div class="char-counter">
+            {message.length}/500 Zeichen
           </div>
         </div>
         
+        <div class="info-text">
+          <p>💌 Deine Nachricht wird als <strong>private NIP-17 DM</strong> an den Angebotsgeber gesendet.</p>
+          <p>🔒 Nur ihr beide könnt sie sehen!</p>
+        </div>
+        
         <div class="info-box">
-          <strong>🔐 Privatsphäre:</strong>
+          <strong>ℹ️ So funktioniert es:</strong>
           <ul>
-            <li>Nur der Anbieter sieht deine Identität</li>
-            <li>Nachricht ist NIP-17 verschlüsselt</li>
-            <li>Andere User sehen nur die Anzahl der Interessen</li>
+            <li>Du zeigst <strong>stilles Interesse</strong> - der Anbieter sieht nur die Anzahl</li>
+            <li>Wenn er dich auswählt, wird ein privater Chat gestartet</li>
+            <li>Andere Interessenten erfahren nichts davon</li>
           </ul>
         </div>
       </div>
@@ -84,7 +90,7 @@
           on:click={sendInterest}
           disabled={sending}
         >
-          {sending ? '⏳ Sende...' : '📤 Interesse senden'}
+          {sending ? '⏳ Sende...' : '📤 Anfrage senden'}
         </button>
       </div>
     </div>
@@ -172,58 +178,27 @@
     font-size: 1.1rem;
   }
   
-  .form-group {
-    margin-bottom: 1.5rem;
+  .confirmation-text {
+    text-align: center;
+    margin: 1.5rem 0;
   }
   
-  .form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
+  .confirmation-text p {
+    font-size: 1.1rem;
     color: #eee;
-    font-weight: 500;
-  }
-  
-  .hint {
-    color: #888;
-    font-size: 0.9rem;
-    font-weight: normal;
-  }
-  
-  textarea {
-    width: 100%;
-    padding: 0.75rem;
-    background: #16213e;
-    border: 1px solid #2d2d44;
-    border-radius: 8px;
-    color: #eee;
-    font-family: inherit;
-    font-size: 1rem;
-    resize: vertical;
-    transition: border-color 0.2s;
-  }
-  
-  textarea:focus {
-    outline: none;
-    border-color: #f39c12;
-  }
-  
-  .char-count {
-    text-align: right;
-    font-size: 0.85rem;
-    color: #888;
-    margin-top: 0.25rem;
+    margin: 0;
   }
   
   .info-box {
-    background: rgba(52, 152, 219, 0.1);
-    border: 1px solid rgba(52, 152, 219, 0.3);
+    background: rgba(46, 204, 113, 0.1);
+    border: 1px solid rgba(46, 204, 113, 0.3);
     border-radius: 8px;
     padding: 1rem;
     margin-top: 1rem;
   }
   
   .info-box strong {
-    color: #3498db;
+    color: #2ecc71;
   }
   
   .info-box ul {
@@ -277,6 +252,65 @@
   .btn-primary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+  
+  .message-section {
+    margin-bottom: 1.5rem;
+  }
+  
+  .message-section label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #f39c12;
+    font-weight: 500;
+  }
+  
+  .message-section textarea {
+    width: 100%;
+    background: #0f1419;
+    border: 1px solid #2d2d44;
+    border-radius: 6px;
+    padding: 0.75rem;
+    color: #eee;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.2s;
+  }
+  
+  .message-section textarea:focus {
+    outline: none;
+    border-color: #f39c12;
+  }
+  
+  .message-section textarea::placeholder {
+    color: #666;
+  }
+  
+  .char-counter {
+    text-align: right;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #888;
+  }
+  
+  .info-text {
+    background: rgba(52, 152, 219, 0.1);
+    border-left: 3px solid #3498db;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .info-text p {
+    margin: 0 0 0.5rem 0;
+    color: #eee;
+    font-size: 0.9rem;
+  }
+  
+  .info-text p:last-child {
+    margin-bottom: 0;
   }
   
   @media (max-width: 640px) {

@@ -16,6 +16,7 @@ export interface Offer {
   id: string;
   content: string;
   tempPubkey: string;
+  authorPubkey?: string; // Echter Public Key des Angebotgebers für NIP-17 DMs (optional für Rückwärtskompatibilität)
   createdAt: number;
   expiresAt: number;
   isExpired: boolean;
@@ -35,7 +36,8 @@ export async function createOffer(
   offerText: string,
   tempKeypair: { privateKey: string; publicKey: string },
   relay: string,
-  channelId: string
+  channelId: string,
+  authorPubkey?: string // Echter Public Key des Angebotgebers
 ): Promise<string> {
   try {
     console.log('📝 Erstelle Angebot...');
@@ -43,14 +45,21 @@ export async function createOffer(
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + (72 * 60 * 60); // +72 Stunden
     
+    const tags = [
+      ['e', channelId, relay, 'root'],
+      ['expiration', expiresAt.toString()] // NIP-40 Expiration
+    ];
+    
+    // Füge Author-Tag hinzu, falls angegeben (für NIP-17 DMs)
+    if (authorPubkey) {
+      tags.push(['author', authorPubkey]);
+    }
+    
     const event = {
       kind: 42,
       pubkey: tempKeypair.publicKey,
       created_at: now,
-      tags: [
-        ['e', channelId, relay, 'root'],
-        ['expiration', expiresAt.toString()] // NIP-40 Expiration
-      ],
+      tags,
       content: offerText,
     };
     
@@ -183,18 +192,30 @@ export async function loadOffers(
     };
     
     try {
+      console.log('  🔍 Query-Filter:', JSON.stringify(filter, null, 2));
+      
       const queryPromise = pool.querySync([relay], filter);
       const timeoutPromise = new Promise<any[]>((_, reject) => 
-        setTimeout(() => reject(new Error('Relay Timeout nach 15s')), 15000)
+        setTimeout(() => reject(new Error('Relay Timeout nach 30s')), 30000)
       );
       
       const events = await Promise.race([queryPromise, timeoutPromise]);
       
       console.log(`  ✅ ${events.length} Events gefunden`);
       
+      if (events.length > 0) {
+        console.log('  📋 Events:', events.map(e => ({
+          id: e.id.substring(0, 16) + '...',
+          pubkey: e.pubkey.substring(0, 16) + '...',
+          tags: e.tags
+        })));
+      }
+      
       // Konvertiere zu Offer-Objekten
       const offers: Offer[] = events.map(event => {
         const expirationTag = event.tags.find(t => t[0] === 'expiration');
+        const authorTag = event.tags.find(t => t[0] === 'author');
+        
         const expiresAt = expirationTag ? parseInt(expirationTag[1]) : 0;
         const isExpired = isOfferExpired(event);
         const isOwnOffer = ownTempPubkey ? event.pubkey === ownTempPubkey : false;
@@ -203,6 +224,7 @@ export async function loadOffers(
           id: event.id,
           content: event.content,
           tempPubkey: event.pubkey,
+          authorPubkey: authorTag ? authorTag[1] : undefined,
           createdAt: event.created_at,
           expiresAt,
           isExpired,

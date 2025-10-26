@@ -32,7 +32,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="modal-content" on:click|stopPropagation>
       <div class="modal-header">
-        <h2>👥 Interessenten ({interests.length})</h2>
+        <h2>� Deal-Anfragen ({interests.length})</h2>
         <button class="close-btn" on:click={close}>✕</button>
       </div>
       
@@ -44,8 +44,8 @@
           </div>
         {:else if interests.length === 0}
           <div class="empty-state">
-            <p>😴 Noch keine Interessenten</p>
-            <p class="hint">Sobald jemand Interesse zeigt, erscheint er hier.</p>
+            <p>😴 Noch keine Deal-Anfragen</p>
+            <p class="hint">Sobald jemand eine private Anfrage sendet, erscheint sie hier.</p>
           </div>
         {:else}
           <div class="interests-list">
@@ -79,10 +79,12 @@
                   >
                     📋 Public Key kopieren
                   </button>
-                  <!-- Später: Deal-Room starten -->
-                  <!-- <button class="btn-deal">
-                    💬 Deal-Room starten
-                  </button> -->
+                  <button 
+                    class="btn-deal"
+                    on:click={() => dispatch('selectPartner', interest)}
+                  >
+                    🤝 User auswählen
+                  </button>
                 </div>
               </div>
             {/each}
@@ -303,22 +305,22 @@
     color: #1a1a2e;
   }
   
-  /* Später aktivieren wenn Deal-Rooms implementiert sind */
-  /* .btn-deal {
-    background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
+  .btn-deal {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
     color: white;
     padding: 0.5rem 1rem;
     border-radius: 6px;
     border: none;
     cursor: pointer;
     font-size: 0.9rem;
+    font-weight: 500;
     transition: all 0.2s;
   }
   
   .btn-deal:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-  } */
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+  }
   
   .modal-footer {
     display: flex;
