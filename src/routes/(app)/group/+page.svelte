@@ -21,9 +21,6 @@
     type Offer
   } from '$lib/nostr/marketplace';
   import {
-    sendInterest as sendInterestNIP17,
-    loadInterests,
-    loadInterestedUsers,
     countDealRequests,
     type Interest
   } from '$lib/nostr/nip17';
@@ -809,26 +806,7 @@
     box-shadow: none;
   }
 
-  /* .btn-deals für zukünftige Deal-Rooms Feature
-  .btn-deals {
-    background: linear-gradient(135deg, var(--primary-color), #d90062);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    font-size: 0.875rem;
-    box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
-  }
 
-  .btn-deals:hover {
-    background: linear-gradient(135deg, #d90062, #b30052);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 0, 110, 0.5);
-  }
-  */
 
   .marketplace-container {
     flex: 1;
@@ -1313,15 +1291,7 @@
       flex: 1;
     }
 
-    /* .interest-actions für zukünftige Features
-    .interest-actions {
-      flex-direction: column;
-    }
 
-    .interest-actions .btn {
-      width: 100%;
-    }
-    */
   }
 
   /* Small Mobile (max 480px) */

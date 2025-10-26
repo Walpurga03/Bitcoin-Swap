@@ -1,200 +1,396 @@
-# 🪙 Bitcoin-Tausch-Netzwerk
+# 🛒 Bitcoin Tausch Netzwerk# 🪙 Bitcoin-Tausch-Netzwerk
 
-[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-5.4-FF3E00?logo=svelte)](https://kit.svelte.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![Nostr](https://img.shields.io/badge/Nostr-Protocol-8B5CF6)](https://github.com/nostr-protocol/nostr)
 
-> **Eine dezentrale, verschlüsselte Plattform für sichere Bitcoin-Tauschgeschäfte über das Nostr-Protokoll**
 
-Anonyme Marktplatz-Angebote treffen auf Ende-zu-Ende-verschlüsselte Deal-Rooms – alles ohne zentrale Server, vollständig dezentral über Nostr-Relays.
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://bitcoin-swap-gmsbyi0um-walpurga03s-projects.vercel.app)
 
----
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-5.4-FF3E00?logo=svelte)](https://kit.svelte.dev/)[![SvelteKit](https://img.shields.io/badge/SvelteKit-5.4-FF3E00?logo=svelte)](https://kit.svelte.dev/)
 
-## ✨ Features
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)](https://www.typescriptlang.org/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)](https://www.typescriptlang.org/)
 
-### 🔐 **Deal-Room System**
-- **Private verschlüsselte Chats** zwischen Käufer und Verkäufer
-- **AES-256-CBC Verschlüsselung** mit gruppenspezifischen Keys
+[![Nostr](https://img.shields.io/badge/Nostr-Protocol-8B5CF6)](https://github.com/nostr-protocol/nostr)[![Nostr](https://img.shields.io/badge/Nostr-Protocol-8B5CF6)](https://github.com/nostr-protocol/nostr)
+
+
+
+> **Privacy-First Bitcoin Trading Platform mit NIP-17 verschlüsselten Nachrichten**> **Eine dezentrale, verschlüsselte Plattform für sichere Bitcoin-Tauschgeschäfte über das Nostr-Protokoll**
+
+
+
+Ein dezentrales, anonymes Bitcoin-Tauschsystem basierend auf Nostr, das vollständig verschlüsselte private Kommunikation zwischen Handelspartnern ermöglicht.Anonyme Marktplatz-Angebote treffen auf Ende-zu-Ende-verschlüsselte Deal-Rooms – alles ohne zentrale Server, vollständig dezentral über Nostr-Relays.
+
+
+
+## ✨ Features---
+
+
+
+### 🔐 **Privacy-First Design**## ✨ Features
+
+- **Keine öffentlichen Interest-Tracker** - Alle Interessensbekundungen sind privat
+
+- **NIP-17 verschlüsselte Nachrichten** - Ende-zu-Ende Verschlüsselung zwischen Usern### 🔐 **Deal-Room System**
+
+- **Anonyme Angebote** - Temporäre Keypairs schützen die Identität- **Private verschlüsselte Chats** zwischen Käufer und Verkäufer
+
+- **Private Deal-Rooms** - Geschützte Kommunikation für Handelsprozesse- **AES-256-CBC Verschlüsselung** mit gruppenspezifischen Keys
+
 - **Automatische Deal-Room-Erstellung** beim Interesse zeigen
-- **Sichere Schlüsselverwaltung** im Browser (IndexedDB)
 
-### 🛒 **Anonymer Marketplace**
-- **Temporäre Keypairs** für vollständige Anonymität
-- **Öffentliche Angebote** sichtbar für alle Nutzer
+### 💬 **Erweiterte Kommunikation**- **Sichere Schlüsselverwaltung** im Browser (IndexedDB)
+
+- **Persönliche Nachrichten** - Nutzer können persönliche Nachrichten in Deal-Anfragen senden
+
+- **Verschlüsselte DMs** - Alle Nachrichten sind NIP-17 verschlüsselt### 🛒 **Anonymer Marketplace**
+
+- **Multi-User Support** - Skalierbare Architektur für beliebig viele Nutzer- **Temporäre Keypairs** für vollständige Anonymität
+
+- **Real-time Updates** - Live-Aktualisierung von Anfragen und Angeboten- **Öffentliche Angebote** sichtbar für alle Nutzer
+
 - **Interesse-System** mit automatischer Deal-Room-Einladung
-- **NIP-09 Delete Events** zum Zurückziehen von Interesse
 
-### 🎨 **Nostr Dark Theme**
-- **Modernes Design** in Pink (#FF006E), Violett (#8B5CF6) und Schwarz
-- **Responsive Layout** für Desktop, Tablet und Mobile
+### 🤝 **Nahtloser Handel**- **NIP-09 Delete Events** zum Zurückziehen von Interesse
+
+- **Ein-Klick Angebotserstellung** - Einfache Erstellung von Bitcoin-Tauschangeboten
+
+- **Smart Deal-Management** - Automatische Weiterleitung zu privaten Deal-Rooms### 🎨 **Nostr Dark Theme**
+
+- **Automatisches Cleanup** - Angebote werden nach Deal-Erstellung automatisch gelöscht- **Modernes Design** in Pink (#FF006E), Violett (#8B5CF6) und Schwarz
+
+- **Robuste Fehlerbehandlung** - Zuverlässige Funktionalität auch bei Netzwerkproblemen- **Responsive Layout** für Desktop, Tablet und Mobile
+
 - **Smooth Animations** und Transitions
-- **Accessibility-optimiert** mit Keyboard-Support
 
-### 🌐 **Dezentrale Architektur**
-- **Nostr-Protokoll** (NIP-01, NIP-09, NIP-12)
-- **Keine zentralen Server** – vollständig P2P
+### 🔧 **Technische Highlights**- **Accessibility-optimiert** mit Keyboard-Support
+
+- **NIP-17 Implementation** - Vollständige Unterstützung für verschlüsselte Direktnachrichten
+
+- **Author-Tag System** - Verknüpfung temporärer Keypairs mit echten Nutzerprofilen### 🌐 **Dezentrale Architektur**
+
+- **NIP-09 Delete Events** - Korrekte Löschung von Angeboten aus Nostr-Relays- **Nostr-Protokoll** (NIP-01, NIP-09, NIP-12)
+
+- **Modern UI/UX** - Responsive Design mit SvelteKit- **Keine zentralen Server** – vollständig P2P
+
 - **Relay-basierte Persistenz** mit lokalem Cache
-- **Echtzeit-Synchronisation** über WebSockets
 
-### ⚡ **Lightning-Spenden**
-- **Bitcoin-Orange Spenden-Button** auf allen Seiten
-- **Lightning-Adresse** mit Ein-Klick-Kopieren
+## 🚀 Schnellstart- **Echtzeit-Synchronisation** über WebSockets
+
+
+
+### Voraussetzungen### ⚡ **Lightning-Spenden**
+
+- Node.js 18+ - **Bitcoin-Orange Spenden-Button** auf allen Seiten
+
+- npm oder yarn- **Lightning-Adresse** mit Ein-Klick-Kopieren
+
 - **Floating Design** – nicht aufdringlich
-
----
-
-## 🚀 Quick Start
-
-### Voraussetzungen
-
-- **Node.js** 18+ und **npm**
-- Ein **Nostr-Relay** mit NIP-12 Support (empfohlen: eigener Relay)
 
 ### Installation
 
-```bash
+```bash---
+
 # Repository klonen
-git clone https://github.com/Walpurga03/Bitcoin-Swap.git
-cd Bitcoin-Swap
+
+git clone https://github.com/Walpurga03/Bitcoin-Tausch-Netzwerk.git## 🚀 Quick Start
+
+cd Bitcoin-Tausch-Netzwerk
+
+### Voraussetzungen
 
 # Dependencies installieren
-npm install
+
+npm install- **Node.js** 18+ und **npm**
+
+- Ein **Nostr-Relay** mit NIP-12 Support (empfohlen: eigener Relay)
 
 # Development Server starten
-npm run dev
+
+npm run dev### Installation
+
 ```
 
-Die App läuft auf `http://localhost:5173`
+```bash
 
----
+### Erste Schritte# Repository klonen
 
-## 📖 Verwendung
+1. **Account erstellen** - Generiere automatisch ein Nostr-Keypairgit clone https://github.com/Walpurga03/Bitcoin-Swap.git
 
-### 1️⃣ **Neue Gruppe erstellen (Admin)**
+2. **Gruppe beitreten** - Verwende einen Einladungslink oder erstelle eine neue Gruppecd Bitcoin-Swap
 
-1. Öffne die App und wähle **"🆕 Neue Gruppe erstellen"**
-2. Gib deinen **NSEC Private Key** ein (du wirst automatisch Admin)
-3. Wähle ein **Relay** (Standard oder eigenes)
-4. Lasse das **Secret automatisch generieren** oder gib ein eigenes ein (min. 8 Zeichen)
-5. Dein **Nostr-Profil** wird automatisch geladen
-6. Klicke auf **"🚀 Gruppe erstellen"**
+3. **Angebot erstellen** - Stelle dein Bitcoin-Tauschangebot ein
 
-> **Als Admin kannst du:**
-> - Die Whitelist verwalten (Public Keys hinzufügen/entfernen)
-> - Einladungslinks für neue User generieren
-> - Die Gruppe vollständig kontrollieren
+4. **Private Anfragen erhalten** - Andere Nutzer können verschlüsselte Interessensbekundungen senden# Dependencies installieren
 
-### 2️⃣ **Gruppe beitreten (User)**
+5. **Deal-Room starten** - Wähle einen Partner und beginne den privaten Handelnpm install
 
-1. Erhalte einen **Einladungslink** vom Gruppen-Admin
+
+
+## 🏗️ Architektur# Development Server starten
+
+npm run dev
+
+### Nostr Integration```
+
+- **Relays**: Dezentrale Nachrichtenübertragung
+
+- **NIP-17**: Ende-zu-Ende verschlüsselte DirektnachrichtenDie App läuft auf `http://localhost:5173`
+
+- **NIP-09**: Saubere Löschung von Events
+
+- **Temporary Keypairs**: Anonymer Handel ohne Preisgabe der Hauptidentität---
+
+
+
+### Komponenten-Struktur## 📖 Verwendung
+
+```
+
+src/### 1️⃣ **Neue Gruppe erstellen (Admin)**
+
+├── lib/
+
+│   ├── components/          # UI Komponenten1. Öffne die App und wähle **"🆕 Neue Gruppe erstellen"**
+
+│   │   ├── InterestModal.svelte    # Deal-Anfrage Interface2. Gib deinen **NSEC Private Key** ein (du wirst automatisch Admin)
+
+│   │   ├── InterestList.svelte     # Anzeige eingehender Anfragen3. Wähle ein **Relay** (Standard oder eigenes)
+
+│   │   └── WhitelistModal.svelte   # Admin-Funktionen4. Lasse das **Secret automatisch generieren** oder gib ein eigenes ein (min. 8 Zeichen)
+
+│   ├── nostr/              # Nostr-Implementierung5. Dein **Nostr-Profil** wird automatisch geladen
+
+│   │   ├── nip17.ts        # Verschlüsselte Messaging6. Klicke auf **"🚀 Gruppe erstellen"**
+
+│   │   ├── marketplace.ts  # Angebots-Management
+
+│   │   ├── crypto.ts       # Kryptographische Funktionen> **Als Admin kannst du:**
+
+│   │   └── client.ts       # Nostr-Client> - Die Whitelist verwalten (Public Keys hinzufügen/entfernen)
+
+│   └── stores/             # Svelte Stores> - Einladungslinks für neue User generieren
+
+├── routes/                 # SvelteKit Routes> - Die Gruppe vollständig kontrollieren
+
+│   ├── (app)/group/        # Haupt-Trading Interface
+
+│   ├── admin/              # Admin-Panel### 2️⃣ **Gruppe beitreten (User)**
+
+│   └── +page.svelte        # Landing Page
+
+```1. Erhalte einen **Einladungslink** vom Gruppen-Admin
+
 2. Öffne die App und wähle **"🔗 Gruppe beitreten"**
-3. Füge den **Einladungslink** ein
+
+## 🔐 Sicherheit & Privacy3. Füge den **Einladungslink** ein
+
 4. Gib deinen **NSEC Private Key** ein
-5. Dein **Nostr-Profil** wird geladen und gegen die **Whitelist** geprüft
-6. Klicke auf **"🔗 Gruppe beitreten"**
 
-> **Wichtig:** Dein Public Key muss vom Admin zur Whitelist hinzugefügt worden sein!
+### Verschlüsselung5. Dein **Nostr-Profil** wird geladen und gegen die **Whitelist** geprüft
 
-> **Tipp:** Dein Private Key bleibt im Browser und wird niemals übertragen!
+- **NIP-17 Encryption**: Alle Nachrichten sind mit ECDH + ChaCha20-Poly1305 verschlüsselt6. Klicke auf **"🔗 Gruppe beitreten"**
 
-### 3️⃣ **Marketplace: Angebot erstellen**
+- **Forward Secrecy**: Einmalige Schlüssel für jede Nachricht
+
+- **Metadata Protection**: Minimale Metadaten, maximale Privacy> **Wichtig:** Dein Public Key muss vom Admin zur Whitelist hinzugefügt worden sein!
+
+
+
+### Anonymität> **Tipp:** Dein Private Key bleibt im Browser und wird niemals übertragen!
+
+- **Temporary Keypairs**: Angebote werden mit temporären Schlüsseln erstellt
+
+- **Author Tags**: Sichere Verknüpfung ohne Identitätspreisgabe### 3️⃣ **Marketplace: Angebot erstellen**
+
+- **No Public Tracking**: Keine öffentlich sichtbaren Interest-Tracker
 
 1. Klicke auf **"+ Neues Angebot"**
-2. Beschreibe dein Angebot (z.B. "Verkaufe 0.01 BTC für 500€")
-3. Ein **temporärer Keypair** wird automatisch generiert
-4. Dein Angebot ist jetzt **anonym** für alle sichtbar
+
+### Authentizität2. Beschreibe dein Angebot (z.B. "Verkaufe 0.01 BTC für 500€")
+
+- **Kryptographische Signaturen**: Alle Events sind digital signiert3. Ein **temporärer Keypair** wird automatisch generiert
+
+- **Relay Verification**: Mehrere Relays für Redundanz4. Dein Angebot ist jetzt **anonym** für alle sichtbar
+
+- **Delete Authentication**: Nur Ersteller können eigene Angebote löschen
 
 ### 4️⃣ **Interesse zeigen**
 
+## 🛠️ Development
+
 1. Finde ein interessantes Angebot
-2. Klicke auf **"💬 Interesse zeigen"**
-3. Ein **privater Deal-Room** wird automatisch erstellt
-4. Du erhältst eine **verschlüsselte Einladung**
+
+### Projekt-Setup2. Klicke auf **"💬 Interesse zeigen"**
+
+```bash3. Ein **privater Deal-Room** wird automatisch erstellt
+
+# Development mit Hot-Reload4. Du erhältst eine **verschlüsselte Einladung**
+
+npm run dev
 
 ### 5️⃣ **Deal-Room: Sicherer Chat**
 
-1. Öffne den **Deal-Room** über die Benachrichtigung
+# Production Build
+
+npm run build1. Öffne den **Deal-Room** über die Benachrichtigung
+
 2. Chatte **Ende-zu-Ende-verschlüsselt** mit dem Anbieter
-3. Vereinbare die **Transaktionsdetails** sicher
-4. Wickle den **Tausch außerhalb der App** ab
 
-### 6️⃣ **Admin: Whitelist verwalten**
+# Preview Build3. Vereinbare die **Transaktionsdetails** sicher
 
-1. Als Admin klicke auf **"🔐 Whitelist verwalten"**
+npm run preview4. Wickle den **Tausch außerhalb der App** ab
+
+
+
+# Type Checking### 6️⃣ **Admin: Whitelist verwalten**
+
+npm run check
+
+```1. Als Admin klicke auf **"🔐 Whitelist verwalten"**
+
 2. **Public Keys hinzufügen**: Gib npub oder hex ein und klicke auf "➕ Hinzufügen"
-3. **Public Keys entfernen**: Klicke auf "🗑️ Entfernen" neben einem Eintrag
-4. **Einladungslink generieren**: Klicke auf "✨ Link generieren" und teile ihn mit neuen Usern
 
-> **Wichtig:** Die App dient nur zur Kontaktanbahnung. Die eigentliche Transaktion erfolgt extern!
+### Wichtige NPM Scripts3. **Public Keys entfernen**: Klicke auf "🗑️ Entfernen" neben einem Eintrag
 
----
+- `dev` - Development Server (Port 5173)4. **Einladungslink generieren**: Klicke auf "✨ Link generieren" und teile ihn mit neuen Usern
 
-## 🏗️ Projekt-Struktur
+- `build` - Production Build für Deployment
 
-```
-Bitcoin-Tausch-Netzwerk/
-├── src/
+- `preview` - Preview der Production Build> **Wichtig:** Die App dient nur zur Kontaktanbahnung. Die eigentliche Transaktion erfolgt extern!
+
+- `check` - TypeScript Type Checking
+
+- `check:watch` - Type Checking im Watch-Modus---
+
+
+
+### Code-Struktur## 🏗️ Projekt-Struktur
+
+- **SvelteKit** - Full-Stack Web Framework
+
+- **TypeScript** - Type-Safe Development```
+
+- **Nostr-Tools** - Nostr Protocol ImplementationBitcoin-Tausch-Netzwerk/
+
+- **NDK** - Nostr Development Kit für erweiterte Features├── src/
+
 │   ├── lib/
-│   │   ├── components/
+
+## 📚 API Referenz│   │   ├── components/
+
 │   │   │   └── DonationButton.svelte    # Lightning-Spenden-Button
-│   │   ├── nostr/
-│   │   │   ├── types.ts                 # TypeScript Interfaces
-│   │   │   ├── client.ts                # Nostr Client & Events
-│   │   │   └── crypto.ts                # AES-256 Verschlüsselung
+
+### Marketplace API│   │   ├── nostr/
+
+```typescript│   │   │   ├── types.ts                 # TypeScript Interfaces
+
+// Angebot erstellen│   │   │   ├── client.ts                # Nostr Client & Events
+
+await createOffer(content, tempKeypair, relay, channelId, authorPubkey);│   │   │   └── crypto.ts                # AES-256 Verschlüsselung
+
 │   │   ├── security/
-│   │   │   └── validation.ts            # Input-Validierung
-│   │   ├── stores/
+
+// Angebote laden│   │   │   └── validation.ts            # Input-Validierung
+
+const offers = await loadOffers(relay, channelId, ownTempPubkey);│   │   ├── stores/
+
 │   │   │   ├── userStore.ts             # User State
-│   │   │   ├── groupStore.ts            # Group State
-│   │   │   └── dealStore.ts             # Deal-Room State
-│   │   └── utils/
+
+// Angebot löschen│   │   │   ├── groupStore.ts            # Group State
+
+await deleteOffer(offerId, tempPrivateKey, tempPublicKey, relay);│   │   │   └── dealStore.ts             # Deal-Room State
+
+```│   │   └── utils/
+
 │   │       └── index.ts                 # Utility-Funktionen
-│   ├── routes/
-│   │   ├── +page.svelte                 # Login-Seite
-│   │   ├── +layout.svelte               # Layout mit Donation-Button
-│   │   └── (app)/
+
+### NIP-17 Messaging API│   ├── routes/
+
+```typescript│   │   ├── +page.svelte                 # Login-Seite
+
+// Verschlüsselte Nachricht senden│   │   ├── +layout.svelte               # Layout mit Donation-Button
+
+await sendDirectMessage(senderPrivateKey, recipientPubkey, content, relay);│   │   └── (app)/
+
 │   │       ├── group/+page.svelte       # Marketplace
-│   │       └── deal/[dealId]/+page.svelte  # Deal-Room Chat
-│   └── app.css                          # Nostr Dark Theme
+
+// Deal-Anfragen laden│   │       └── deal/[dealId]/+page.svelte  # Deal-Room Chat
+
+const requests = await loadDealRequests(recipientPrivateKey, relay);│   └── app.css                          # Nostr Dark Theme
+
 ├── package.json                         # Dependencies
-├── vite.config.ts                       # Vite Config
-├── svelte.config.js                     # SvelteKit Config
-├── tsconfig.json                        # TypeScript Config
+
+// Deal-Room erstellen├── vite.config.ts                       # Vite Config
+
+const dealId = await createDealRoom(privateKey, partnerPubkey, content, relay);├── svelte.config.js                     # SvelteKit Config
+
+```├── tsconfig.json                        # TypeScript Config
+
 ├── vercel.json                          # Vercel Deployment
-├── .env.example                         # Environment Variables
+
+## 🤝 Contributing├── .env.example                         # Environment Variables
+
 ├── .gitignore                           # Git Ignore
-└── README.md                            # Diese Datei
+
+Beiträge sind willkommen! Bitte beachte:└── README.md                            # Diese Datei
+
 ```
 
----
+1. **Fork** das Repository
 
-## 🔐 Sicherheit
+2. **Feature Branch** erstellen (`git checkout -b feature/amazing-feature`)---
+
+3. **Commit** deine Änderungen (`git commit -m 'Add amazing feature'`)
+
+4. **Push** zu Branch (`git push origin feature/amazing-feature`)## 🔐 Sicherheit
+
+5. **Pull Request** öffnen
 
 ### Implementierte Maßnahmen
 
-✅ **Client-seitige Verschlüsselung** – Private Keys bleiben im Browser  
-✅ **AES-256-CBC** – Militärische Verschlüsselung für Deal-Rooms  
-✅ **Temporäre Keypairs** – Vollständige Anonymität im Marketplace  
-✅ **Signatur-Validierung** – Alle Nostr-Events werden validiert  
-✅ **Input-Validierung** – Schutz vor Injection-Angriffen  
+### Development Guidelines
+
+- TypeScript für alle neuen Features✅ **Client-seitige Verschlüsselung** – Private Keys bleiben im Browser  
+
+- Comprehensive Error Handling✅ **AES-256-CBC** – Militärische Verschlüsselung für Deal-Rooms  
+
+- Privacy-First Design Principles✅ **Temporäre Keypairs** – Vollständige Anonymität im Marketplace  
+
+- Responsive UI Components✅ **Signatur-Validierung** – Alle Nostr-Events werden validiert  
+
+- Ausführliche Code-Dokumentation✅ **Input-Validierung** – Schutz vor Injection-Angriffen  
+
 ✅ **Rate-Limiting** – Schutz vor Spam (20 Requests/Minute)  
-✅ **IndexedDB** – Sichere lokale Speicherung von Keys  
 
-### Best Practices
+## 📄 Lizenz✅ **IndexedDB** – Sichere lokale Speicherung von Keys  
 
-1. **Private Keys**: Niemals in Git committen oder teilen
+
+
+Dieses Projekt ist unter der MIT Lizenz veröffentlicht. Siehe [LICENSE](LICENSE) für Details.### Best Practices
+
+
+
+## 🔗 Links1. **Private Keys**: Niemals in Git committen oder teilen
+
 2. **Relays**: Verwende vertrauenswürdige Relays oder betreibe eigene
-3. **Transaktionen**: Wickle Bitcoin-Transfers nur über sichere Kanäle ab
-4. **Backups**: Sichere deinen NSEC Private Key offline
 
----
+- **Nostr Protocol**: [nostr.com](https://nostr.com)3. **Transaktionen**: Wickle Bitcoin-Transfers nur über sichere Kanäle ab
 
-## 🌐 Nostr NIPs
+- **NIP-17 Specification**: [github.com/nostr-protocol/nips](https://github.com/nostr-protocol/nips/blob/master/17.md)4. **Backups**: Sichere deinen NSEC Private Key offline
 
-Dieses Projekt implementiert folgende Nostr Implementation Possibilities:
+- **SvelteKit Docs**: [kit.svelte.dev](https://kit.svelte.dev)
 
-- **NIP-01**: Basic Protocol Flow (Events, Signing, Validation)
+- **NDK Documentation**: [ndk.fyi](https://ndk.fyi)---
+
+
+
+---## 🌐 Nostr NIPs
+
+
+
+**⚡ Dezentral. Privat. Sicher. ⚡**Dieses Projekt implementiert folgende Nostr Implementation Possibilities:
+
+
+
+*Gebaut für die Bitcoin-Community von der Bitcoin-Community.*- **NIP-01**: Basic Protocol Flow (Events, Signing, Validation)
 - **NIP-09**: Event Deletion (Angebote & Interesse zurückziehen)
 - **NIP-12**: Generic Tag Queries (`#t=bitcoin-group` Filtering)
 - **Custom Encryption**: AES-256-CBC für Deal-Rooms
