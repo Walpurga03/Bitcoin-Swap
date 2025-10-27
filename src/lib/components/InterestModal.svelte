@@ -178,17 +178,6 @@
     font-size: 1.1rem;
   }
   
-  .confirmation-text {
-    text-align: center;
-    margin: 1.5rem 0;
-  }
-  
-  .confirmation-text p {
-    font-size: 1.1rem;
-    color: #eee;
-    margin: 0;
-  }
-  
   .info-box {
     background: rgba(46, 204, 113, 0.1);
     border: 1px solid rgba(46, 204, 113, 0.3);

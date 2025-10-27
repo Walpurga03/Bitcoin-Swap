@@ -150,83 +150,20 @@ export function generateTempKeypair(): { privateKey: string; publicKey: string }
  */
 
 /**
- * Speichere temp_keypair mit Recovery-Mechanismus
- * - Speichert unverschlüsselt für schnellen Zugriff
- * - Speichert verschlüsselt mit User-NSEC für Recovery
+ * Speichere temp_keypair nur im Speicher (kein localStorage mehr)
  */
-export function saveTempKeypair(
-  tempKeypair: { privateKey: string; publicKey: string },
-  userPrivateKey: string
-): void {
-  try {
-    // 1. Speichere unverschlüsselt (schneller Zugriff)
-    localStorage.setItem('marketplace_temp_keypair', JSON.stringify(tempKeypair));
-    
-    // 2. Verschlüssele mit User's eigenem Public Key (Self-Encryption)
-    const userPublicKey = getPublicKey(userPrivateKey as any);
-    const encrypted = nip44Encrypt(
-      JSON.stringify(tempKeypair),
-      userPrivateKey,
-      userPublicKey
-    );
-    
-    // 3. Speichere verschlüsselt (Backup für Recovery)
-    localStorage.setItem('marketplace_temp_keypair_encrypted', encrypted);
-    
-    console.log('✅ Temp-Keypair gespeichert (plain + encrypted backup)');
-  } catch (error) {
-    console.error('❌ Fehler beim Speichern des Temp-Keypairs:', error);
-    throw error;
-  }
-}
+// Kein localStorage mehr: temp_keypair wird nicht persistent gespeichert.
 
 /**
  * Lade temp_keypair aus localStorage
  * Versucht Recovery aus encrypted backup falls plain fehlt
  */
-export function loadTempKeypair(
-  userPrivateKey?: string
-): { privateKey: string; publicKey: string } | null {
-  try {
-    // 1. Versuche unverschlüsselt zu laden
-    const plain = localStorage.getItem('marketplace_temp_keypair');
-    if (plain) {
-      return JSON.parse(plain);
-    }
-    
-    // 2. Falls nicht vorhanden, versuche Recovery
-    if (userPrivateKey) {
-      const encrypted = localStorage.getItem('marketplace_temp_keypair_encrypted');
-      if (encrypted) {
-        console.log('🔄 Versuche Temp-Keypair Recovery...');
-        
-        const userPublicKey = getPublicKey(userPrivateKey as any);
-        const decrypted = nip44Decrypt(encrypted, userPrivateKey, userPublicKey);
-        const recovered = JSON.parse(decrypted);
-        
-        // Speichere wieder unverschlüsselt
-        localStorage.setItem('marketplace_temp_keypair', JSON.stringify(recovered));
-        
-        console.log('✅ Temp-Keypair wiederhergestellt!');
-        return recovered;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('❌ Fehler beim Laden des Temp-Keypairs:', error);
-    return null;
-  }
-}
+// Kein localStorage mehr: temp_keypair kann nicht geladen werden. Muss neu generiert werden.
 
 /**
  * Lösche temp_keypair aus localStorage
  */
-export function deleteTempKeypair(): void {
-  localStorage.removeItem('marketplace_temp_keypair');
-  localStorage.removeItem('marketplace_temp_keypair_encrypted');
-  console.log('✅ Temp-Keypair gelöscht');
-}
+// Kein localStorage mehr: temp_keypair wird nicht persistent gespeichert.
 
 /**
  * Konvertiere Hex zu Bytes

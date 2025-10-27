@@ -1,18 +1,13 @@
 import { writable, derived, get } from 'svelte/store';
-import type { GroupConfig, GroupMessage, MarketplaceOffer, OfferReply } from '$lib/nostr/types';
+import type { GroupConfig, MarketplaceOffer, OfferReply } from '$lib/nostr/types';
 import { 
   deriveChannelId, 
   deriveKeyFromSecret,
-  saveTempKeypair,
-  loadTempKeypair,
-  deleteTempKeypair,
   generateTempKeypair
 } from '$lib/nostr/crypto';
 import { 
-  fetchGroupMessages, 
   fetchMarketplaceOffers,
   fetchOfferInterests,
-  sendGroupMessage,
   createMarketplaceOffer,
   sendOfferInterest,
   deleteEvent
@@ -35,8 +30,8 @@ interface GroupState {
   channelId: string | null;
   relay: string | null;
   secret: string | null;
+  secretHash: string | null;
   groupKey: string | null;
-  messages: GroupMessage[];
   offers: MarketplaceOffer[];
   isConnected: boolean;
   lastFetch: number;
@@ -46,8 +41,8 @@ const initialState: GroupState = {
   channelId: null,
   relay: null,
   secret: null,
+  secretHash: null,
   groupKey: null,
-  messages: [],
   offers: [],
   isConnected: false,
   lastFetch: 0
@@ -67,137 +62,24 @@ function createGroupStore() {
         console.log('🔧 [STORE] Initialize Gruppe...');
         const channelId = await deriveChannelId(secret);
         const groupKey = await deriveKeyFromSecret(secret);
+        const secretHash = await deriveChannelId(secret); // Identisch mit channelId für Gruppen-Isolation
 
         update(state => ({
           ...state,
           channelId,
           relay,
           secret,
+          secretHash,
           groupKey,
           isConnected: true,
-          lastFetch: 0,  // ✅ Reset lastFetch beim Initialize!
-          messages: [],  // ✅ Leere alte Nachrichten
-          offers: []     // ✅ Leere alte Angebote
+          lastFetch: 0,
+          offers: []
         }));
 
-        console.log('✅ [STORE] Gruppe initialisiert, lastFetch auf 0 gesetzt');
+        console.log('✅ [STORE] Gruppe initialisiert');
         return { channelId, groupKey };
       } catch (error) {
         console.error('Fehler beim Initialisieren der Gruppe:', error);
-        throw error;
-      }
-    },
-
-    /**
-     * Lade Nachrichten
-     */
-    loadMessages: async (loadAll: boolean = false) => {
-      console.log('🔄 [STORE] loadMessages() aufgerufen:', { loadAll });
-      const state = get({ subscribe });
-      
-      if (!state.channelId || !state.groupKey || !state.relay) {
-        console.error('❌ [STORE] Gruppe nicht initialisiert!', { state });
-        throw new Error('Gruppe nicht initialisiert');
-      }
-
-      console.log('✅ [STORE] Gruppe initialisiert:', { 
-        channelId: state.channelId?.substring(0, 16) + '...', 
-        relay: state.relay,
-        lastFetch: state.lastFetch 
-      });
-
-      try {
-        // ✅ FIX: Wenn lastFetch === 0, lade IMMER alle (auch wenn loadAll = false)
-        // Das passiert beim ersten Login nach initialize()
-        const shouldLoadAll = loadAll || state.lastFetch === 0;
-        
-        // Bei Updates: Nutze lastFetch mit 60 Sekunden Buffer (statt 10) wegen Relay-Delays
-        const since = shouldLoadAll ? undefined : (state.lastFetch > 0 ? state.lastFetch - 60 : undefined);
-        
-        console.log('📊 [STORE] Fetch-Parameter:', { loadAll, shouldLoadAll, since, lastFetch: state.lastFetch });
-        
-        const events = await fetchGroupMessages(
-          state.channelId,
-          state.groupKey,
-          [state.relay],
-          since,
-          loadAll ? 200 : 100 // Mehr Nachrichten beim ersten Laden
-        );
-
-        const messages: GroupMessage[] = events
-          .filter((e: any) => e.decrypted)
-          .map((e: any) => ({
-            id: e.id,
-            content: e.decrypted!,
-            pubkey: e.pubkey,
-            created_at: e.created_at
-          }))
-          .sort((a: GroupMessage, b: GroupMessage) => a.created_at - b.created_at);
-
-        // Beim ersten Laden ersetze alle Nachrichten, sonst füge neue hinzu
-        update(state => {
-          if (loadAll) {
-            return {
-              ...state,
-              messages: messages,
-              lastFetch: Math.floor(Date.now() / 1000)
-            };
-          } else {
-            // Verhindere Duplikate
-            const existingIds = new Set(state.messages.map(m => m.id));
-            const newMessages = messages.filter(m => !existingIds.has(m.id));
-            
-            return {
-              ...state,
-              messages: [...state.messages, ...newMessages],
-              lastFetch: Math.floor(Date.now() / 1000)
-            };
-          }
-        });
-
-        console.log('✅ [STORE] Nachrichten geladen:', messages.length);
-        return messages;
-      } catch (error) {
-        console.error('❌ [STORE] Fehler beim Laden der Nachrichten:', error);
-        throw error;
-      }
-    },
-
-    /**
-     * Sende Nachricht
-     */
-    sendMessage: async (content: string, privateKey: string) => {
-      const state = get({ subscribe });
-      
-      if (!state.channelId || !state.groupKey || !state.relay) {
-        throw new Error('Gruppe nicht initialisiert');
-      }
-
-      try {
-        const event = await sendGroupMessage(
-          content,
-          state.channelId,
-          state.groupKey,
-          privateKey,
-          [state.relay]
-        );
-
-        // Füge Nachricht lokal hinzu
-        const message: GroupMessage = {
-          id: event.id,
-          content,
-          pubkey: event.pubkey,
-          created_at: event.created_at
-        };
-
-        update(state => ({
-          ...state,
-          messages: [...state.messages, message]
-        }));
-
-        return message;
-      } catch (error) {
-        console.error('Fehler beim Senden der Nachricht:', error);
         throw error;
       }
     },
@@ -423,16 +305,6 @@ function createGroupStore() {
     },
 
     /**
-     * Füge Nachricht hinzu (für Echtzeit-Updates)
-     */
-    addMessage: (message: GroupMessage) => {
-      update(state => ({
-        ...state,
-        messages: [...state.messages, message]
-      }));
-    },
-
-    /**
      * Lösche alle Daten
      */
     clearGroupData: () => {
@@ -457,11 +329,6 @@ export const channelId = derived(
 export const isGroupConnected = derived(
   groupStore,
   $group => $group.isConnected
-);
-
-export const groupMessages = derived(
-  groupStore,
-  $group => $group.messages
 );
 
 export const marketplaceOffers = derived(

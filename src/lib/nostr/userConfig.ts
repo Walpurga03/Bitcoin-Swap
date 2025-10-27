@@ -1,26 +1,8 @@
-/**
- * ============================================
- * NIP-17 User Config System
- * ============================================
- * 
- * Speichert User-Konfiguration verschlüsselt auf Nostr-Relays
- * - Admin-Status
- * - Gruppen-Secret
- * - Einladungslink
- * - Admin-Pubkey
- * 
- * Verwendet NIP-17 (Gift-Wrapped Messages) für maximale Privatsphäre
- * localStorage dient als Fallback wenn Relay nicht erreichbar
- */
 
 import { finalizeEvent, getPublicKey } from 'nostr-tools';
 import { createNIP17Message, decryptNIP17Message } from './crypto';
 import { fetchEvents, publishEvent } from './client';
 import type { NostrEvent, NostrFilter } from './types';
-
-/**
- * User-Konfiguration
- */
 export interface UserConfig {
   is_group_admin: boolean;
   admin_pubkey: string;
@@ -30,15 +12,6 @@ export interface UserConfig {
   created_at: number;
   updated_at: number;
 }
-
-/**
- * Speichere User-Config verschlüsselt auf Nostr (NIP-17)
- * 
- * @param config - User-Konfiguration
- * @param privateKey - User's Private Key (hex)
- * @param relays - Relays zum Speichern
- * @returns Event-ID
- */
 export async function saveUserConfig(
   config: UserConfig,
   privateKey: string,
@@ -104,21 +77,13 @@ export async function saveUserConfig(
   } catch (error) {
     console.error('❌ [USER-CONFIG] Fehler beim Speichern:', error);
     
-    // Werfe Fehler weiter - KEIN localStorage-Fallback!
+  // Werfe Fehler weiter - KEIN localStorage-Fallback! Kein localStorage mehr.
     if (error instanceof Error) {
       throw error;
     }
     throw new Error('❌ Relay nicht erreichbar. Bitte prüfe deine Internetverbindung und versuche es erneut.');
   }
 }
-
-/**
- * Lade User-Config von Nostr (NIP-17)
- * 
- * @param privateKey - User's Private Key (hex)
- * @param relays - Relays zum Laden
- * @returns User-Config oder null
- */
 export async function loadUserConfig(
   privateKey: string,
   relays: string[]
@@ -178,20 +143,13 @@ export async function loadUserConfig(
   } catch (error) {
     console.error('❌ [USER-CONFIG] Fehler beim Laden:', error);
     
-    // Werfe Fehler weiter - KEIN localStorage-Fallback!
+  // Werfe Fehler weiter - KEIN localStorage-Fallback! Kein localStorage mehr.
     if (error instanceof Error) {
       throw error;
     }
     throw new Error('❌ Relay nicht erreichbar. Bitte prüfe deine Internetverbindung und versuche es erneut.');
   }
 }
-
-/**
- * Lösche User-Config (von Nostr und localStorage)
- * 
- * @param privateKey - User's Private Key (hex)
- * @param relays - Relays
- */
 export async function deleteUserConfig(
   privateKey: string,
   relays: string[]
@@ -238,14 +196,6 @@ export async function deleteUserConfig(
     throw new Error('❌ Relay nicht erreichbar. Config konnte nicht gelöscht werden.');
   }
 }
-
-/**
- * Prüfe ob User-Config existiert
- * 
- * @param privateKey - User's Private Key (hex)
- * @param relays - Relays
- * @returns true wenn Config existiert
- */
 export async function hasUserConfig(
   privateKey: string,
   relays: string[]
@@ -258,58 +208,3 @@ export async function hasUserConfig(
   }
 }
 
-/**
- * Migriere localStorage-Daten zu Nostr
- * Wird beim ersten Login nach Update aufgerufen
- */
-export async function migrateLocalStorageToNostr(
-  privateKey: string,
-  relays: string[]
-): Promise<boolean> {
-  try {
-    console.log('🔄 [MIGRATION] Migriere localStorage zu Nostr...');
-    
-    // Prüfe ob bereits auf Nostr
-    try {
-      const existingConfig = await loadUserConfig(privateKey, relays);
-      if (existingConfig) {
-        console.log('  ✅ Config bereits auf Nostr, keine Migration nötig');
-        return true;
-      }
-    } catch (error) {
-      // Config existiert nicht auf Nostr, fahre mit Migration fort
-      console.log('  ℹ️ Keine Config auf Nostr gefunden, starte Migration...');
-    }
-    
-    // Lade aus localStorage
-    const isAdmin = localStorage.getItem('is_group_admin') === 'true';
-    const adminPubkey = localStorage.getItem('admin_pubkey');
-    const groupSecret = localStorage.getItem('group_secret');
-    const inviteLink = localStorage.getItem('invite_link');
-    
-    if (!adminPubkey || !groupSecret) {
-      console.log('  ⚠️ Keine vollständigen Daten in localStorage');
-      return false;
-    }
-    
-    // Erstelle Config
-    const config: UserConfig = {
-      is_group_admin: isAdmin,
-      admin_pubkey: adminPubkey,
-      group_secret: groupSecret,
-      invite_link: inviteLink || undefined,
-      relay: relays[0],
-      created_at: Math.floor(Date.now() / 1000),
-      updated_at: Math.floor(Date.now() / 1000)
-    };
-    
-    // Speichere auf Nostr
-    await saveUserConfig(config, privateKey, relays);
-    
-    console.log('  ✅ Migration erfolgreich');
-    return true;
-  } catch (error) {
-    console.error('❌ [MIGRATION] Fehler:', error);
-    throw new Error('❌ Migration fehlgeschlagen. Relay nicht erreichbar.');
-  }
-}

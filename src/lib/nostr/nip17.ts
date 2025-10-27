@@ -34,6 +34,8 @@
 
 import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk';
 import { getPublicKey } from 'nostr-tools';
+import { fetchEvents, fetchUserProfile } from './client';
+import type { NostrFilter } from './types';
 
 export interface Interest {
   userPubkey: string;
@@ -494,13 +496,20 @@ export async function getMyInterests(
     
     for (const event of events) {
       try {
+        // Prüfe ob Content existiert und nicht leer ist
+        if (!event.content || event.content.trim() === '') {
+          console.warn(`  ⚠️ Event ohne Content übersprungen: ${event.id?.substring(0, 16)}...`);
+          continue;
+        }
+        
         const data = JSON.parse(event.content);
-        if (data.temp_pubkey) {
+        if (data && data.temp_pubkey) {
           tempPubkeys.push(data.temp_pubkey);
           console.log(`  ✅ Interest an: ${data.temp_pubkey.substring(0, 16)}...`);
         }
       } catch (err) {
-        console.warn('  ⚠️ Fehler beim Parsen eines Events:', err);
+        console.warn(`  ⚠️ Fehler beim Parsen von Event ${event.id?.substring(0, 16)}...:`, err);
+        console.warn(`  📄 Content war: "${event.content?.substring(0, 50)}..."`);
       }
     }
     
@@ -573,7 +582,8 @@ export async function createDealRoom(
   anbieterPrivateKey: string,
   interessentPubkey: string,
   offerContent: string,
-  relay: string
+  relay: string,
+  channelId?: string // 🔥 Gruppen-spezifischer Channel-ID
 ): Promise<string> {
   try {
     console.log('🤝 [CREATE-DEAL-ROOM] Erstelle Deal-Room...');
@@ -600,6 +610,7 @@ export async function createDealRoom(
     const dealMessage = {
       type: 'deal-room-invitation',
       dealId: dealId,
+      channelId: channelId, // 🔥 Gruppen-Zuordnung
       offerContent: offerContent,
       message: 'Der Angebotsgeber möchte einen Deal-Room mit dir starten! 🤝',
       timestamp: Math.floor(Date.now() / 1000)
@@ -626,12 +637,14 @@ export async function createDealRoom(
     };
     
     const statusEvent = new NDKEvent(ndk);
-    statusEvent.kind = 30078;
+    statusEvent.kind = 30080;  // Korrektur: richtige Kind für Deal-Rooms
     statusEvent.content = JSON.stringify(dealStatusData);
     statusEvent.tags = [
       ['d', `deal-room-${dealId}`],  // Unique identifier
       ['app', 'bitcoin-swap-deal-rooms'],  // App identifier
-      ['p', interessentPubkey]  // Teilnehmer markieren
+      ['p', getPublicKey(anbieterPrivateKey as any)],  // Anbieter als Teilnehmer
+      ['p', interessentPubkey],  // Interessent als Teilnehmer
+      ['t', 'bitcoin-deal']  // Deal-Room Tag für Suche
     ];
     
     await statusEvent.publish();
@@ -679,10 +692,13 @@ export async function loadDealRequests(
     
     console.log('  ✅ NDK verbunden');
     
-    // 2. Filter: Alle NIP-17 DMs an mich
+    // 2. Filter: Alle NIP-17 DMs an mich (nur letzte 24 Stunden)
+    const oneDayAgo = Math.floor(Date.now() / 1000) - (24 * 60 * 60);
+    
     const filter: NDKFilter = {
       kinds: [14], // NIP-17 Direct Message
       '#p': [userPublicKey], // An mich gerichtet
+      since: oneDayAgo, // 🔥 Nur Events der letzten 24 Stunden
       limit: 50
     };
     
@@ -776,5 +792,109 @@ export async function countDealRequests(
   } catch (error) {
     console.error('❌ Fehler beim Zählen der Deal-Anfragen:', error);
     return 0;
+  }
+}
+
+/**
+ * Lädt Deal-Room Einladungen für einen User
+ * @param privateKey - Private Key des Users
+ * @param relay - Relay URL
+ * @param channelId - Gruppen-spezifischer Channel-ID (optional für Filterung)
+ * @returns Array von Deal-Room Einladungen
+ */
+export async function loadDealInvitations(
+  privateKey: string,
+  relay: string,
+  channelId?: string // 🔥 Gruppen-Filter
+): Promise<Array<{
+  id: string;
+  dealId: string;
+  senderPubkey: string;
+  senderName: string;
+  offerContent: string;
+  message: string;
+  timestamp: number;
+}>> {
+  try {
+    console.log('📨 [DEAL-INVITATIONS] Lade Deal-Room Einladungen...');
+    
+    // 1. NDK Setup
+    const ndk = initNDK(relay);
+    await ndk.connect();
+    console.log('  ✅ NDK verbunden');
+    
+    const userPubkey = getPublicKey(privateKey as any);
+    
+    // 2. Filter für eingehende DMs (Kind 14, nur letzte 24 Stunden)
+    const oneDayAgo = Math.floor(Date.now() / 1000) - (24 * 60 * 60);
+    
+    const filter = {
+      kinds: [14],
+      '#p': [userPubkey],
+      since: oneDayAgo, // 🔥 Nur Events der letzten 24 Stunden
+      limit: 50
+    } as NostrFilter;
+    
+    console.log('  🔎 Filter:', filter);
+    
+    const events = await fetchEvents([relay], filter);
+    console.log(`  📊 ${events.length} DM Events gefunden`);
+    
+    const invitations = [];
+    
+    // 3. Entschlüssele und parse DMs
+    for (const event of events) {
+      try {
+        // Erstelle NDKEvent für Entschlüsselung
+        const ndkEvent = new NDKEvent(ndk);
+        ndkEvent.id = event.id;
+        ndkEvent.pubkey = event.pubkey;
+        ndkEvent.created_at = event.created_at;
+        ndkEvent.kind = event.kind;
+        ndkEvent.tags = event.tags;
+        ndkEvent.content = event.content;
+        
+        // Event entschlüsseln
+        await ndkEvent.decrypt();
+        
+        const data = JSON.parse(ndkEvent.content);
+        
+        // 4. Prüfe ob es eine Deal-Room Einladung ist
+        if (data.type === 'deal-room-invitation' && data.dealId) {
+          
+          // 🔥 Gruppen-Filter: Nur Einladungen dieser Gruppe anzeigen
+          if (channelId && data.channelId && data.channelId !== channelId) {
+            console.log(`  ⏭️ Überspringe Einladung aus anderer Gruppe: ${data.channelId?.substring(0, 16)}...`);
+            continue;
+          }
+          
+          // 5. Lade Sender-Profil
+          const senderProfile = await fetchUserProfile(event.pubkey, [relay]);
+          
+          invitations.push({
+            id: event.id,
+            dealId: data.dealId,
+            senderPubkey: event.pubkey,
+            senderName: senderProfile?.name || 'Anonym',
+            offerContent: data.offerContent || 'Bitcoin Swap Deal',
+            message: data.message || 'Deal-Room Einladung',
+            timestamp: data.timestamp || event.created_at || 0
+          });
+          
+          console.log(`  ✅ Deal-Einladung von: ${senderProfile?.name || 'Anonym'} (${event.pubkey.substring(0, 16)}...)`);
+        }
+        
+      } catch (parseError) {
+        console.warn(`  ⚠️ Fehler beim Entschlüsseln von Event ${event.id?.substring(0, 16)}...:`, parseError);
+      }
+    }
+    
+    console.log(`  ✅ ${invitations.length} Deal-Einladungen geladen`);
+    
+    return invitations.sort((a, b) => b.timestamp - a.timestamp);
+    
+  } catch (error) {
+    console.error('❌ Fehler beim Laden der Deal-Einladungen:', error);
+    return [];
   }
 }

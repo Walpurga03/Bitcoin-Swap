@@ -110,41 +110,54 @@ export async function saveGroupConfig(
 /**
  * Lade Gruppen-Konfiguration von Nostr
  * Jeder kann diese Daten laden (öffentlich)
+ * Mit Retry-Mechanismus für frisch erstellte Configs
  */
 export async function loadGroupConfig(
   secretHash: string,
-  relays: string[]
+  relays: string[],
+  retries: number = 3,
+  delayMs: number = 1000
 ): Promise<GroupConfig | null> {
   try {
     console.log('📥 Lade Gruppen-Config von Nostr für Secret-Hash:', secretHash.substring(0, 16) + '...');
     
     const pool = initPool();
     
-    // Query nach der Config
-    const events = await pool.querySync(
-      relays,
-      {
-        kinds: [30000],
-        '#d': [`bitcoin-group-config:${secretHash}`],
-        limit: 1
+    // Retry-Loop für frisch erstellte Configs
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      if (attempt > 1) {
+        console.log(`  🔄 Retry ${attempt}/${retries} nach ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-    );
+      
+      // Query nach der Config
+      const events = await pool.querySync(
+        relays,
+        {
+          kinds: [30000],
+          '#d': [`bitcoin-group-config:${secretHash}`],
+          limit: 1
+        }
+      );
 
-    if (events.length === 0) {
-      console.warn('⚠️ Keine Gruppen-Config gefunden für Secret-Hash:', secretHash);
-      return null;
+      if (events.length > 0) {
+        const event = events[0];
+        console.log('✅ Gruppen-Config geladen (Versuch', attempt + ')');
+
+        // Parse Content
+        const config = JSON.parse(event.content) as GroupConfig;
+        
+        // Validiere
+        GroupConfigSchema.parse(config);
+        
+        return config;
+      }
+      
+      console.log(`  ⏳ Versuch ${attempt}/${retries}: Keine Config gefunden, warte...`);
     }
 
-    const event = events[0];
-    console.log('✅ Gruppen-Config geladen');
-
-    // Parse Content
-    const config = JSON.parse(event.content) as GroupConfig;
-    
-    // Validiere
-    GroupConfigSchema.parse(config);
-    
-    return config;
+    console.warn('⚠️ Keine Gruppen-Config gefunden nach', retries, 'Versuchen für Secret-Hash:', secretHash);
+    return null;
   } catch (error) {
     console.error('❌ Fehler beim Laden der Gruppen-Config:', error);
     return null;
@@ -157,10 +170,11 @@ export async function loadGroupConfig(
  */
 export async function loadGroupAdmin(
   secretHash: string,
-  relays: string[]
+  relays: string[],
+  retries: number = 3
 ): Promise<string | null> {
   try {
-    const config = await loadGroupConfig(secretHash, relays);
+    const config = await loadGroupConfig(secretHash, relays, retries);
     if (config) {
       return config.admin_pubkey;
     }

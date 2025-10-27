@@ -37,7 +37,8 @@ export async function createOffer(
   tempKeypair: { privateKey: string; publicKey: string },
   relay: string,
   channelId: string,
-  authorPubkey?: string // Echter Public Key des Angebotgebers
+  authorPubkey?: string, // Echter Public Key des Angebotgebers
+  secretHash?: string // Gruppen-spezifischer Hash zur Filterung
 ): Promise<string> {
   try {
     console.log('📝 Erstelle Angebot...');
@@ -53,6 +54,11 @@ export async function createOffer(
     // Füge Author-Tag hinzu, falls angegeben (für NIP-17 DMs)
     if (authorPubkey) {
       tags.push(['author', authorPubkey]);
+    }
+    
+    // WICHTIG: Füge gruppen-spezifischen Tag hinzu zur Filterung
+    if (secretHash) {
+      tags.push(['g', secretHash]); // 'g' für Group-Hash
     }
     
     const event = {
@@ -177,7 +183,8 @@ export async function deleteOffer(
 export async function loadOffers(
   relay: string,
   channelId: string,
-  ownTempPubkey?: string
+  ownTempPubkey?: string,
+  secretHash?: string // Gruppen-spezifischer Hash zur Filterung
 ): Promise<Offer[]> {
   try {
     console.log('📥 Lade Angebote...');
@@ -185,11 +192,16 @@ export async function loadOffers(
     const pool = new SimplePool();
     
     // Filter für Kind 42 Events (Channel Messages)
-    const filter = {
+    const filter: any = {
       kinds: [42],
       '#e': [channelId],
       limit: 100
     };
+    
+    // WICHTIG: Filtere nur Angebote dieser Gruppe
+    if (secretHash) {
+      filter['#g'] = [secretHash];
+    }
     
     try {
       console.log('  🔍 Query-Filter:', JSON.stringify(filter, null, 2));

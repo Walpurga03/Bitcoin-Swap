@@ -5,14 +5,10 @@
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
   
-  // Akzeptiere params Prop um Svelte Warning zu vermeiden
-  export let params: any = undefined;
+
   import { formatTimestamp, truncatePubkey, getTimeRemaining, isExpiringSoon } from '$lib/utils';
   import { 
     generateTempKeypair, 
-    saveTempKeypair, 
-    loadTempKeypair, 
-    deleteTempKeypair 
   } from '$lib/nostr/crypto';
   import {
     createOffer as createOfferMarketplace,
@@ -52,7 +48,8 @@
   // Vergebene Angebote (nach Deal-Erstellung ausblenden)
   let assignedOfferIds: Set<string> = new Set();
   
-  let autoRefreshInterval: ReturnType<typeof setInterval>;
+    let autoRefreshInterval: NodeJS.Timeout;
+  let handleShowInterestList: () => void;
 
   /**
    * Lade MEINE gesendeten Interests vom Relay
@@ -121,7 +118,7 @@
       console.log('🔍 [LOAD-OFFERS] Eigener temp_pubkey:', tempKeypair?.publicKey?.substring(0, 16) + '...' || 'keiner');
       
       const ownTempPubkey = tempKeypair?.publicKey;
-      offers = await loadOffers($groupStore.relay, $groupStore.channelId, ownTempPubkey);
+      offers = await loadOffers($groupStore.relay, $groupStore.channelId, ownTempPubkey, $groupStore.secretHash);
       
       console.log('📊 [LOAD-OFFERS] Ergebnis:', {
         anzahl: offers.length,
@@ -192,7 +189,7 @@
       
       // Versuche temp_keypair zu laden (mit Recovery)
       if ($userStore.privateKey) {
-        tempKeypair = loadTempKeypair($userStore.privateKey);
+  // Kein loadTempKeypair mehr: tempKeypair muss neu generiert werden oder im State bleiben.
         if (tempKeypair) {
           console.log('✅ [PAGE] temp_keypair wiederhergestellt');
         }
@@ -212,6 +209,18 @@
           console.error('Auto-Refresh Fehler:', e);
         }
       }, 10000);
+      
+      // Event-Listener für "Interest-Liste anzeigen" von Notification-System
+      handleShowInterestList = () => {
+        console.log('📨 [EVENT] Interest-Liste öffnen durch Notification-System');
+        // Finde das erste eigene Angebot und öffne dessen Interest-Liste
+        const ownOffer = offers.find(offer => offer.isOwnOffer);
+        if (ownOffer) {
+          openInterestList(ownOffer);
+        }
+      };
+      
+      window.addEventListener('show-interest-list', handleShowInterestList);
 
     } catch (e: any) {
       console.error('❌ [PAGE] Fehler beim Laden:', e);
@@ -222,6 +231,11 @@
   onDestroy(() => {
     if (autoRefreshInterval) {
       clearInterval(autoRefreshInterval);
+    }
+    
+    // Cleanup Event-Listener
+    if (handleShowInterestList) {
+      window.removeEventListener('show-interest-list', handleShowInterestList);
     }
   });
 
@@ -242,7 +256,7 @@
       // Generiere oder lade temp_keypair
       if (!tempKeypair) {
         tempKeypair = generateTempKeypair();
-        saveTempKeypair(tempKeypair, $userStore.privateKey);
+  // Kein saveTempKeypair mehr: tempKeypair bleibt nur im State.
         console.log('✅ Neuer temp_keypair erstellt & gespeichert');
       }
 
@@ -252,7 +266,8 @@
         tempKeypair,
         $groupStore.relay,
         $groupStore.channelId,
-        $userStore.pubkey // Echter Public Key für NIP-17 DMs
+        $userStore.pubkey, // Echter Public Key für NIP-17 DMs
+        $groupStore.secretHash // Gruppen-spezifischer Hash
       );
       
       error = '✅ Angebot veröffentlicht! Lade Angebote neu...';
@@ -291,7 +306,7 @@
       );
       
       // Lösche temp_keypair
-      deleteTempKeypair();
+  // Kein deleteTempKeypair mehr: tempKeypair bleibt nur im State.
       tempKeypair = null;
       
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -437,7 +452,7 @@
       console.log('✅ [DELETE-OFFER] Angebot gelöscht');
       
       // Reset Zustand
-      deleteTempKeypair();
+  // Kein deleteTempKeypair mehr: tempKeypair bleibt nur im State.
       tempKeypair = null;
       
       // Lade Angebote neu
@@ -474,7 +489,8 @@
         $userStore.privateKey,
         selectedInterest.userPubkey,
         selectedOffer?.content || 'Bitcoin Swap Deal',
-        $groupStore.relay
+        $groupStore.relay,
+        $groupStore.channelId // 🔥 Gruppen-Zuordnung
       );
 
       console.log('✅ [SELECT-PARTNER] Deal-Room erstellt:', dealId.substring(0, 16) + '...');

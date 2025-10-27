@@ -5,12 +5,11 @@
   import { userStore } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
   
-  // Akzeptiere params Prop um Svelte Warning zu vermeiden
-  export let params: any = undefined;
+
   import { validatePrivateKey, validateRelayUrl } from '$lib/security/validation';
   import { DEFAULT_RELAYS } from '$lib/config';
   import { deriveChannelId } from '$lib/nostr/crypto';
-  import { saveUserConfig, loadUserConfig, migrateLocalStorageToNostr } from '$lib/nostr/userConfig';
+  import { saveUserConfig, loadUserConfig } from '$lib/nostr/userConfig';
   import { saveGroupConfig, loadGroupAdmin, deriveSecretHash, loadGroupConfigFromRelays } from '$lib/nostr/groupConfig';
   import type { UserConfig } from '$lib/nostr/userConfig';
   import { getPublicKey, nip19 } from 'nostr-tools';
@@ -152,17 +151,9 @@
       await saveGroupConfig(groupConfigData, keyValidation.hex!, [relay]);
       console.log('✅ Gruppen-Config publiziert');
 
-      // 🔐 Speichere Admin-Status im Browser (nur für schnelle lokale Checks)
-      // Aber: Admin-Status wird primär von Nostr geladen, nicht aus localStorage!
-      localStorage.setItem('is_group_admin', 'true');
-      localStorage.setItem('admin_pubkey', pubkey);
-      localStorage.setItem('group_secret', finalSecret);
-      
-      console.log('💾 [STORAGE] Admin als Admin erkannt nach Erstellung:', {
-        is_group_admin: true,
-        admin_pubkey: pubkey.substring(0, 16) + '...',
-        group_secret: finalSecret.substring(0, 10) + '...'
-      });
+        // Kein localStorage mehr: Admin-Status, Pubkey und Secret werden NICHT mehr im Browser gespeichert.
+        // Admin-Status wird immer live vom Relay geladen.
+        console.log('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
 
       // Initialisiere Gruppe
       await groupStore.initialize(finalSecret, relay);
@@ -288,27 +279,14 @@
       userStore.setUserFromNsec(joinNsec, userName);
       
       // Speichere Admin-Status im Browser
-      localStorage.setItem('is_group_admin', isAdmin ? 'true' : 'false');
-      localStorage.setItem('admin_pubkey', adminPubkey);
-      localStorage.setItem('group_secret', secret);
-      
-      console.log('💾 [STORAGE] Admin-Status gespeichert:', {
-        is_group_admin: isAdmin,
-        admin_pubkey: adminPubkey.substring(0, 16) + '...',
-        group_secret: secret.substring(0, 10) + '...'
-      });
+        // Kein localStorage mehr: Admin-Status, Pubkey und Secret werden NICHT mehr im Browser gespeichert.
+        // Admin-Status wird immer live vom Relay geladen.
+        console.log('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
 
       // Initialisiere Gruppe
       await groupStore.initialize(secret, configRelay);
 
-      // Lade Nachrichten
-      try {
-        await groupStore.loadMessages(true);
-      } catch (e) {
-        console.warn('Nachrichten konnten nicht geladen werden:', e);
-      }
-
-      // Weiterleitung zum Chat
+      // Weiterleitung zum Marketplace (kein Gruppen-Chat mehr!)
       await goto('/group');
     } catch (e: any) {
       error = e.message || 'Ein Fehler ist aufgetreten';
@@ -320,10 +298,8 @@
 
 <div class="container">
   <div class="card">
-    <h1>🛒 Bitcoin Tausch Netzwerk</h1>
-    <p class="subtitle">Dezentraler Gruppen-Chat mit Nostr</p>
-
-    {#if mode === 'create'}
+    <h1 class="title">🪙 Bitcoin Tausch Netzwerk</h1>
+    <p class="subtitle">Dezentraler P2P-Marketplace mit Nostr</p>    {#if mode === 'create'}
       <!-- Create Group Form -->
       <form on:submit|preventDefault={handleCreateGroup}>
         <h2>Neue Gruppe erstellen</h2>

@@ -1,12 +1,13 @@
 <script lang="ts">
   import '../app.css';
   import DonationButton from '$lib/components/DonationButton.svelte';
-  
-  // Akzeptiere params Prop um Svelte Warning zu vermeiden
-  export let params: any = undefined;
+  import UnifiedNotificationSystem from '$lib/components/UnifiedNotificationSystem.svelte';
 </script>
 
 <slot />
+
+<!-- Unified Notification System auf allen Seiten -->
+<UnifiedNotificationSystem />
 
 <!-- Lightning Donation Button auf allen Seiten -->
 <DonationButton />

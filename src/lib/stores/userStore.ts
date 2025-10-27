@@ -47,39 +47,7 @@ function createUserStore() {
         isAuthenticated: true
       }));
 
-      // Speichere in localStorage (optional, für Session-Persistenz)
-      if (typeof window !== 'undefined') {
-        const existingSession = localStorage.getItem('nostr_session');
-        let tempPrivkey = null;
-        
-        // Behalte existierenden tempPrivkey beim erneuten Login
-        if (existingSession) {
-          try {
-            const data = JSON.parse(existingSession);
-            tempPrivkey = data.tempPrivkey || null;
-            if (tempPrivkey) {
-              console.log('✅ [LOGIN] tempPrivkey aus localStorage geladen');
-            }
-          } catch (e) {
-            console.error('Fehler beim Parsen der Session:', e);
-          }
-        }
-        
-        localStorage.setItem('nostr_session', JSON.stringify({
-          pubkey,
-          name: name || null,
-          tempPrivkey
-        }));
-        
-        // Setze tempPrivkey im State wenn vorhanden
-        if (tempPrivkey) {
-          update(state => ({
-            ...state,
-            tempPrivkey
-          }));
-          console.log('✅ [LOGIN] tempPrivkey in State gesetzt');
-        }
-      }
+      // Kein localStorage mehr: Session wird nicht persistent gespeichert. tempPrivkey bleibt nur im State.
     },
 
     /**
@@ -91,21 +59,7 @@ function createUserStore() {
         tempPrivkey
       }));
       
-      // Speichere tempPrivkey in localStorage für Persistenz
-      if (typeof window !== 'undefined') {
-        const session = localStorage.getItem('nostr_session');
-        if (session) {
-          try {
-            const data = JSON.parse(session);
-            localStorage.setItem('nostr_session', JSON.stringify({
-              ...data,
-              tempPrivkey
-            }));
-          } catch (e) {
-            console.error('Fehler beim Speichern des tempPrivkey:', e);
-          }
-        }
-      }
+      // Kein localStorage mehr: tempPrivkey bleibt nur im State.
     },
 
     /**
@@ -117,72 +71,22 @@ function createUserStore() {
         name
       }));
 
-      // Update localStorage
-      if (typeof window !== 'undefined') {
-        const session = localStorage.getItem('nostr_session');
-        if (session) {
-          const data = JSON.parse(session);
-          localStorage.setItem('nostr_session', JSON.stringify({
-            ...data,
-            name
-          }));
-        }
-      }
+      // Kein localStorage mehr: Name bleibt nur im State.
     },
 
     /**
      * Logout
      */
     logout: () => {
-      // Speichere tempPrivkey vor dem Logout
-      let savedTempPrivkey: string | null = null;
-      if (typeof window !== 'undefined') {
-        const session = localStorage.getItem('nostr_session');
-        if (session) {
-          try {
-            const data = JSON.parse(session);
-            savedTempPrivkey = data.tempPrivkey || null;
-          } catch (e) {
-            console.error('Fehler beim Lesen des tempPrivkey:', e);
-          }
-        }
-      }
-      
-      // Reset State
+      // Kein localStorage mehr: tempPrivkey bleibt nur im State. State wird zurückgesetzt.
       set(initialState);
-      
-      // Speichere nur tempPrivkey zurück in localStorage (ohne andere Session-Daten)
-      if (typeof window !== 'undefined' && savedTempPrivkey) {
-        localStorage.setItem('nostr_session', JSON.stringify({
-          tempPrivkey: savedTempPrivkey
-        }));
-        console.log('✅ [LOGOUT] tempPrivkey wurde für nächsten Login gespeichert');
-      } else if (typeof window !== 'undefined') {
-        localStorage.removeItem('nostr_session');
-      }
     },
 
     /**
      * Restore Session von localStorage
      */
     restoreSession: () => {
-      if (typeof window !== 'undefined') {
-        const session = localStorage.getItem('nostr_session');
-        if (session) {
-          try {
-            const data = JSON.parse(session);
-            update(state => ({
-              ...state,
-              pubkey: data.pubkey,
-              name: data.name,
-              tempPrivkey: data.tempPrivkey || null, // ✅ Restore tempPrivkey
-              isAuthenticated: false // Benötigt erneute NSEC-Eingabe
-            }));
-          } catch (error) {
-            console.error('Fehler beim Wiederherstellen der Session:', error);
-          }
-        }
-      }
+      // Kein localStorage mehr: Session kann nicht wiederhergestellt werden. User muss sich neu authentifizieren.
     },
 
     /**
