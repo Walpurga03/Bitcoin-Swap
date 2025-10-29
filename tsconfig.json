@@ -10,7 +10,7 @@
     "strict": false,
     "target": "es2020",
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "lib": ["es2020", "dom"],
     "baseUrl": ".",
     "paths": {
