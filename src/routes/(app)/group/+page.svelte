@@ -1433,10 +1433,10 @@
 />
 
 <!-- Interest Modal -->
-<InterestModal 
+<InterestModal
   bind:show={showInterestModal}
   offerContent={selectedOffer?.content || ''}
-  offerPubkey={selectedOffer?.authorPubkey || selectedOffer?.tempPubkey || ''}
+  offerPubkey={selectedOffer?.tempPubkey || ''}
   on:send={handleSendInterest}
 />
 

@@ -457,16 +457,23 @@ export async function fetchDealRooms(
     const events = await fetchEvents(relays, filter);
     console.log('  📦 Gefundene Deal-Rooms:', events.length);
 
-    // Entschlüssele Metadata
+    // Parse Metadata (neue Events sind plain JSON, alte Events sind verschlüsselt)
     const decryptedEvents = await Promise.all(
       events.map(async (event) => {
         try {
-          const decryptedStr = await decryptForGroup(event.content, groupKey);
-          const decrypted = JSON.parse(decryptedStr);
+          // Versuch 1: Plain JSON (neue Events)
+          const decrypted = JSON.parse(event.content);
           return { ...event, decrypted };
-        } catch (error) {
-          console.error('  ⚠️ Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16));
-          return null;
+        } catch (jsonError) {
+          // Versuch 2: Verschlüsselt (alte Events)
+          try {
+            const decrypted = await decryptForGroup(event.content, groupKey);
+            const parsed = JSON.parse(decrypted);
+            return { ...event, decrypted: parsed };
+          } catch (decryptError) {
+            console.error('  ⚠️ Weder JSON noch Entschlüsselung möglich für Event:', event.id.substring(0, 16));
+            return null;
+          }
         }
       })
     );

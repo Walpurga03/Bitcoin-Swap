@@ -818,10 +818,14 @@ export async function loadDealInvitations(
   try {
     console.log('📨 [DEAL-INVITATIONS] Lade Deal-Room Einladungen...');
     
-    // 1. NDK Setup
+    // 1. NDK Setup mit Signer
     const ndk = initNDK(relay);
     await ndk.connect();
-    console.log('  ✅ NDK verbunden');
+    
+    const signer = new NDKPrivateKeySigner(privateKey);
+    ndk.signer = signer;
+    
+    console.log('  ✅ NDK verbunden (mit Signer)');
     
     const userPubkey = getPublicKey(privateKey as any);
     

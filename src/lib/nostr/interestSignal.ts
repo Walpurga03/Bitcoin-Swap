@@ -148,10 +148,13 @@ export async function loadInterestSignals(
 
   for (const event of events) {
     try {
-      // Entschlüssele Content
+      // Entschlüssele Content mit Angebots-Private-Key
+      // NIP-04: decrypt(receiverPrivKey, senderPubKey, encrypted)
+      // Der Interessent hat mit seinem privKey und unserem pubKey verschlüsselt
+      // Wir entschlüsseln mit unserem privKey und seinem pubKey
       const decrypted = await nip04.decrypt(
-        offerPrivateKey as any,
-        event.pubkey,
+        offerPrivateKey as any,  // Unser Angebots-Private-Key
+        event.pubkey,            // Interessenten-Public-Key (Event-Author)
         event.content
       );
 
