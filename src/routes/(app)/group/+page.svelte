@@ -24,11 +24,15 @@
     type Offer
   } from '$lib/nostr/marketplace';
   import {
-    type Interest
-  } from '$lib/nostr/nip17';
+    createDeal,
+    loadDeal,
+    loadMyDeals,
+    updateDealStatus,
+    type Deal
+  } from '$lib/nostr/dealStatus';
   import WhitelistModal from '$lib/components/WhitelistModal.svelte';
-  import InterestModal from '$lib/components/InterestModal.svelte';
-  import InterestList from '$lib/components/InterestList.svelte';
+  import DealStatusCard from '$lib/components/DealStatusCard.svelte';
+  import InterestListSimple from '$lib/components/InterestListSimple.svelte';
   import SecretBackupModal from '$lib/components/SecretBackupModal.svelte';
   import SecretLoginModal from '$lib/components/SecretLoginModal.svelte';
   
@@ -48,50 +52,53 @@
   
   // Modals
   let showWhitelistModal = false;
-  let showInterestModal = false;
   let showInterestList = false;
   let selectedOffer: Offer | null = null;
   
-  // Interests State
-  let interests: Interest[] = [];
-  let interestCounts: Record<string, number> = {};
+  // Deal-Status State
+  let myDeals: Deal[] = [];
+  let currentDeal: Deal | null = null;
+  
+  // Interests State (vereinfacht - nur für Angebotsgeber)
+  let interests: Array<{ pubkey: string; name?: string; timestamp: number }> = [];
   let myInterestOfferIds: Set<string> = new Set();
   
-  // Vergebene Angebote (nach Deal-Erstellung ausblenden)
-  let assignedOfferIds: Set<string> = new Set();
+  // Temp-Variablen (können später entfernt werden)
+  let interestCounts: Record<string, number> = {};
   
-    let autoRefreshInterval: NodeJS.Timeout;
-  let handleShowInterestList: () => void;
+  let autoRefreshInterval: NodeJS.Timeout;
 
   /**
-   * Lade MEINE gesendeten Interesse-Signale vom Relay
-   * Filtert nach Kind 30078 Events die ICH gesendet habe
+   * Lade MEINE Deals vom Relay
    */
-  async function loadMyInterests(): Promise<void> {
+  async function loadMyDealsFromRelay(): Promise<void> {
     if (!$userStore.pubkey || !$groupStore.relay) return;
 
     try {
-      console.log('📥 [MY-INTERESTS] Lade meine gesendeten Interesse-Signale...');
+      console.log('📥 [MY-DEALS] Lade meine Deals...');
       
-      const { loadMyInterestSignals } = await import('$lib/nostr/interestSignal');
-      const mySignals = await loadMyInterestSignals($userStore.pubkey, $groupStore.relay);
+      myDeals = await loadMyDeals($userStore.pubkey, $groupStore.relay);
       
-      console.log('✅ [MY-INTERESTS] Gefunden:', mySignals.length, 'Interesse-Signale');
+      console.log('✅ [MY-DEALS] Gefunden:', myDeals.length, 'Deals');
       
-      // Extrahiere Offer-IDs
+      // Extrahiere Offer-IDs mit aktivem Deal
       myInterestOfferIds.clear();
-      for (const signal of mySignals) {
-        if (signal.offerId) {
-          myInterestOfferIds.add(signal.offerId);
-          console.log('  ✅ Signal für Offer:', signal.offerId.substring(0, 16) + '...');
+      for (const deal of myDeals) {
+        if (deal.status === 'active') {
+          myInterestOfferIds.add(deal.offerId);
         }
       }
       
-      myInterestOfferIds = myInterestOfferIds; // Trigger Svelte reactivity
+      // ✅ Lade auch lokale Interest-Secrets (für Anonymität)
+      const { loadMyInterestSignals } = await import('$lib/nostr/interestSignal');
+      const localInterests = loadMyInterestSignals();
+      for (const interest of localInterests) {
+        myInterestOfferIds.add(interest.offerId);
+      }
       
-      console.log('✅ [MY-INTERESTS] Insgesamt:', myInterestOfferIds.size, 'Offer-IDs');
+      myInterestOfferIds = myInterestOfferIds; // Trigger Svelte reactivity
     } catch (e) {
-      console.warn('⚠️ [MY-INTERESTS] Fehler beim Laden:', e);
+      console.warn('⚠️ [MY-DEALS] Fehler beim Laden:', e);
     }
   }
 
@@ -200,35 +207,35 @@
         }
       }
       
-      // Secret-basiertes System - kein automatisches Laden mehr
-      console.log('💡 [PAGE] Verwende Secret-basiertes System (kein localStorage)');
+      // Secret-basiertes System - lade aus sessionStorage
+      console.log('💡 [PAGE] Verwende Secret-basiertes System (sessionStorage)');
+      const savedSecret = sessionStorage.getItem('offerSecret');
+      if (savedSecret) {
+        try {
+          offerSecret = savedSecret;
+          offerKeypair = deriveKeypairFromSecret(savedSecret);
+          console.log('✅ [SECRET] Aus sessionStorage geladen');
+        } catch (e) {
+          console.warn('⚠️ [SECRET] Ungültiges Secret in sessionStorage:', e);
+          sessionStorage.removeItem('offerSecret');
+        }
+      }
       
       // Lade Marketplace-Angebote ZUERST
       await loadAllOffers();
 
-      // ✅ Dann lade meine gesendeten Interests vom Relay
-      await loadMyInterests();
+      // ✅ Dann lade meine Deals vom Relay
+      await loadMyDealsFromRelay();
 
       // Auto-Refresh alle 10 Sekunden
       autoRefreshInterval = setInterval(async () => {
         try {
           await loadAllOffers();
+          await loadMyDealsFromRelay();
         } catch (e) {
           console.error('Auto-Refresh Fehler:', e);
         }
       }, 10000);
-      
-      // Event-Listener für "Interest-Liste anzeigen" von Notification-System
-      handleShowInterestList = () => {
-        console.log('📨 [EVENT] Interest-Liste öffnen durch Notification-System');
-        // Finde das erste eigene Angebot und öffne dessen Interest-Liste
-        const ownOffer = offers.find(offer => offer.isOwnOffer);
-        if (ownOffer) {
-          openInterestList(ownOffer);
-        }
-      };
-      
-      window.addEventListener('show-interest-list', handleShowInterestList);
 
     } catch (e: any) {
       console.error('❌ [PAGE] Fehler beim Laden:', e);
@@ -239,11 +246,6 @@
   onDestroy(() => {
     if (autoRefreshInterval) {
       clearInterval(autoRefreshInterval);
-    }
-    
-    // Cleanup Event-Listener
-    if (handleShowInterestList) {
-      window.removeEventListener('show-interest-list', handleShowInterestList);
     }
   });
 
@@ -265,6 +267,7 @@
       if (!offerKeypair) {
         offerSecret = generateOfferSecret();
         offerKeypair = deriveKeypairFromSecret(offerSecret);
+        sessionStorage.setItem('offerSecret', offerSecret);
         console.log('✅ Neues Angebots-Secret generiert (deterministisches Keypair)');
       }
 
@@ -319,6 +322,7 @@
     // Lösche Secret und Keypair
     offerSecret = null;
     offerKeypair = null;
+    sessionStorage.removeItem('offerSecret');
       
       await new Promise(resolve => setTimeout(resolve, 500));
       await loadAllOffers();
@@ -332,67 +336,82 @@
     }
   }
 
-  function openInterestModal(offer: Offer) {
-    selectedOffer = offer;
-    showInterestModal = true;
-  }
-
-  async function handleSendInterest(event: CustomEvent<{ message: string; recipientPubkey: string }>) {
-    if (!selectedOffer || !$userStore.privateKey || !$userStore.pubkey || !$groupStore.relay) return;
+  /**
+   * Zeige Interesse an einem Angebot (vereinfacht - nur Signal)
+   */
+  async function handleShowInterest(offer: Offer) {
+    if (!$userStore.pubkey || !$groupStore.relay) return;
+    
+    if (!confirm(`📤 Interesse zeigen für:\n\n"${offer.content.substring(0, 100)}..."\n\nDer Angebotsgeber wird deine Public Key sehen und kann dich auswählen.`)) {
+      return;
+    }
 
     try {
       loading = true;
-      error = '⏳ Private Anfrage wird gesendet...';
-      showInterestModal = false;
+      error = '⏳ Interesse wird gesendet...';
 
-      console.log('� [SEND-PRIVATE-REQUEST] Sende NIP-17 DM:', {
-        to: event.detail.recipientPubkey.substring(0, 16) + '...',
-        offer: selectedOffer.content.substring(0, 30) + '...'
+      console.log('📤 [INTEREST] Sende ANONYMES Interesse für Angebot:', offer.id.substring(0, 16) + '...');
+      console.log('🔍 [DEBUG] Offer-Daten:', {
+        authorPubkey: offer.authorPubkey?.substring(0, 16) + '...' || 'NICHT VORHANDEN',
+        tempPubkey: offer.tempPubkey.substring(0, 16) + '...',
+        verwendetKey: offer.tempPubkey.substring(0, 16) + '... (TEMP-PUBKEY für Verschlüsselung)'
       });
 
-      // Sende verschlüsseltes Interesse-Signal (NIP-04)
-      const { sendInterestSignal } = await import('$lib/nostr/interestSignal');
+      // Sende ANONYMES Interesse-Signal (mit temp-keypair)
+      const { sendInterestSignal, saveInterestSecret } = await import('$lib/nostr/interestSignal');
       
-      await sendInterestSignal(
-        selectedOffer.id,
-        event.detail.recipientPubkey,
-        event.detail.message,
-        $userStore.name || 'Anonym',
+      const { event, tempSecret } = await sendInterestSignal(
+        offer.id,
+        offer.tempPubkey,  // ✅ WICHTIG: Verschlüssele mit TEMP-PUBKEY (nicht authorPubkey!)
+        'Ich habe Interesse!',
+        $userStore.name || undefined,  // ← undefined statt "Anonym"
         $userStore.privateKey,
         $groupStore.relay
       );
 
-      console.log('✅ [SEND-INTEREST-SIGNAL] Interesse-Signal gesendet');
+      // ✅ Speichere temp-secret für spätere Löschung
+      saveInterestSecret(offer.id, tempSecret);
+
+      console.log('✅ [INTEREST] ANONYMES Interesse gesendet');
+      console.log('  🎭 Event signiert mit temp-pubkey');
+      console.log('  💾 Temp-Secret gespeichert für Löschung');
       
       // Merke, dass ich Interesse gezeigt habe
-      myInterestOfferIds.add(selectedOffer.id);
+      myInterestOfferIds.add(offer.id);
       myInterestOfferIds = myInterestOfferIds;
 
       error = '';
-      alert(`✅ Interesse-Signal gesendet!\n\n📤 Dein Interesse wurde verschlüsselt an den Angebotsgeber gesendet.\n🔒 Nur der Angebotsgeber kann es sehen!\n\n⏳ Warte auf Auswahl durch den Angebotsgeber.`);
+      alert(`✅ Interesse gezeigt!\n\n⏳ Warte auf Auswahl durch den Angebotsgeber.\n\n🎭 Dein Interesse ist vollständig anonym!`);
       
     } catch (e: any) {
-      console.error('❌ Fehler beim Senden des Interesse-Signals:', e);
-      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesse-Signals');
-      if (selectedOffer) {
-        myInterestOfferIds.delete(selectedOffer.id);
-        myInterestOfferIds = myInterestOfferIds;
-      }
+      console.error('❌ Fehler beim Senden des Interesses:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
     } finally {
       loading = false;
-      selectedOffer = null;
     }
   }
 
+  /**
+   * Öffne Interessenten-Liste für eigenes Angebot
+   */
   async function openInterestList(offer: Offer) {
-    if (!$groupStore.relay || !offerKeypair?.privateKey) return;
+    if (!$groupStore.relay) {
+      error = '❌ Kein Relay verbunden';
+      return;
+    }
+    
+    if (!offerKeypair?.privateKey) {
+      error = '❌ Secret nicht verfügbar!\n\nBitte importiere dein Angebots-Secret um die Interessenten zu sehen.';
+      showSecretLogin = true;
+      return;
+    }
     
     try {
       loading = true;
       selectedOffer = offer;
       console.log('📋 [ANGEBOTSGEBER] Lade Interesse-Signale für mein Angebot...');
       
-      // Lade verschlüsselte Interesse-Signale (nur Anbieter kann entschlüsseln)
+      // Lade Interesse-Signale
       const { loadInterestSignals } = await import('$lib/nostr/interestSignal');
       const signals = await loadInterestSignals(
         offer.id,
@@ -400,21 +419,71 @@
         $groupStore.relay
       );
       
-      // Konvertiere zu Interest-Format für bestehende UI
+      // Konvertiere zu vereinfachtem Interest-Format
       interests = signals.map(signal => ({
-        userPubkey: signal.interestedPubkey,
-        userName: signal.userName || 'Anonym',
-        message: signal.message || '',
-        timestamp: Math.floor(signal.timestamp / 1000) // Convert ms to seconds
+        pubkey: signal.interestedPubkey,
+        name: signal.userName || undefined,
+        timestamp: signal.timestamp
       }));
       
-      console.log(`📊 [ANGEBOTSGEBER] ${interests.length} Interesse-Signale für dieses Angebot`);
+      console.log(`📊 [ANGEBOTSGEBER] ${interests.length} Interesse-Signale gefunden`);
       
       showInterestList = true;
       loading = false;
     } catch (e: any) {
       console.error('❌ Fehler beim Laden der Interesse-Signale:', e);
       error = '❌ ' + (e.message || 'Fehler beim Laden der Interesse-Signale');
+      loading = false;
+    }
+  }
+
+  /**
+   * Angebotsgeber wählt einen Interessenten aus → Deal wird erstellt
+   */
+  async function handleSelectInterest(selectedPubkey: string) {
+    if (!selectedOffer || !offerKeypair || !$userStore.pubkey || !$groupStore.relay) return;
+
+    try {
+      loading = true;
+      error = '⏳ Erstelle Deal...';
+      console.log('🤝 [DEAL] Erstelle Deal mit:', selectedPubkey.substring(0, 16) + '...');
+
+      // Erstelle Deal
+      await createDeal(
+        selectedOffer.id,
+        selectedPubkey,
+        $userStore.pubkey,
+        $userStore.privateKey,
+        $groupStore.relay
+      );
+
+      console.log('✅ [DEAL] Deal erstellt');
+
+      // Lösche Angebot
+      await deleteOfferMarketplace(
+        selectedOffer.id,
+        offerKeypair.privateKey,
+        offerKeypair.publicKey,
+        $groupStore.relay
+      );
+
+      console.log('🗑️ [OFFER] Angebot gelöscht');
+
+      // UI aufräumen
+      showInterestList = false;
+      selectedOffer = null;
+      interests = [];
+      error = '';
+
+      // Neu laden
+      await loadAllOffers();
+      await loadMyDealsFromRelay();
+
+      alert('✅ Deal erstellt!\n\nDu kannst jetzt mit dem ausgewählten Partner außerhalb der App kommunizieren.');
+    } catch (e: any) {
+      console.error('❌ Fehler beim Erstellen des Deals:', e);
+      error = '❌ ' + (e.message || 'Fehler beim Erstellen des Deals');
+    } finally {
       loading = false;
     }
   }
@@ -458,6 +527,7 @@
       // Reset Zustand
       offerSecret = null;
       offerKeypair = null;
+      sessionStorage.removeItem('offerSecret');
       
       // Lade Angebote neu
       await loadAllOffers();
@@ -473,110 +543,7 @@
   }
 
   // 🤝 Wählt einen Partner aus und sendet Absagen an alle anderen
-  async function handleSelectPartner(event: CustomEvent<any>) {
-    const selectedInterest = event.detail;
-    
-    if (!confirm(`🤝 Partner "${selectedInterest.userName || 'Anonym'}" auswählen?\n\n✅ Dieser Partner wird ausgewählt\n❌ Alle anderen erhalten eine Absage\n💬 Dann wird ein Deal-Room erstellt`)) {
-      return;
-    }
 
-    try {
-      loading = true;
-      error = '';
-
-      console.log('🤝 [SELECT-PARTNER] Wähle Partner aus:', selectedInterest.userName);
-
-      if (!selectedOffer || !offerKeypair) {
-        throw new Error('Angebot oder Keypair fehlt');
-      }
-
-      // 1. Partner auswählen und Absagen senden
-      const { selectPartner } = await import('$lib/nostr/offerSelection');
-      const { loadInterestSignals } = await import('$lib/nostr/interestSignal');
-      
-      // Lade alle Interesse-Signale
-      const allSignals = await loadInterestSignals(
-        selectedOffer.id,
-        offerKeypair.privateKey,
-        $groupStore.relay
-      );
-
-      console.log(`📋 [SELECT-PARTNER] ${allSignals.length} Interesse-Signale gefunden`);
-
-      // Wähle Partner aus (sendet automatisch Absagen)
-      const selectionResult = await selectPartner(
-        offerKeypair,
-        selectedInterest.userPubkey,
-        allSignals,
-        selectedOffer.id,
-        selectedOffer.content,
-        $groupStore.relay
-      );
-
-      console.log(`✅ [SELECT-PARTNER] Auswahl abgeschlossen:`, {
-        selected: selectionResult.selectedPubkey.substring(0, 16) + '...',
-        rejected: selectionResult.rejectedPubkeys.length,
-        errors: selectionResult.errors.length
-      });
-
-      // 2. Deal-Room erstellen
-      const { createDealRoom } = await import('$lib/nostr/nip17');
-      
-      const dealId = await createDealRoom(
-        $userStore.privateKey,
-        selectedInterest.userPubkey,
-        selectedOffer.content || 'Bitcoin Swap Deal',
-        $groupStore.relay,
-        $groupStore.channelId
-      );
-
-      console.log('✅ [SELECT-PARTNER] Deal-Room erstellt:', dealId.substring(0, 16) + '...');
-      
-      // 3. Lösche Angebot permanent aus dem Nostr-Relay
-      try {
-        console.log('🗑️ [DELETE-OFFER] Lösche Angebot aus Nostr-Relay:', selectedOffer.id.substring(0, 16) + '...');
-        
-        await deleteOfferMarketplace(
-          selectedOffer.id,
-          offerKeypair.privateKey,
-          offerKeypair.publicKey,
-          $groupStore.relay
-        );
-        
-        console.log('✅ [DELETE-OFFER] Angebot erfolgreich gelöscht');
-        assignedOfferIds.add(selectedOffer.id);
-        
-      } catch (deleteError) {
-        console.error('❌ [DELETE-OFFER] Fehler beim Löschen:', deleteError);
-        assignedOfferIds.add(selectedOffer.id);
-      }
-      
-      // Schließe Interest-Liste
-      showInterestList = false;
-      
-      // Lade Offers neu
-      setTimeout(() => {
-        loadAllOffers();
-      }, 1000);
-      
-      const rejectionInfo = selectionResult.rejectedPubkeys.length > 0 
-        ? `\n📤 ${selectionResult.rejectedPubkeys.length} Absagen gesendet`
-        : '';
-      
-      alert(`✅ Partner erfolgreich ausgewählt!\n\n🤝 Partner: ${selectedInterest.userName || 'Anonym'}${rejectionInfo}\n💬 Deal-ID: ${dealId.substring(0, 16)}...\n🗑️ Dein Angebot wurde gelöscht\n\n🚪 Du wirst zum Deal-Room weitergeleitet...`);
-      
-      // Navigation zum Deal-Room
-      setTimeout(() => {
-        goto(`/deal/${dealId}`);
-      }, 2000);
-      
-    } catch (e: any) {
-      console.error('❌ Fehler bei Partner-Auswahl:', e);
-      error = '❌ Fehler bei Partner-Auswahl: ' + (e.message || 'Unbekannter Fehler');
-    } finally {
-      loading = false;
-    }
-  }
 
   // Secret-Login Handler
   async function handleSecretLogin(event: CustomEvent<{ secret: string }>) {
@@ -595,6 +562,7 @@
       // Leite Keypair aus Secret ab
       offerSecret = secret;
       offerKeypair = deriveKeypairFromSecret(secret);
+      sessionStorage.setItem('offerSecret', secret);
 
       console.log('✅ [SECRET-LOGIN] Keypair erfolgreich abgeleitet');
       console.log('  📋 Public Key:', offerKeypair.publicKey.substring(0, 16) + '...');
@@ -609,6 +577,7 @@
       error = '❌ Fehler beim Login: ' + (e.message || 'Unbekannter Fehler');
       offerSecret = null;
       offerKeypair = null;
+      sessionStorage.removeItem('offerSecret');
     } finally {
       loading = false;
     }
@@ -663,6 +632,42 @@
       </button>
     </div>
 
+    <!-- Meine aktiven Deals -->
+    {#if myDeals.length > 0}
+      <div class="my-deals-section">
+        <h2>🤝 Meine Deals</h2>
+        {#each myDeals as deal (deal.id)}
+          <DealStatusCard
+            {deal}
+            userPubkey={$userStore.pubkey || ''}
+            onComplete={async () => {
+              if (!$userStore.privateKey || !$groupStore.relay) return;
+              try {
+                await updateDealStatus(deal.offerId, 'completed', $userStore.privateKey, $groupStore.relay);
+                await loadMyDealsFromRelay();
+                alert('✅ Deal als abgeschlossen markiert!');
+              } catch (e) {
+                console.error('❌ Fehler beim Abschließen:', e);
+                alert('❌ Fehler beim Abschließen des Deals');
+              }
+            }}
+            onCancel={async () => {
+              if (!$userStore.privateKey || !$groupStore.relay) return;
+              if (!confirm('Deal wirklich abbrechen?')) return;
+              try {
+                await updateDealStatus(deal.offerId, 'cancelled', $userStore.privateKey, $groupStore.relay);
+                await loadMyDealsFromRelay();
+                alert('❌ Deal abgebrochen');
+              } catch (e) {
+                console.error('❌ Fehler beim Abbrechen:', e);
+                alert('❌ Fehler beim Abbrechen des Deals');
+              }
+            }}
+          />
+        {/each}
+      </div>
+    {/if}
+
     {#if anyOfferExists && !showOfferForm}
       <div class="info-banner">
         ℹ️ Es existiert bereits ein aktives Angebot. Nur 1 Angebot gleichzeitig erlaubt.
@@ -701,26 +706,17 @@
         <div class="loading-state">
           <p>⏳ Lade Angebote...</p>
         </div>
-      {:else if offers.length === 0 || offers.filter(offer => !assignedOfferIds.has(offer.id)).length === 0}
+      {:else if offers.length === 0}
         <div class="empty-state">
           <div class="empty-icon">🛒</div>
-          {#if offers.length === 0}
-            <p><strong>Noch keine Angebote vorhanden</strong></p>
-            <p class="text-muted">Sei der Erste und erstelle ein Bitcoin-Tauschangebot!</p>
-          {:else}
-            <p><strong>Alle Angebote sind bereits vergeben</strong></p>
-            <p class="text-muted">Erstelle ein neues Angebot oder warte auf neue Angebote von anderen.</p>
-          {/if}
+          <p><strong>Noch keine Angebote vorhanden</strong></p>
+          <p class="text-muted">Sei der Erste und erstelle ein Bitcoin-Tauschangebot!</p>
         </div>
       {:else}
         <div class="offers-count">
-          {#if offers.filter(offer => !assignedOfferIds.has(offer.id)).length !== offers.length}
-            {offers.filter(offer => !assignedOfferIds.has(offer.id)).length} aktive Angebote ({assignedOfferIds.size} vergeben)
-          {:else}
-            {offers.length} {offers.length === 1 ? 'Angebot' : 'Angebote'}
-          {/if}
+          {offers.length} {offers.length === 1 ? 'Angebot' : 'Angebote'}
         </div>
-        {#each offers.filter(offer => !assignedOfferIds.has(offer.id)) as offer (offer.id)}
+        {#each offers as offer (offer.id)}
           <div class="offer-card card" class:own-offer={offer.isOwnOffer}>
             <div class="offer-header">
               <div class="offer-meta">
@@ -774,7 +770,7 @@
                 {:else}
                   <button 
                     class="btn btn-success btn-sm" 
-                    on:click={() => openInterestModal(offer)}
+                    on:click={() => handleShowInterest(offer)}
                     disabled={loading}
                   >
                     ✋ Interesse zeigen
@@ -1424,6 +1420,42 @@
       font-size: 0.875rem;
     }
   }
+
+  /* Modal Overlay */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .my-deals-section {
+    margin: 2rem 0;
+  }
+
+  .my-deals-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+  }
 </style>
 
 <!-- Whitelist Modal -->
@@ -1432,21 +1464,25 @@
   onClose={() => showWhitelistModal = false}
 />
 
-<!-- Interest Modal -->
-<InterestModal
-  bind:show={showInterestModal}
-  offerContent={selectedOffer?.content || ''}
-  offerPubkey={selectedOffer?.tempPubkey || ''}
-  on:send={handleSendInterest}
-/>
-
-<!-- Interest List Modal -->
-<InterestList
-  bind:show={showInterestList}
-  {interests}
-  {loading}
-  on:selectPartner={handleSelectPartner}
-/>
+<!-- Interest List (vereinfacht) -->
+{#if showInterestList && selectedOffer}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="modal-overlay" on:click={() => showInterestList = false}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="modal-content" on:click|stopPropagation>
+      <InterestListSimple
+        {interests}
+        {loading}
+        onSelect={handleSelectInterest}
+      />
+      <button class="btn btn-secondary" on:click={() => showInterestList = false}>
+        Schließen
+      </button>
+    </div>
+  </div>
+{/if}
 
 <!-- Secret Backup Modal -->
 <SecretBackupModal

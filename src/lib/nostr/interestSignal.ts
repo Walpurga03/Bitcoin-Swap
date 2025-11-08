@@ -1,11 +1,17 @@
 /**
- * Interesse-Signal Management
+ * Interesse-Signal Management (VOLLSTÄNDIG ANONYM)
  * 
- * Dieses Modul verwaltet verschlüsselte Interesse-Signale für Marketplace-Angebote.
- * Statt sofort NIP-17 DMs zu senden, werden verschlüsselte Signale erstellt,
- * die nur der Anbieter (mit seinem Angebots-Secret) entschlüsseln kann.
+ * Dieses Modul verwaltet verschlüsselte UND ANONYME Interesse-Signale für Marketplace-Angebote.
+ * 
+ * ANONYMITÄT:
+ * - Interessent erstellt temporäres Keypair (wie beim Angebot)
+ * - Event wird mit temp-privateKey signiert → temp-pubkey im Event
+ * - Im verschlüsselten Content steht der ECHTE pubkey
+ * - Auf Relay: Niemand kann sehen WER Interesse gezeigt hat
+ * - Nur Anbieter kann entschlüsseln und echten pubkey sehen
  * 
  * Vorteile:
+ * - Vollständige Anonymität auf Relay-Ebene
  * - Privatsphäre: Andere Gruppenmitglieder sehen KEINE Interessenten
  * - Effizienz: Nur EINE DM wird erstellt (mit ausgewähltem Partner)
  * - Kontrolle: Anbieter sieht alle Interessenten und wählt aus
@@ -16,13 +22,14 @@ import * as nip04 from 'nostr-tools/nip04';
 import type { NostrEvent, NostrFilter } from './types';
 import { createEvent, publishEvent, fetchEvents } from './client';
 import { GROUP_TAG } from '$lib/config';
+import { generateOfferSecret, deriveKeypairFromSecret } from './offerSecret';
 
 /**
- * Interface für Interesse-Signal
+ * Interface für Interesse-Signal (verschlüsselter Content)
  */
 export interface InterestSignal {
   offerId: string;
-  interestedPubkey: string;
+  interestedPubkey: string; // ECHTER Pubkey (nur verschlüsselt sichtbar)
   timestamp: number;
   message?: string;
   userName?: string;
@@ -34,24 +41,30 @@ export interface InterestSignal {
 export interface DecryptedInterestSignal extends InterestSignal {
   eventId: string;
   createdAt: number;
+  tempPubkey: string; // Temporärer Public Key (Event-Author)
 }
 
 /**
- * Sende Interesse-Signal (verschlüsselt)
+ * Sende Interesse-Signal (VOLLSTÄNDIG ANONYM)
  * 
- * Erstellt ein verschlüsseltes Event (Kind 30078), das nur der Anbieter
- * mit seinem Angebots-Private-Key entschlüsseln kann.
+ * Erstellt ein verschlüsseltes Event (Kind 30078) mit temporärem Keypair.
+ * Nur der Anbieter kann mit seinem Angebots-Private-Key entschlüsseln.
+ * 
+ * ANONYMITÄT:
+ * - Event wird mit temp-privateKey signiert (temp-pubkey im Event)
+ * - Echter pubkey NUR im verschlüsselten Content
+ * - Auf Relay: Niemand sieht den echten Interessenten
  * 
  * @param offerId - ID des Angebots
  * @param offerPublicKey - Public Key des Angebots (aus Secret abgeleitet)
  * @param message - Optional: Nachricht an Anbieter
  * @param userName - Optional: Name des Interessenten
- * @param userPrivateKey - Private Key des Interessenten
+ * @param userPrivateKey - ECHTER Private Key des Interessenten (nur für verschlüsselten Content)
  * @param relay - Relay-URL
- * @returns Erstelltes Event
+ * @returns Object mit Event und temp-secret für Löschung
  * 
  * @example
- * await sendInterestSignal(
+ * const result = await sendInterestSignal(
  *   offerId,
  *   offerPubkey,
  *   "Ich hätte Interesse!",
@@ -59,6 +72,7 @@ export interface DecryptedInterestSignal extends InterestSignal {
  *   userPrivateKey,
  *   relay
  * );
+ * // Speichere result.tempSecret um später löschen zu können!
  */
 export async function sendInterestSignal(
   offerId: string,
@@ -67,47 +81,57 @@ export async function sendInterestSignal(
   userName: string,
   userPrivateKey: string,
   relay: string
-): Promise<NostrEvent> {
-  console.log('💌 [INTEREST-SIGNAL] Sende verschlüsseltes Interesse-Signal...');
-  console.log('  📋 Offer-ID:', offerId.substring(0, 16) + '...');
+): Promise<{ event: NostrEvent; tempSecret: string }> {
+  console.log('💌 [INTEREST-SIGNAL] Sende ANONYMES verschlüsseltes Interesse-Signal...');
+  console.log('  � VERSION: 2024-11-07-18:15 - NEUE VERSCHLÜSSELUNG');
+  console.log('  �📋 Offer-ID:', offerId.substring(0, 16) + '...');
   console.log('  👤 User:', userName);
 
   const userPubkey = getPublicKey(userPrivateKey as any);
 
-  // Erstelle Signal-Daten
+  // 🔐 ANONYMITÄT: Generiere temporäres Keypair
+  const tempSecret = generateOfferSecret();
+  const tempKeypair = deriveKeypairFromSecret(tempSecret);
+  console.log('  🎭 Temp-Pubkey:', tempKeypair.publicKey.substring(0, 16) + '...');
+  console.log('  👤 Echter Pubkey:', userPubkey.substring(0, 16) + '... (nur verschlüsselt)');
+
+  // Erstelle Signal-Daten (mit ECHTEM Pubkey)
   const signal: InterestSignal = {
     offerId,
-    interestedPubkey: userPubkey,
+    interestedPubkey: userPubkey, // ECHTER Pubkey (nur verschlüsselt sichtbar!)
     timestamp: Date.now(),
     message,
     userName
   };
 
-  // Verschlüssele mit Anbieter-Pubkey (NIP-04)
-  // Nur Anbieter mit seinem Private Key kann entschlüsseln
+  // 🔐 WICHTIG: Verschlüssele mit TEMP-KEYPAIR (nicht mit echtem User-PrivateKey!)
+  // NIP-04: encrypt(senderPrivKey, receiverPubKey, plaintext)
+  // Anbieter entschlüsselt später mit: decrypt(receiverPrivKey, senderPubKey=tempPubkey, ciphertext)
   const encrypted = await nip04.encrypt(
-    userPrivateKey as any,
-    offerPublicKey,
+    tempKeypair.privateKey as any, // TEMP-PrivateKey (passt zum Event-Signatur!)
+    offerPublicKey,                 // Angebots-PublicKey (Empfänger)
     JSON.stringify(signal)
   );
 
-  console.log('  🔐 Signal verschlüsselt (nur Anbieter kann lesen)');
+  console.log('  🔐 Signal verschlüsselt mit temp-keypair (nur Anbieter kann lesen)');
 
-  // Erstelle Event (Kind 30078 = Addressable Event)
+  // 🎭 ANONYMITÄT: Event wird mit TEMP-KEYPAIR signiert!
   const tags = [
-    ['d', `interest-${offerId}-${userPubkey}`], // Unique identifier
-    ['e', offerId, '', 'reply'],                 // Referenz zum Angebot
-    ['t', 'bitcoin-interest'],                   // Tag für Filtering
-    ['t', GROUP_TAG]                             // Gruppen-Tag
-    // ❌ KEIN 'p' Tag mit Anbieter-Pubkey! (Privatsphäre)
+    ['d', `interest-${offerId}-${tempKeypair.publicKey}`], // Unique mit temp-pubkey
+    ['e', offerId, '', 'reply'],                           // Referenz zum Angebot
+    ['t', 'bitcoin-interest'],                             // Tag für Filtering
+    ['t', GROUP_TAG]                                       // Gruppen-Tag
+    // ❌ KEIN 'p' Tag! (Privatsphäre)
   ];
 
-  const event = await createEvent(30078, encrypted, tags, userPrivateKey);
+  // Event signiert mit TEMP-PRIVATE-KEY → temp-pubkey im Event!
+  const event = await createEvent(30078, encrypted, tags, tempKeypair.privateKey);
   const result = await publishEvent(event, [relay]);
 
-  console.log('  ✅ Interesse-Signal gesendet:', result.relays.length + '/' + 1 + ' Relays');
+  console.log('  ✅ ANONYMES Interesse-Signal gesendet:', result.relays.length + '/' + 1 + ' Relays');
+  console.log('  💾 Speichere temp-secret um später löschen zu können!');
 
-  return event;
+  return { event, tempSecret };
 }
 
 /**
@@ -116,10 +140,14 @@ export async function sendInterestSignal(
  * Lädt alle verschlüsselten Interesse-Signale für ein Angebot und
  * entschlüsselt sie mit dem Angebots-Private-Key.
  * 
+ * ANONYMITÄT:
+ * - event.pubkey ist TEMP-PUBKEY (anonym auf Relay)
+ * - Echter pubkey im verschlüsselten Content
+ * 
  * @param offerId - ID des Angebots
  * @param offerPrivateKey - Private Key des Angebots (aus Secret abgeleitet)
  * @param relay - Relay-URL
- * @returns Array von entschlüsselten Interesse-Signalen
+ * @returns Array von entschlüsselten Interesse-Signalen mit ECHTEN pubkeys
  * 
  * @example
  * const interests = await loadInterestSignals(offerId, offerPrivateKey, relay);
@@ -130,8 +158,9 @@ export async function loadInterestSignals(
   offerPrivateKey: string,
   relay: string
 ): Promise<DecryptedInterestSignal[]> {
-  console.log('💌 [INTEREST-SIGNALS] Lade Interesse-Signale...');
-  console.log('  📋 Offer-ID:', offerId.substring(0, 16) + '...');
+  console.log('💌 [INTEREST-SIGNALS] Lade ANONYME Interesse-Signale...');
+  console.log('  � VERSION: 2024-11-07-18:15 - NEUE ENTSCHLÜSSELUNG');
+  console.log('  �📋 Offer-ID:', offerId.substring(0, 16) + '...');
 
   // Filter für Interesse-Signale
   const filter: NostrFilter = {
@@ -145,16 +174,21 @@ export async function loadInterestSignals(
 
   // Entschlüssele mit Angebots-Private-Key
   const signals: DecryptedInterestSignal[] = [];
+  const offerPublicKey = getPublicKey(offerPrivateKey as any);
 
   for (const event of events) {
     try {
+      // 🎭 ANONYMITÄT: event.pubkey ist TEMP-PUBKEY (nicht der echte Interessent!)
+      // Wir brauchen den temp-pubkey NUR für NIP-04 Entschlüsselung
+      const tempPubkey = event.pubkey;
+      
       // Entschlüssele Content mit Angebots-Private-Key
       // NIP-04: decrypt(receiverPrivKey, senderPubKey, encrypted)
-      // Der Interessent hat mit seinem privKey und unserem pubKey verschlüsselt
-      // Wir entschlüsseln mit unserem privKey und seinem pubKey
+      // Der Interessent hat mit seinem ECHTEN privKey verschlüsselt
+      // Wir entschlüsseln mit unserem privKey und dem TEMP-pubkey
       const decrypted = await nip04.decrypt(
         offerPrivateKey as any,  // Unser Angebots-Private-Key
-        event.pubkey,            // Interessenten-Public-Key (Event-Author)
+        tempPubkey,              // Temp-Public-Key (Event-Author, NICHT der echte!)
         event.content
       );
 
@@ -164,12 +198,22 @@ export async function loadInterestSignals(
       signals.push({
         ...signal,
         eventId: event.id,
-        createdAt: event.created_at
+        createdAt: event.created_at,
+        tempPubkey: tempPubkey // Speichere temp-pubkey für Löschung
       });
 
-      console.log('  ✅ Signal entschlüsselt:', signal.userName || signal.interestedPubkey.substring(0, 16) + '...');
+      console.log('  ✅ Signal entschlüsselt:');
+      console.log('    🎭 Temp-Pubkey (Event):', tempPubkey.substring(0, 16) + '...');
+      console.log('    👤 ECHTER Pubkey:', signal.interestedPubkey.substring(0, 16) + '...');
+      console.log('    📝 Name:', signal.userName || '(kein Name)');
     } catch (error) {
       console.warn('  ⚠️ Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16) + '...');
+      console.error('  🔍 Debug-Info:', {
+        offerPrivateKey: offerPrivateKey.substring(0, 16) + '...',
+        tempPubkey: event.pubkey.substring(0, 16) + '...',
+        contentLength: event.content.length,
+        error: error
+      });
       // Ignoriere Events die nicht entschlüsselt werden können
     }
   }
@@ -183,66 +227,106 @@ export async function loadInterestSignals(
 }
 
 /**
- * Lösche Interesse-Signal
+ * Lösche Interesse-Signal (mit temp-secret)
  * 
  * Löscht ein Interesse-Signal vom Relay (NIP-09).
- * Nur der Ersteller kann sein eigenes Signal löschen.
+ * Benötigt das temp-secret das beim Senden zurückgegeben wurde.
+ * 
+ * ANONYMITÄT:
+ * - Event wurde mit temp-privateKey signiert
+ * - Löschung muss auch mit temp-privateKey erfolgen
+ * - Daher: User muss temp-secret speichern!
  * 
  * @param eventId - ID des zu löschenden Events
- * @param userPrivateKey - Private Key des Interessenten
+ * @param tempSecret - Temp-Secret (vom Senden zurückgegeben)
  * @param relay - Relay-URL
  * @param reason - Optional: Grund für Löschung
  * 
  * @example
- * await deleteInterestSignal(eventId, userPrivateKey, relay, "Interesse zurückgezogen");
+ * const { tempSecret } = await sendInterestSignal(...);
+ * // Speichere tempSecret!
+ * await deleteInterestSignal(eventId, tempSecret, relay, "Interesse zurückgezogen");
  */
 export async function deleteInterestSignal(
   eventId: string,
-  userPrivateKey: string,
+  tempSecret: string,
   relay: string,
   reason?: string
 ): Promise<void> {
-  console.log('🗑️ [INTEREST-SIGNAL] Lösche Interesse-Signal...');
+  console.log('🗑️ [INTEREST-SIGNAL] Lösche ANONYMES Interesse-Signal...');
   console.log('  🆔 Event-ID:', eventId.substring(0, 16) + '...');
+
+  // Leite temp-keypair aus secret ab
+  const tempKeypair = deriveKeypairFromSecret(tempSecret);
 
   const tags = [['e', eventId]];
   const content = reason || 'Interesse zurückgezogen';
 
-  const deleteEvent = await createEvent(5, content, tags, userPrivateKey);
+  // Löschung MUSS mit temp-privateKey erfolgen (gleicher wie Event!)
+  const deleteEvent = await createEvent(5, content, tags, tempKeypair.privateKey);
   await publishEvent(deleteEvent, [relay]);
 
-  console.log('  ✅ Interesse-Signal gelöscht');
+  console.log('  ✅ ANONYMES Interesse-Signal gelöscht');
 }
 
 /**
- * Prüfe ob User bereits Interesse gezeigt hat
+ * Prüfe ob User bereits Interesse gezeigt hat (lokal)
+ * 
+ * ANONYMITÄT:
+ * - Events sind mit temp-pubkeys signiert
+ * - Wir können NICHT auf Relay nach authors filtern
+ * - Lösung: Speichere temp-secrets lokal (sessionStorage)
  * 
  * @param offerId - ID des Angebots
- * @param userPubkey - Public Key des Users
- * @param relay - Relay-URL
- * @returns true wenn User bereits Interesse gezeigt hat
+ * @returns true wenn temp-secret für dieses Angebot existiert
  * 
  * @example
- * const hasInterest = await hasUserShownInterest(offerId, userPubkey, relay);
+ * const hasInterest = hasUserShownInterest(offerId);
  * if (hasInterest) {
  *   console.log("Du hast bereits Interesse gezeigt");
  * }
  */
-export async function hasUserShownInterest(
-  offerId: string,
-  userPubkey: string,
-  relay: string
-): Promise<boolean> {
-  const filter: NostrFilter = {
-    kinds: [30078],
-    authors: [userPubkey],
-    '#e': [offerId],
-    '#t': ['bitcoin-interest'],
-    limit: 1
-  };
+export function hasUserShownInterest(offerId: string): boolean {
+  const key = `interest-secret-${offerId}`;
+  return sessionStorage.getItem(key) !== null;
+}
 
-  const events = await fetchEvents([relay], filter);
-  return events.length > 0;
+/**
+ * Speichere temp-secret für Interesse-Signal (lokal)
+ * 
+ * @param offerId - ID des Angebots
+ * @param tempSecret - Temp-Secret vom Senden
+ * 
+ * @example
+ * const { tempSecret } = await sendInterestSignal(...);
+ * saveInterestSecret(offerId, tempSecret);
+ */
+export function saveInterestSecret(offerId: string, tempSecret: string): void {
+  const key = `interest-secret-${offerId}`;
+  sessionStorage.setItem(key, tempSecret);
+  console.log('💾 [INTEREST] Temp-Secret gespeichert für Offer:', offerId.substring(0, 16) + '...');
+}
+
+/**
+ * Lade temp-secret für Interesse-Signal (lokal)
+ * 
+ * @param offerId - ID des Angebots
+ * @returns Temp-Secret oder null
+ */
+export function getInterestSecret(offerId: string): string | null {
+  const key = `interest-secret-${offerId}`;
+  return sessionStorage.getItem(key);
+}
+
+/**
+ * Lösche temp-secret für Interesse-Signal (lokal)
+ * 
+ * @param offerId - ID des Angebots
+ */
+export function removeInterestSecret(offerId: string): void {
+  const key = `interest-secret-${offerId}`;
+  sessionStorage.removeItem(key);
+  console.log('🗑️ [INTEREST] Temp-Secret gelöscht für Offer:', offerId.substring(0, 16) + '...');
 }
 
 /**
@@ -274,38 +358,33 @@ export async function countInterestSignals(
 }
 
 /**
- * Lade eigene Interesse-Signale
+ * Lade eigene Interesse-Signale (lokal)
  * 
- * Lädt alle Interesse-Signale die der User selbst gesendet hat.
- * Nützlich für "Meine Interessen" Übersicht.
+ * ANONYMITÄT:
+ * - Events sind mit temp-pubkeys signiert
+ * - Wir können NICHT auf Relay nach authors filtern
+ * - Lösung: Lade aus sessionStorage
  * 
- * @param userPubkey - Public Key des Users
- * @param relay - Relay-URL
- * @returns Array von Event-IDs und Offer-IDs
+ * @returns Array von Offer-IDs mit temp-secrets
  * 
  * @example
- * const myInterests = await loadMyInterestSignals(userPubkey, relay);
+ * const myInterests = loadMyInterestSignals();
  * console.log(`Du hast ${myInterests.length} Interessen gezeigt`);
  */
-export async function loadMyInterestSignals(
-  userPubkey: string,
-  relay: string
-): Promise<Array<{ eventId: string; offerId: string; timestamp: number }>> {
-  const filter: NostrFilter = {
-    kinds: [30078],
-    authors: [userPubkey],
-    '#t': ['bitcoin-interest'],
-    limit: 100
-  };
-
-  const events = await fetchEvents([relay], filter);
-
-  return events.map(event => {
-    const offerTag = event.tags.find(t => t[0] === 'e' && t[3] === 'reply');
-    return {
-      eventId: event.id,
-      offerId: offerTag ? offerTag[1] : '',
-      timestamp: event.created_at
-    };
-  }).filter(i => i.offerId !== '');
+export function loadMyInterestSignals(): Array<{ offerId: string; tempSecret: string }> {
+  const interests: Array<{ offerId: string; tempSecret: string }> = [];
+  
+  // Durchsuche sessionStorage nach interest-secret-* Keys
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key && key.startsWith('interest-secret-')) {
+      const offerId = key.replace('interest-secret-', '');
+      const tempSecret = sessionStorage.getItem(key);
+      if (tempSecret) {
+        interests.push({ offerId, tempSecret });
+      }
+    }
+  }
+  
+  return interests;
 }

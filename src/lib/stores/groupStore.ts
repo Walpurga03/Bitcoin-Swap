@@ -18,12 +18,6 @@ import {
   loadOffers,
   hasActiveOffer as checkActiveOffer
 } from '$lib/nostr/marketplace';
-import {
-  sendInterest,
-  loadInterests,
-  withdrawInterest,
-  getInterestCount
-} from '$lib/nostr/nip17';
 
 // Group Store State
 interface GroupState {
