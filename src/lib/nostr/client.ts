@@ -3,6 +3,7 @@ import type { NostrEvent, NostrFilter, RelayConnection } from './types';
 import { deriveChannelId, encryptForGroup, decryptForGroup } from './crypto';
 import { RateLimiter } from '$lib/security/validation';
 import { GROUP_TAG, EVENT_KINDS, POPULAR_RELAYS } from '$lib/config';
+import { logger, nostrLogger, marketplaceLogger } from '$lib/utils/logger';
 
 // Globaler Pool für Relay-Verbindungen
 let pool: SimplePool | null = null;
@@ -24,19 +25,19 @@ export function initPool(): SimplePool {
  * Verbinde zu einem Relay
  */
 export async function connectToRelay(relayUrl: string): Promise<RelayConnection> {
-  console.log('🔗 [RELAY] Verbinde zu:', relayUrl);
+  nostrLogger.relay('Verbinde zu: ' + relayUrl);
   const pool = initPool();
   
   try {
     // Pool verwaltet Verbindungen automatisch
-    console.log('  ✅ Relay-Verbindung hergestellt:', relayUrl);
+    nostrLogger.relay('✅ Relay-Verbindung hergestellt: ' + relayUrl);
     return {
       url: relayUrl,
       connected: true,
       relay: pool
     };
   } catch (error) {
-    console.error(`Fehler beim Verbinden zu ${relayUrl}:`, error);
+    logger.error('Fehler beim Verbinden zu ' + relayUrl, error);
     return {
       url: relayUrl,
       connected: false
@@ -67,7 +68,7 @@ export async function createEvent(
     const signedEvent = finalizeEvent(event, privateKey as any);
     return signedEvent as NostrEvent;
   } catch (error) {
-    console.error('Fehler beim Erstellen des Events:', error);
+    logger.error('Fehler beim Erstellen des Events', error);
     throw new Error('Event konnte nicht erstellt werden');
   }
 }
@@ -79,9 +80,9 @@ export async function publishEvent(
   event: NostrEvent,
   relays: string[]
 ): Promise<{ success: boolean; relays: string[] }> {
-  console.log('📡 [PUBLISH] Starte Event-Publishing...');
-  console.log('  🆔 Event-ID:', event.id);
-  console.log('  📡 Ziel-Relays:', relays);
+  nostrLogger.event('Starte Event-Publishing...');
+  nostrLogger.event('Event-ID: ' + event.id);
+  nostrLogger.event('Ziel-Relays: ' + relays.join(', '));
   
   const pool = initPool();
   const successfulRelays: string[] = [];
@@ -95,27 +96,26 @@ export async function publishEvent(
     // Publiziere zu allen Relays
     const promises = relays.map(async (relay) => {
       try {
-        console.log('  ⏳ Sende zu:', relay);
+        nostrLogger.relay('⏳ Sende zu: ' + relay);
         await pool.publish([relay], event as Event);
         successfulRelays.push(relay);
-        console.log('  ✅ Erfolgreich:', relay);
+        nostrLogger.relay('✅ Erfolgreich: ' + relay);
       } catch (error) {
-        console.error(`  ❌ Fehler bei ${relay}:`, error);
+        logger.error('Fehler bei ' + relay, error);
       }
     });
 
     await Promise.all(promises);
 
-    console.log('📊 [PUBLISH] Ergebnis:');
-    console.log('  ✅ Erfolgreich:', successfulRelays.length + '/' + relays.length);
-    console.log('  📡 Erfolgreiche Relays:', successfulRelays);
+    nostrLogger.event('Ergebnis: ' + successfulRelays.length + '/' + relays.length + ' erfolgreich');
+    nostrLogger.relay('Erfolgreiche Relays: ' + successfulRelays.join(', '));
 
     return {
       success: successfulRelays.length > 0,
       relays: successfulRelays
     };
   } catch (error) {
-    console.error('Fehler beim Publizieren:', error);
+    logger.error('Fehler beim Publizieren', error);
     throw error;
   }
 }
@@ -128,34 +128,34 @@ export async function fetchEvents(
   filter: NostrFilter,
   timeout: number = 5000
 ): Promise<NostrEvent[]> {
-  console.log('🔍 [FETCH] Starte Event-Abfrage...');
-  console.log('  📡 Relays:', relays);
-  console.log('  🔎 Filter:', JSON.stringify(filter, null, 2));
-  console.log('  ⏱️ Timeout:', timeout + 'ms');
+  nostrLogger.event('Starte Event-Abfrage...');
+  nostrLogger.relay('Relays: ' + relays.join(', '));
+  logger.debug('Filter: ' + JSON.stringify(filter, null, 2));
+  logger.debug('Timeout: ' + timeout + 'ms');
   
   const pool = initPool();
   const events: NostrEvent[] = [];
   let eoseReceived = false;
 
   try {
-    console.log('  🔌 Alternative: Verwende pool.querySync()...');
+    logger.debug('Alternative: Verwende pool.querySync()...');
     
     // ⚠️ WORKAROUND: subscribeMany funktioniert nicht, verwende querySync
     // Dies ist eine synchrone Abfrage die Events direkt zurückgibt
     const fetchedEvents = await pool.querySync(relays, filter as any);
     
-    console.log('  📨 Events von querySync:', fetchedEvents.length);
+    logger.debug('Events von querySync: ' + fetchedEvents.length);
     
     fetchedEvents.forEach(event => {
-      console.log('    ├─ Event:', event.id.substring(0, 16) + '...', 'Tags:', event.tags?.map((t: any) => t[0]));
+      logger.debug('Event: ' + event.id.substring(0, 16) + '... Tags: ' + event.tags?.map((t: any) => t[0]).join(', '));
       events.push(event as NostrEvent);
     });
     
-    console.log('📊 [FETCH] Ergebnis:', events.length + ' Events geladen');
+    nostrLogger.event('Ergebnis: ' + events.length + ' Events geladen');
 
     return events;
   } catch (error) {
-    console.error('❌ [FETCH] Fehler beim Abrufen von Events:', error);
+    logger.error('Fehler beim Abrufen von Events', error);
     return events;
   }
 }
@@ -190,7 +190,7 @@ export async function createMarketplaceOffer(
 
     return event;
   } catch (error) {
-    console.error('Fehler beim Erstellen des Angebots:', error);
+    logger.error('Fehler beim Erstellen des Angebots', error);
     throw error;
   }
 }
@@ -213,7 +213,7 @@ export async function fetchMarketplaceOffers(
 
     const events = await fetchEvents(relays, filter);
     
-    console.log(`  🔍 Marketplace: ${events.length} Events mit #t=${GROUP_TAG} geladen`);
+    logger.debug('Marketplace: ' + events.length + ' Events mit #t=' + GROUP_TAG + ' geladen');
 
     // Entschlüssele Events
     const decryptedEvents = await Promise.all(
@@ -230,11 +230,11 @@ export async function fetchMarketplaceOffers(
 
     // Filtere ungültige Events
     const validEvents = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string }>;
-    console.log(`  � Marketplace: ${validEvents.length}/${events.length} Angebote erfolgreich entschlüsselt`);
+    logger.debug('Marketplace: ' + validEvents.length + '/' + events.length + ' Angebote erfolgreich entschlüsselt');
 
     return validEvents;
   } catch (error) {
-    console.error('Fehler beim Abrufen von Angeboten:', error);
+    logger.error('Fehler beim Abrufen von Angeboten', error);
     return [];
   }
 }
@@ -252,8 +252,8 @@ export async function sendOfferInterest(
   relays: string[]
 ): Promise<NostrEvent> {
   try {
-    console.log('💌 [INTEREST] Sende Interesse an Angebot:', offerId.substring(0, 16) + '...');
-    console.log('  👤 Name:', userName);
+    marketplaceLogger.interest('Sende Interesse an Angebot: ' + offerId.substring(0, 16) + '...');
+    logger.debug('Name: ' + userName);
     
     const { encryptMetadata } = await import('$lib/nostr/crypto');
     
@@ -277,17 +277,17 @@ export async function sendOfferInterest(
       // ❌ ENTFERNT: ['name', userName] - jetzt verschlüsselt
     ];
 
-    console.log('  📋 Tags (pubkey-sicher):', tags.map(t => t[0]));
-    console.log('  🔐 Metadaten encrypted: pubkey, name, message');
+    logger.debug('Tags (pubkey-sicher): ' + tags.map(t => t[0]).join(', '));
+    logger.debug('Metadaten encrypted: pubkey, name, message');
 
     const event = await createEvent(1, encrypted, tags, privateKey);
     const result = await publishEvent(event, relays);
     
-    console.log('  ✅ Interesse gesendet:', result.relays.length + '/' + relays.length + ' Relays');
+    marketplaceLogger.interest('✅ Interesse gesendet: ' + result.relays.length + '/' + relays.length + ' Relays');
 
     return event;
   } catch (error) {
-    console.error('❌ [INTEREST] Fehler beim Senden des Interesses:', error);
+    logger.error('Fehler beim Senden des Interesses', error);
     throw error;
   }
 }
@@ -301,7 +301,7 @@ export async function fetchOfferInterests(
   relays: string[]
 ): Promise<Array<NostrEvent & { decrypted?: string; offerId?: string }>> {
   try {
-    console.log('💌 [INTERESTS] Lade Interesse-Events für', offerIds.length, 'Angebote...');
+    marketplaceLogger.interest('Lade Interesse-Events für ' + offerIds.length + ' Angebote...');
     
     if (offerIds.length === 0) {
       return [];
@@ -315,11 +315,11 @@ export async function fetchOfferInterests(
       limit: 500
     } as NostrFilter;
 
-    console.log('  🔍 Filter:', JSON.stringify(filter, null, 2));
+    logger.debug('Filter: ' + JSON.stringify(filter, null, 2));
 
     const events = await fetchEvents(relays, filter);
     
-    console.log('  📦 Gefundene Events:', events.length);
+    logger.debug('Gefundene Events: ' + events.length);
 
     // Entschlüssele und mappe zu Angebots-IDs
     const decryptedEvents = await Promise.all(
@@ -343,11 +343,11 @@ export async function fetchOfferInterests(
 
     const validInterests = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string; offerId?: string }>;
     
-    console.log('  ✅ Entschlüsselte Interessen:', validInterests.length);
+    marketplaceLogger.interest('✅ Entschlüsselte Interessen: ' + validInterests.length);
 
     return validInterests;
   } catch (error) {
-    console.error('❌ [INTERESTS] Fehler beim Laden:', error);
+    logger.error('Fehler beim Laden von Interessen', error);
     return [];
   }
 }
@@ -370,7 +370,7 @@ export async function deleteEvent(
 
     return event;
   } catch (error) {
-    console.error('Fehler beim Löschen des Events:', error);
+    logger.error('Fehler beim Löschen des Events', error);
     throw error;
   }
 }
@@ -390,10 +390,10 @@ export async function createDealRoom(
   relays: string[]
 ): Promise<NostrEvent> {
   try {
-    console.log('🏠 [DEAL-ROOM] Erstelle Deal-Room...');
-    console.log('  📋 Offer-ID:', offerId.substring(0, 16) + '...');
-    console.log('  👤 Seller:', sellerPubkey.substring(0, 16) + '...');
-    console.log('  👤 Buyer:', buyerPubkey.substring(0, 16) + '...');
+    marketplaceLogger.deal('Erstelle Deal-Room...');
+    logger.debug('Offer-ID: ' + offerId.substring(0, 16) + '...');
+    logger.debug('Seller: ' + sellerPubkey.substring(0, 16) + '...');
+    logger.debug('Buyer: ' + buyerPubkey.substring(0, 16) + '...');
 
     // 🔐 VERBESSERUNG: Pubkeys gehören in verschlüsselte Metadaten!
     const metadata = {
@@ -420,17 +420,17 @@ export async function createDealRoom(
       // ❌ ENTFERNT: ['p', buyerPubkey] - jetzt verschlüsselt
     ];
 
-    console.log('  🏷️ Deal-Room Tags (pubkey-sicher):', tags.map(t => t[0]));
-    console.log('  🔐 Pubkeys encrypted: seller + buyer in metadata');
+    logger.debug('Deal-Room Tags (pubkey-sicher): ' + tags.map(t => t[0]).join(', '));
+    logger.debug('Pubkeys encrypted: seller + buyer in metadata');
 
     const event = await createEvent(30080, encrypted, tags, privateKey);
     const result = await publishEvent(event, relays);
 
-    console.log('  ✅ Deal-Room erstellt:', result.relays.length + '/' + relays.length + ' Relays');
+    marketplaceLogger.deal('✅ Deal-Room erstellt: ' + result.relays.length + '/' + relays.length + ' Relays');
 
     return event;
   } catch (error) {
-    console.error('❌ [DEAL-ROOM] Fehler beim Erstellen:', error);
+    logger.error('Fehler beim Erstellen des Deal-Rooms', error);
     throw error;
   }
 }
@@ -444,7 +444,7 @@ export async function fetchDealRooms(
   relays: string[]
 ): Promise<Array<NostrEvent & { decrypted?: any }>> {
   try {
-    console.log('🏠 [DEAL-ROOMS] Lade Deal-Rooms für User:', userPubkey.substring(0, 16) + '...');
+    marketplaceLogger.deal('Lade Deal-Rooms für User: ' + userPubkey.substring(0, 16) + '...');
 
     // Filter für Deal-Rooms wo User Teilnehmer ist
     const filter = {
@@ -455,7 +455,7 @@ export async function fetchDealRooms(
     } as NostrFilter;
 
     const events = await fetchEvents(relays, filter);
-    console.log('  📦 Gefundene Deal-Rooms:', events.length);
+    logger.debug('Gefundene Deal-Rooms: ' + events.length);
 
     // Parse Metadata (neue Events sind plain JSON, alte Events sind verschlüsselt)
     const decryptedEvents = await Promise.all(
@@ -471,7 +471,7 @@ export async function fetchDealRooms(
             const parsed = JSON.parse(decrypted);
             return { ...event, decrypted: parsed };
           } catch (decryptError) {
-            console.error('  ⚠️ Weder JSON noch Entschlüsselung möglich für Event:', event.id.substring(0, 16));
+            logger.warn('Weder JSON noch Entschlüsselung möglich für Event: ' + event.id.substring(0, 16));
             return null;
           }
         }
@@ -479,11 +479,11 @@ export async function fetchDealRooms(
     );
 
     const validRooms = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: any }>;
-    console.log('  ✅ Entschlüsselte Deal-Rooms:', validRooms.length);
+    marketplaceLogger.deal('✅ Entschlüsselte Deal-Rooms: ' + validRooms.length);
 
     return validRooms;
   } catch (error) {
-    console.error('❌ [DEAL-ROOMS] Fehler beim Laden:', error);
+    logger.error('Fehler beim Laden von Deal-Rooms', error);
     return [];
   }
 }
@@ -502,8 +502,8 @@ export async function sendDealMessage(
   relays: string[]
 ): Promise<NostrEvent> {
   try {
-    console.log('💬 [DEAL-MSG] Sende NIP-17 Nachricht im Deal-Room:', dealId);
-    console.log('  📨 Recipient:', recipientPubkey.substring(0, 16) + '...');
+    logger.info('Sende NIP-17 Nachricht im Deal-Room: ' + dealId);
+    logger.debug('Recipient: ' + recipientPubkey.substring(0, 16) + '...');
     
     const { createNIP17Message } = await import('$lib/nostr/crypto');
     
@@ -515,16 +515,16 @@ export async function sendDealMessage(
       privateKey
     );
 
-    console.log('  🎁 NIP-17 Message erstellt (nur Recipient kann lesen)');
+    logger.debug('NIP-17 Message erstellt (nur Recipient kann lesen)');
     
     // Veröffentliche wrapped Event
     const result = await publishEvent(wrappedEvent as NostrEvent, relays);
 
-    console.log('  ✅ Nachricht gesendet:', result.relays.length + '/' + relays.length + ' Relays');
+    logger.success('Nachricht gesendet: ' + result.relays.length + '/' + relays.length + ' Relays');
 
     return wrappedEvent as NostrEvent;
   } catch (error) {
-    console.error('❌ [DEAL-MSG] Fehler beim Senden:', error);
+    logger.error('Fehler beim Senden der Deal-Message', error);
     throw error;
   }
 }
@@ -543,7 +543,7 @@ export async function fetchDealMessages(
   limit: number = 100
 ): Promise<Array<NostrEvent & { decrypted?: string; senderPubkey?: string }>> {
   try {
-    console.log('💬 [DEAL-MSGS] Lade NIP-17 Nachrichten für Deal-Room:', dealId);
+    logger.info('Lade NIP-17 Nachrichten für Deal-Room: ' + dealId);
 
     const { decryptNIP17Message } = await import('$lib/nostr/crypto');
     
@@ -559,7 +559,7 @@ export async function fetchDealMessages(
     }
 
     const events = await fetchEvents(relays, filter);
-    console.log('  📦 Gefundene NIP-17 Messages:', events.length);
+    logger.debug('Gefundene NIP-17 Messages: ' + events.length);
 
     // Entschlüssele NIP-17 Messages
     const decryptedEvents = await Promise.all(
@@ -572,18 +572,18 @@ export async function fetchDealMessages(
             senderPubkey: decrypted.senderPubkey
           };
         } catch (error) {
-          console.warn('⚠️ NIP-17 Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16));
+          logger.warn('NIP-17 Entschlüsselung fehlgeschlagen für Event: ' + event.id.substring(0, 16));
           return null;
         }
       })
     );
 
     const validMessages = decryptedEvents.filter(e => e !== null) as Array<NostrEvent & { decrypted?: string; senderPubkey?: string }>;
-    console.log('  ✅ Entschlüsselte NIP-17 Nachrichten:', validMessages.length);
+    logger.info('✅ Entschlüsselte NIP-17 Nachrichten: ' + validMessages.length);
 
     return validMessages;
   } catch (error) {
-    console.error('❌ [DEAL-MSGS] Fehler beim Laden:', error);
+    logger.error('Fehler beim Laden von Deal-Messages', error);
     return [];
   }
 }
@@ -597,12 +597,12 @@ export async function fetchUserProfile(
   relays?: string[]
 ): Promise<{ name?: string; display_name?: string; nip05?: string } | null> {
   try {
-    console.log('👤 [PROFILE] Lade Profil für:', pubkey.substring(0, 16) + '...');
+    nostrLogger.profile('Lade Profil für: ' + pubkey.substring(0, 16) + '...');
 
     // Populäre Relays für Profil-Suche (falls nicht angegeben)
     const profileRelays = relays || POPULAR_RELAYS;
 
-    console.log('  📡 Suche auf', profileRelays.length, 'Relays...');
+    logger.debug('Suche auf ' + profileRelays.length + ' Relays...');
 
     // Filter für Kind 0 (Metadata) Events
     const filter = {
@@ -614,7 +614,7 @@ export async function fetchUserProfile(
     const events = await fetchEvents(profileRelays, filter, 3000);
 
     if (events.length === 0) {
-      console.log('  ⚠️ Kein Profil gefunden');
+      logger.warn('Kein Profil gefunden');
       return null;
     }
 
@@ -623,7 +623,7 @@ export async function fetchUserProfile(
     
     try {
       const metadata = JSON.parse(latestEvent.content);
-      console.log('  ✅ Profil gefunden:', metadata.name || metadata.display_name || metadata.nip05 || 'Unbekannt');
+      nostrLogger.profile('✅ Profil gefunden: ' + (metadata.name || metadata.display_name || metadata.nip05 || 'Unbekannt'));
       
       return {
         name: metadata.name,
@@ -631,11 +631,11 @@ export async function fetchUserProfile(
         nip05: metadata.nip05
       };
     } catch (error) {
-      console.error('  ❌ Fehler beim Parsen des Profils:', error);
+      logger.error('Fehler beim Parsen des Profils', error);
       return null;
     }
   } catch (error) {
-    console.error('❌ [PROFILE] Fehler beim Laden:', error);
+    logger.error('Fehler beim Laden des Profils', error);
     return null;
   }
 }
