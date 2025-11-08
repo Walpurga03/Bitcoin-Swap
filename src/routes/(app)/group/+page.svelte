@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
+  import { logger, marketplaceLogger, securityLogger } from '$lib/utils/logger';
   
 
   import { formatTimestamp, truncatePubkey, getTimeRemaining, isExpiringSoon } from '$lib/utils';
@@ -75,11 +76,11 @@
     if (!$userStore.pubkey || !$groupStore.relay) return;
 
     try {
-      console.log('📥 [MY-DEALS] Lade meine Deals...');
+      marketplaceLogger.deal('Lade meine Deals...');
       
       myDeals = await loadMyDeals($userStore.pubkey, $groupStore.relay);
       
-      console.log('✅ [MY-DEALS] Gefunden:', myDeals.length, 'Deals');
+      marketplaceLogger.deal('✅ Gefunden: ' + myDeals.length + ' Deals');
       
       // Extrahiere Offer-IDs mit aktivem Deal
       myInterestOfferIds.clear();
@@ -98,7 +99,7 @@
       
       myInterestOfferIds = myInterestOfferIds; // Trigger Svelte reactivity
     } catch (e) {
-      console.warn('⚠️ [MY-DEALS] Fehler beim Laden:', e);
+      logger.warn('Fehler beim Laden von Deals', e);
     }
   }
 
@@ -115,38 +116,27 @@
 
   async function loadAllOffers() {
     if (!$groupStore.relay || !$groupStore.channelId) {
-      console.warn('⚠️ [LOAD-OFFERS] Abbruch - Relay oder ChannelId fehlt:', {
-        relay: $groupStore.relay || 'fehlt',
-        channelId: $groupStore.channelId || 'fehlt'
-      });
+      logger.warn('Abbruch - Relay oder ChannelId fehlt: relay=' + ($groupStore.relay || 'fehlt') + ', channelId=' + ($groupStore.channelId || 'fehlt'));
       return;
     }
 
     // Wenn bereits ein Load läuft, überspringe diesen Call
     if (isLoadingOffers) {
-      console.log('⏸️ [LOAD-OFFERS] Übersprungen - läuft bereits');
+      logger.debug('Load-Offers übersprungen - läuft bereits');
       return;
     }
     
     try {
       isLoadingOffers = true;
-      console.log('🔍 [LOAD-OFFERS] Relay:', $groupStore.relay);
-      console.log('🔍 [LOAD-OFFERS] Channel ID:', $groupStore.channelId);
-      console.log('🔍 [LOAD-OFFERS] Secret Hash:', $groupStore.secret ? 'vorhanden' : 'fehlt');
-      console.log('🔍 [LOAD-OFFERS] Eigener temp_pubkey:', offerKeypair?.publicKey?.substring(0, 16) + '...' || 'keiner');
+      logger.debug('Load-Offers: relay=' + $groupStore.relay);
+      logger.debug('Load-Offers: channelId=' + $groupStore.channelId);
+      logger.debug('Load-Offers: secretHash=' + ($groupStore.secret ? 'vorhanden' : 'fehlt'));
+      logger.debug('Load-Offers: eigener temp_pubkey=' + (offerKeypair?.publicKey?.substring(0, 16) + '...' || 'keiner'));
       
       const ownTempPubkey = offerKeypair?.publicKey;
       offers = await loadOffers($groupStore.relay, $groupStore.channelId, ownTempPubkey, $groupStore.secretHash);
       
-      console.log('📊 [LOAD-OFFERS] Ergebnis:', {
-        anzahl: offers.length,
-        offers: offers.map(o => ({
-          id: o.id.substring(0, 16) + '...',
-          tempPubkey: o.tempPubkey.substring(0, 16) + '...',
-          content: o.content.substring(0, 30) + '...',
-          isOwn: o.isOwnOffer
-        }))
-      });
+      logger.debug('Load-Offers Ergebnis: ' + offers.length + ' Angebote');
       
       // Lade Interesse-Signal-Counts nur für EIGENE Angebote (Performance-Optimierung)
       for (const offer of offers) {
@@ -156,9 +146,9 @@
         }
       }
       
-      console.log(`✅ ${offers.length} Angebote geladen`);
+      marketplaceLogger.offer('✅ ' + offers.length + ' Angebote geladen');
     } catch (e) {
-      console.error('❌ Fehler beim Laden der Angebote:', e);
+      logger.error('Fehler beim Laden der Angebote', e);
     } finally {
       isLoadingOffers = false;
     }
@@ -169,7 +159,7 @@
       await navigator.clipboard.writeText(text);
       alert(`✅ Public Key kopiert!\n\n${text}\n\nDu kannst den User nun außerhalb der App kontaktieren.`);
     } catch (err) {
-      console.error('Fehler beim Kopieren:', err);
+      logger.error('Fehler beim Kopieren', err);
       prompt('Public Key (kopiere ihn manuell):', text);
     }
   }
@@ -181,7 +171,7 @@
       return;
     }
     try {
-      console.log('🚀 [PAGE] onMount - Lade Daten...');
+      logger.info('onMount - Lade Daten...');
       
       // 🔐 Lade Admin-Status dynamisch von Nostr
       const group = $groupStore;
@@ -196,27 +186,23 @@
           const isCurrentUserAdmin = adminPubkey?.toLowerCase() === userPubkey?.toLowerCase();
           isAdmin = isCurrentUserAdmin;
           
-          console.log('🔐 [ADMIN-CHECK]', {
-            adminPubkey: adminPubkey?.substring(0, 16) + '...',
-            userPubkey: userPubkey?.substring(0, 16) + '...',
-            isAdmin: isCurrentUserAdmin ? '✅ JA' : '❌ NEIN'
-          });
+          securityLogger.admin('Admin-Check: adminPubkey=' + (adminPubkey?.substring(0, 16) + '...') + ', userPubkey=' + (userPubkey?.substring(0, 16) + '...') + ', isAdmin=' + (isCurrentUserAdmin ? 'JA' : 'NEIN'));
         } catch (adminCheckError) {
-          console.warn('⚠️ [ADMIN-CHECK] Fehler:', adminCheckError);
+          logger.warn('Admin-Check Fehler', adminCheckError);
           isAdmin = false;
         }
       }
       
       // Secret-basiertes System - lade aus sessionStorage
-      console.log('💡 [PAGE] Verwende Secret-basiertes System (sessionStorage)');
+      logger.debug('Verwende Secret-basiertes System (sessionStorage)');
       const savedSecret = sessionStorage.getItem('offerSecret');
       if (savedSecret) {
         try {
           offerSecret = savedSecret;
           offerKeypair = deriveKeypairFromSecret(savedSecret);
-          console.log('✅ [SECRET] Aus sessionStorage geladen');
+          logger.success('Secret aus sessionStorage geladen');
         } catch (e) {
-          console.warn('⚠️ [SECRET] Ungültiges Secret in sessionStorage:', e);
+          logger.warn('Ungültiges Secret in sessionStorage', e);
           sessionStorage.removeItem('offerSecret');
         }
       }
@@ -233,12 +219,12 @@
           await loadAllOffers();
           await loadMyDealsFromRelay();
         } catch (e) {
-          console.error('Auto-Refresh Fehler:', e);
+          logger.error('Auto-Refresh Fehler', e);
         }
       }, 10000);
 
     } catch (e: any) {
-      console.error('❌ [PAGE] Fehler beim Laden:', e);
+      logger.error('Fehler beim Laden der Daten', e);
       error = e.message || 'Fehler beim Laden der Daten';
     }
   });
@@ -268,7 +254,7 @@
         offerSecret = generateOfferSecret();
         offerKeypair = deriveKeypairFromSecret(offerSecret);
         sessionStorage.setItem('offerSecret', offerSecret);
-        console.log('✅ Neues Angebots-Secret generiert (deterministisches Keypair)');
+        logger.success('Neues Angebots-Secret generiert (deterministisches Keypair)');
       }
 
       // Erstelle Angebot
@@ -350,12 +336,8 @@
       loading = true;
       error = '⏳ Interesse wird gesendet...';
 
-      console.log('📤 [INTEREST] Sende ANONYMES Interesse für Angebot:', offer.id.substring(0, 16) + '...');
-      console.log('🔍 [DEBUG] Offer-Daten:', {
-        authorPubkey: offer.authorPubkey?.substring(0, 16) + '...' || 'NICHT VORHANDEN',
-        tempPubkey: offer.tempPubkey.substring(0, 16) + '...',
-        verwendetKey: offer.tempPubkey.substring(0, 16) + '... (TEMP-PUBKEY für Verschlüsselung)'
-      });
+      marketplaceLogger.interest('Sende ANONYMES Interesse für Angebot: ' + offer.id.substring(0, 16) + '...');
+      logger.debug('Offer-Daten: authorPubkey=' + (offer.authorPubkey?.substring(0, 16) + '...' || 'NICHT VORHANDEN') + ', tempPubkey=' + offer.tempPubkey.substring(0, 16) + '... (TEMP-PUBKEY für Verschlüsselung)');
 
       // Sende ANONYMES Interesse-Signal (mit temp-keypair)
       const { sendInterestSignal, saveInterestSecret } = await import('$lib/nostr/interestSignal');
@@ -372,9 +354,7 @@
       // ✅ Speichere temp-secret für spätere Löschung
       saveInterestSecret(offer.id, tempSecret);
 
-      console.log('✅ [INTEREST] ANONYMES Interesse gesendet');
-      console.log('  🎭 Event signiert mit temp-pubkey');
-      console.log('  💾 Temp-Secret gespeichert für Löschung');
+      marketplaceLogger.interest('✅ ANONYMES Interesse gesendet (temp-pubkey signiert, temp-secret gespeichert)');
       
       // Merke, dass ich Interesse gezeigt habe
       myInterestOfferIds.add(offer.id);
@@ -384,7 +364,7 @@
       alert(`✅ Interesse gezeigt!\n\n⏳ Warte auf Auswahl durch den Angebotsgeber.\n\n🎭 Dein Interesse ist vollständig anonym!`);
       
     } catch (e: any) {
-      console.error('❌ Fehler beim Senden des Interesses:', e);
+      logger.error('Fehler beim Senden des Interesses', e);
       error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
     } finally {
       loading = false;
@@ -409,7 +389,7 @@
     try {
       loading = true;
       selectedOffer = offer;
-      console.log('📋 [ANGEBOTSGEBER] Lade Interesse-Signale für mein Angebot...');
+      marketplaceLogger.interest('Lade Interesse-Signale für mein Angebot...');
       
       // Lade Interesse-Signale
       const { loadInterestSignals } = await import('$lib/nostr/interestSignal');
@@ -426,12 +406,12 @@
         timestamp: signal.timestamp
       }));
       
-      console.log(`📊 [ANGEBOTSGEBER] ${interests.length} Interesse-Signale gefunden`);
+      marketplaceLogger.interest(`Interesse-Signale gefunden: ${interests.length}`);
       
       showInterestList = true;
       loading = false;
     } catch (e: any) {
-      console.error('❌ Fehler beim Laden der Interesse-Signale:', e);
+      logger.error('Fehler beim Laden der Interesse-Signale', e);
       error = '❌ ' + (e.message || 'Fehler beim Laden der Interesse-Signale');
       loading = false;
     }
@@ -446,7 +426,7 @@
     try {
       loading = true;
       error = '⏳ Erstelle Deal...';
-      console.log('🤝 [DEAL] Erstelle Deal mit:', selectedPubkey.substring(0, 16) + '...');
+      marketplaceLogger.deal('Erstelle Deal mit: ' + selectedPubkey.substring(0, 16) + '...');
 
       // Erstelle Deal
       await createDeal(
@@ -457,7 +437,7 @@
         $groupStore.relay
       );
 
-      console.log('✅ [DEAL] Deal erstellt');
+      marketplaceLogger.deal('✅ Deal erstellt');
 
       // Lösche Angebot
       await deleteOfferMarketplace(
@@ -467,7 +447,7 @@
         $groupStore.relay
       );
 
-      console.log('🗑️ [OFFER] Angebot gelöscht');
+      marketplaceLogger.offer('��️ Angebot gelöscht');
 
       // UI aufräumen
       showInterestList = false;
@@ -481,7 +461,7 @@
 
       alert('✅ Deal erstellt!\n\nDu kannst jetzt mit dem ausgewählten Partner außerhalb der App kommunizieren.');
     } catch (e: any) {
-      console.error('❌ Fehler beim Erstellen des Deals:', e);
+      logger.error('Fehler beim Erstellen des Deals', e);
       error = '❌ ' + (e.message || 'Fehler beim Erstellen des Deals');
     } finally {
       loading = false;
@@ -508,7 +488,7 @@
       loading = true;
       error = '';
 
-      console.log('🗑️ [DELETE-OFFER] Lösche Angebot:', offer.id.substring(0, 8) + '...');
+      marketplaceLogger.offer('Lösche Angebot: ' + offer.id.substring(0, 8) + '...');
 
       // WICHTIG: Verwende Angebots-Keypair, da das Angebot damit erstellt wurde!
       if (!offerKeypair?.privateKey) {
@@ -522,7 +502,7 @@
         $groupStore.relay
       );
 
-      console.log('✅ [DELETE-OFFER] Angebot gelöscht');
+      marketplaceLogger.offer('✅ Angebot gelöscht');
       
       // Reset Zustand
       offerSecret = null;
@@ -535,7 +515,7 @@
       alert('✅ Angebot erfolgreich gelöscht!');
       
     } catch (e: any) {
-      console.error('❌ Fehler beim Löschen des Angebots:', e);
+      logger.error('Fehler beim Löschen des Angebots', e);
       error = '❌ Fehler beim Löschen: ' + (e.message || 'Unbekannter Fehler');
     } finally {
       loading = false;
@@ -553,7 +533,7 @@
       loading = true;
       error = '';
 
-      console.log('🔐 [SECRET-LOGIN] Validiere Secret...');
+      logger.info('Validiere Secret...');
 
       if (!validateOfferSecret(secret)) {
         throw new Error('Ungültiges Secret-Format');
@@ -564,8 +544,8 @@
       offerKeypair = deriveKeypairFromSecret(secret);
       sessionStorage.setItem('offerSecret', secret);
 
-      console.log('✅ [SECRET-LOGIN] Keypair erfolgreich abgeleitet');
-      console.log('  📋 Public Key:', offerKeypair.publicKey.substring(0, 16) + '...');
+      logger.success('Keypair erfolgreich abgeleitet');
+      logger.debug('Public Key: ' + offerKeypair.publicKey.substring(0, 16) + '...');
 
       // Lade Angebote neu
       await loadAllOffers();
@@ -573,7 +553,7 @@
       alert('✅ Erfolgreich mit Secret angemeldet!\n\nDu kannst jetzt dein Angebot verwalten.');
       
     } catch (e: any) {
-      console.error('❌ [SECRET-LOGIN] Fehler:', e);
+      logger.error('Secret-Login Fehler', e);
       error = '❌ Fehler beim Login: ' + (e.message || 'Unbekannter Fehler');
       offerSecret = null;
       offerKeypair = null;
@@ -647,7 +627,7 @@
                 await loadMyDealsFromRelay();
                 alert('✅ Deal als abgeschlossen markiert!');
               } catch (e) {
-                console.error('❌ Fehler beim Abschließen:', e);
+                logger.error('Fehler beim Abschließen', e);
                 alert('❌ Fehler beim Abschließen des Deals');
               }
             }}
@@ -659,7 +639,7 @@
                 await loadMyDealsFromRelay();
                 alert('❌ Deal abgebrochen');
               } catch (e) {
-                console.error('❌ Fehler beim Abbrechen:', e);
+                logger.error('Fehler beim Abbrechen', e);
                 alert('❌ Fehler beim Abbrechen des Deals');
               }
             }}

@@ -6,7 +6,8 @@
  * - Production: Nur Errors werden ausgegeben
  */
 
-const isDev = import.meta.env?.DEV ?? true;
+// @ts-ignore - Vite sets import.meta.env.MODE
+const isDev = import.meta.env.MODE === 'development';
 
 /**
  * Log-Levels
