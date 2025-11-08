@@ -1,4 +1,5 @@
 import { nip19 } from 'nostr-tools';
+  import { logger } from '$lib/utils/logger';
 import type { WhitelistData } from '$lib/nostr/whitelist';
 
 /**
@@ -134,7 +135,7 @@ export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): 
 
     // Wenn keine Whitelist vorhanden, verweigere Zugriff
     if (!whitelist) {
-      console.warn('⚠️ Keine Whitelist verfügbar - Zugriff verweigert');
+      logger.warn('⚠️ Keine Whitelist verfügbar - Zugriff verweigert');
       return false;
     }
 
@@ -148,7 +149,7 @@ export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): 
 
     return false;
   } catch (error) {
-    console.error('❌ Fehler bei Whitelist-Prüfung:', error);
+    logger.error('❌ Fehler bei Whitelist-Prüfung:', error);
     return false;
   }
 }
@@ -159,13 +160,13 @@ export function validateEventSignature(event: any): boolean {
     const { verifySignature } = require('nostr-tools');
     
     if (!event.id || !event.sig || !event.pubkey) {
-      console.warn('⚠️ Event fehlen erforderliche Felder (id, sig, pubkey)');
+      logger.warn('⚠️ Event fehlen erforderliche Felder (id, sig, pubkey)');
       return false;
     }
 
     // Prüfe Signatur-Format (128 Hex-Zeichen)
     if (!/^[0-9a-f]{128}$/i.test(event.sig)) {
-      console.warn('⚠️ Ungültiges Signatur-Format');
+      logger.warn('⚠️ Ungültiges Signatur-Format');
       return false;
     }
 
@@ -173,12 +174,12 @@ export function validateEventSignature(event: any): boolean {
     const isValid = verifySignature(event);
     
     if (!isValid) {
-      console.warn('⚠️ Event-Signatur ungültig für:', event.id.substring(0, 16) + '...');
+      logger.warn('⚠️ Event-Signatur ungültig für:', event.id.substring(0, 16) + '...');
     }
     
     return isValid;
   } catch (error) {
-    console.error('❌ Fehler bei Signatur-Validierung:', error);
+    logger.error('❌ Fehler bei Signatur-Validierung:', error);
     return false;
   }
 }

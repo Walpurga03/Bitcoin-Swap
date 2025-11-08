@@ -13,6 +13,7 @@
  */
 
 import { sha256 } from '@noble/hashes/sha256';
+  import { logger } from '$lib/utils/logger';
 import { getPublicKey } from 'nostr-tools';
 import { bytesToHex } from '@noble/hashes/utils';
 
@@ -50,7 +51,7 @@ export function generateOfferSecret(): string {
  * @example
  * const secret = "a1b2c3d4...";
  * const keypair = deriveKeypairFromSecret(secret);
- * console.log(keypair.publicKey); // "npub1..."
+ * logger.debug(keypair.publicKey); // "npub1..."
  */
 export function deriveKeypairFromSecret(secret: string): OfferKeypair {
   // Validiere Secret-Format
@@ -169,7 +170,7 @@ export function areSecretsEqual(secret1: string, secret2: string): boolean {
  * 
  * @example
  * const backup = createSecretBackup(secret, "Verkaufe 0.01 BTC");
- * console.log(backup);
+ * logger.debug(backup);
  * // "=== ANGEBOTS-SECRET BACKUP ===
  * //  Angebot: Verkaufe 0.01 BTC
  * //  Secret: a1b2c3d4 e5f6g7h8 ...

@@ -23,6 +23,7 @@ import type { NostrEvent, NostrFilter } from './types';
 import { createEvent, publishEvent, fetchEvents } from './client';
 import { GROUP_TAG } from '$lib/config';
 import { generateOfferSecret, deriveKeypairFromSecret } from './offerSecret';
+import { logger, marketplaceLogger } from '$lib/utils/logger';
 
 /**
  * Interface für Interesse-Signal (verschlüsselter Content)
@@ -82,18 +83,18 @@ export async function sendInterestSignal(
   userPrivateKey: string,
   relay: string
 ): Promise<{ event: NostrEvent; tempSecret: string }> {
-  console.log('💌 [INTEREST-SIGNAL] Sende ANONYMES verschlüsseltes Interesse-Signal...');
-  console.log('  � VERSION: 2024-11-07-18:15 - NEUE VERSCHLÜSSELUNG');
-  console.log('  �📋 Offer-ID:', offerId.substring(0, 16) + '...');
-  console.log('  👤 User:', userName);
+  marketplaceLogger.interest(' [INTEREST-SIGNAL] Sende ANONYMES verschlüsseltes Interesse-Signal...');
+  logger.debug('� VERSION: 2024-11-07-18:15 - NEUE VERSCHLÜSSELUNG');
+  logger.debug('�📋 Offer-ID:', offerId.substring(0, 16) + '...');
+  logger.debug('👤 User:', userName);
 
   const userPubkey = getPublicKey(userPrivateKey as any);
 
   // 🔐 ANONYMITÄT: Generiere temporäres Keypair
   const tempSecret = generateOfferSecret();
   const tempKeypair = deriveKeypairFromSecret(tempSecret);
-  console.log('  🎭 Temp-Pubkey:', tempKeypair.publicKey.substring(0, 16) + '...');
-  console.log('  👤 Echter Pubkey:', userPubkey.substring(0, 16) + '... (nur verschlüsselt)');
+  logger.debug('🎭 Temp-Pubkey:', tempKeypair.publicKey.substring(0, 16) + '...');
+  logger.debug('👤 Echter Pubkey:', userPubkey.substring(0, 16) + '... (nur verschlüsselt)');
 
   // Erstelle Signal-Daten (mit ECHTEM Pubkey)
   const signal: InterestSignal = {
@@ -113,7 +114,7 @@ export async function sendInterestSignal(
     JSON.stringify(signal)
   );
 
-  console.log('  🔐 Signal verschlüsselt mit temp-keypair (nur Anbieter kann lesen)');
+  logger.debug('🔐 Signal verschlüsselt mit temp-keypair (nur Anbieter kann lesen)');
 
   // 🎭 ANONYMITÄT: Event wird mit TEMP-KEYPAIR signiert!
   const tags = [
@@ -128,8 +129,8 @@ export async function sendInterestSignal(
   const event = await createEvent(30078, encrypted, tags, tempKeypair.privateKey);
   const result = await publishEvent(event, [relay]);
 
-  console.log('  ✅ ANONYMES Interesse-Signal gesendet:', result.relays.length + '/' + 1 + ' Relays');
-  console.log('  💾 Speichere temp-secret um später löschen zu können!');
+  logger.debug('✅ ANONYMES Interesse-Signal gesendet:', result.relays.length + '/' + 1 + ' Relays');
+  logger.debug('💾 Speichere temp-secret um später löschen zu können!');
 
   return { event, tempSecret };
 }
@@ -151,16 +152,16 @@ export async function sendInterestSignal(
  * 
  * @example
  * const interests = await loadInterestSignals(offerId, offerPrivateKey, relay);
- * console.log(`${interests.length} Interessenten gefunden`);
+ * logger.debug(`${interests.length} Interessenten gefunden`);
  */
 export async function loadInterestSignals(
   offerId: string,
   offerPrivateKey: string,
   relay: string
 ): Promise<DecryptedInterestSignal[]> {
-  console.log('💌 [INTEREST-SIGNALS] Lade ANONYME Interesse-Signale...');
-  console.log('  � VERSION: 2024-11-07-18:15 - NEUE ENTSCHLÜSSELUNG');
-  console.log('  �📋 Offer-ID:', offerId.substring(0, 16) + '...');
+  marketplaceLogger.interest(' [INTEREST-SIGNALS] Lade ANONYME Interesse-Signale...');
+  logger.debug('� VERSION: 2024-11-07-18:15 - NEUE ENTSCHLÜSSELUNG');
+  logger.debug('�📋 Offer-ID:', offerId.substring(0, 16) + '...');
 
   // Filter für Interesse-Signale
   const filter: NostrFilter = {
@@ -170,7 +171,7 @@ export async function loadInterestSignals(
   };
 
   const events = await fetchEvents([relay], filter);
-  console.log('  📦 Gefundene Events:', events.length);
+  logger.debug('📦 Gefundene Events:', events.length);
 
   // Entschlüssele mit Angebots-Private-Key
   const signals: DecryptedInterestSignal[] = [];
@@ -202,13 +203,13 @@ export async function loadInterestSignals(
         tempPubkey: tempPubkey // Speichere temp-pubkey für Löschung
       });
 
-      console.log('  ✅ Signal entschlüsselt:');
-      console.log('    🎭 Temp-Pubkey (Event):', tempPubkey.substring(0, 16) + '...');
-      console.log('    👤 ECHTER Pubkey:', signal.interestedPubkey.substring(0, 16) + '...');
-      console.log('    📝 Name:', signal.userName || '(kein Name)');
+      logger.debug('✅ Signal entschlüsselt:');
+      logger.debug('  🎭 Temp-Pubkey (Event):', tempPubkey.substring(0, 16) + '...');
+      logger.debug('  👤 ECHTER Pubkey:', signal.interestedPubkey.substring(0, 16) + '...');
+      logger.debug('  📝 Name:', signal.userName || '(kein Name)');
     } catch (error) {
-      console.warn('  ⚠️ Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16) + '...');
-      console.error('  🔍 Debug-Info:', {
+      logger.warn('  ⚠️ Entschlüsselung fehlgeschlagen für Event:', event.id.substring(0, 16) + '...');
+      logger.error('  🔍 Debug-Info:', {
         offerPrivateKey: offerPrivateKey.substring(0, 16) + '...',
         tempPubkey: event.pubkey.substring(0, 16) + '...',
         contentLength: event.content.length,
@@ -218,7 +219,7 @@ export async function loadInterestSignals(
     }
   }
 
-  console.log('  📊 Entschlüsselte Signale:', signals.length);
+  logger.debug('📊 Entschlüsselte Signale:', signals.length);
 
   // Sortiere nach Timestamp (neueste zuerst)
   signals.sort((a, b) => b.timestamp - a.timestamp);
@@ -253,8 +254,8 @@ export async function deleteInterestSignal(
   relay: string,
   reason?: string
 ): Promise<void> {
-  console.log('🗑️ [INTEREST-SIGNAL] Lösche ANONYMES Interesse-Signal...');
-  console.log('  🆔 Event-ID:', eventId.substring(0, 16) + '...');
+  logger.debug('🗑️ [INTEREST-SIGNAL] Lösche ANONYMES Interesse-Signal...');
+  logger.debug('🆔 Event-ID:', eventId.substring(0, 16) + '...');
 
   // Leite temp-keypair aus secret ab
   const tempKeypair = deriveKeypairFromSecret(tempSecret);
@@ -266,7 +267,7 @@ export async function deleteInterestSignal(
   const deleteEvent = await createEvent(5, content, tags, tempKeypair.privateKey);
   await publishEvent(deleteEvent, [relay]);
 
-  console.log('  ✅ ANONYMES Interesse-Signal gelöscht');
+  logger.debug('✅ ANONYMES Interesse-Signal gelöscht');
 }
 
 /**
@@ -283,7 +284,7 @@ export async function deleteInterestSignal(
  * @example
  * const hasInterest = hasUserShownInterest(offerId);
  * if (hasInterest) {
- *   console.log("Du hast bereits Interesse gezeigt");
+ *   logger.debug("Du hast bereits Interesse gezeigt");
  * }
  */
 export function hasUserShownInterest(offerId: string): boolean {
@@ -304,7 +305,7 @@ export function hasUserShownInterest(offerId: string): boolean {
 export function saveInterestSecret(offerId: string, tempSecret: string): void {
   const key = `interest-secret-${offerId}`;
   sessionStorage.setItem(key, tempSecret);
-  console.log('💾 [INTEREST] Temp-Secret gespeichert für Offer:', offerId.substring(0, 16) + '...');
+  logger.debug('💾 [INTEREST] Temp-Secret gespeichert für Offer:', offerId.substring(0, 16) + '...');
 }
 
 /**
@@ -326,7 +327,7 @@ export function getInterestSecret(offerId: string): string | null {
 export function removeInterestSecret(offerId: string): void {
   const key = `interest-secret-${offerId}`;
   sessionStorage.removeItem(key);
-  console.log('🗑️ [INTEREST] Temp-Secret gelöscht für Offer:', offerId.substring(0, 16) + '...');
+  logger.debug('🗑️ [INTEREST] Temp-Secret gelöscht für Offer:', offerId.substring(0, 16) + '...');
 }
 
 /**
@@ -341,7 +342,7 @@ export function removeInterestSecret(offerId: string): void {
  * 
  * @example
  * const count = await countInterestSignals(offerId, relay);
- * console.log(`${count} Interessenten`);
+ * logger.debug(`${count} Interessenten`);
  */
 export async function countInterestSignals(
   offerId: string,
@@ -369,7 +370,7 @@ export async function countInterestSignals(
  * 
  * @example
  * const myInterests = loadMyInterestSignals();
- * console.log(`Du hast ${myInterests.length} Interessen gezeigt`);
+ * logger.debug(`Du hast ${myInterests.length} Interessen gezeigt`);
  */
 export function loadMyInterestSignals(): Array<{ offerId: string; tempSecret: string }> {
   const interests: Array<{ offerId: string; tempSecret: string }> = [];

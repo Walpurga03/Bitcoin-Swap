@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+import { logger } from '$lib/utils/logger';
   import { getErrorMessage } from '$lib/utils';
   // @ts-ignore
   import { goto } from '$app/navigation';
@@ -137,7 +138,7 @@
       userStore.setUserFromNsec(adminNsec, userName);
       
       // 🔐 NEU: Speichere Gruppen-Config öffentlich (für Admin-Erkennung)
-      console.log('💾 Speichere Gruppen-Config...');
+      logger.debug(' Speichere Gruppen-Config...');
       const secretHash = await deriveSecretHash(finalSecret);
       
       const groupConfigData = {
@@ -150,18 +151,18 @@
       
       // Publiziere auf den ausgewählten Relay
       await saveGroupConfig(groupConfigData, keyValidation.hex!, [relay]);
-      console.log('✅ Gruppen-Config publiziert');
+      logger.success('✅ Gruppen-Config publiziert');
 
         // Kein localStorage mehr: Admin-Status, Pubkey und Secret werden NICHT mehr im Browser gespeichert.
         // Admin-Status wird immer live vom Relay geladen.
-        console.log('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
+        logger.debug('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
 
       // Initialisiere Gruppe
       await groupStore.initialize(finalSecret, relay);
 
       // Erstelle leere Whitelist für diese Gruppe
       const channelId = await deriveChannelId(finalSecret);
-      console.log('✅ Gruppe erstellt:', {
+      logger.success('✅ Gruppe erstellt:', {
         admin: pubkey.substring(0, 16) + '...',
         relay,
         channelId: channelId.substring(0, 16) + '...'
@@ -200,11 +201,11 @@
           throw new Error(relayValidation.error || 'Ungültige Relay-URL');
         }
         relay = relayParam;
-        console.log('📡 Verwende Relay aus Link:', relay);
+        logger.debug('📡 Verwende Relay aus Link:', relay);
       } else {
         // Fallback: Lade GroupConfig vom Standard-Relay
         relay = DEFAULT_RELAYS[0];
-        console.log('📡 Kein Relay im Link → Verwende Standard-Relay:', relay);
+        logger.debug('📡 Kein Relay im Link → Verwende Standard-Relay:', relay);
       }
 
       // Validiere NSEC
@@ -214,14 +215,14 @@
       }
 
       // 🔐 Lade GroupConfig vom Relay
-      console.log('📥 Lade GroupConfig von Relay:', relay);
+      logger.info(' Lade GroupConfig von Relay:', relay);
       const groupConfig = await loadGroupConfigFromRelays(secret, [relay]);
       
       if (!groupConfig) {
         throw new Error('❌ Gruppe nicht gefunden. Bitte prüfe den Link oder kontaktiere den Admin.');
       }
       
-      console.log('✅ GroupConfig geladen');
+      logger.success('✅ GroupConfig geladen');
       
       // Verwende Relay aus Config
       const configRelay = groupConfig.relay;
@@ -249,12 +250,12 @@
       
       // 🔐 Extrahiere Admin-Pubkey aus GroupConfig
       const adminPubkey = groupConfig.admin_pubkey;
-      console.log('✅ Admin-Pubkey aus GroupConfig:', adminPubkey.substring(0, 16) + '...');
+      logger.success('✅ Admin-Pubkey aus GroupConfig:', adminPubkey.substring(0, 16) + '...');
       
       // Prüfe ob User der Admin ist
       const isAdmin = adminPubkey.toLowerCase() === pubkey.toLowerCase();
       
-      console.log('🔐 Admin-Status:', isAdmin ? 'JA ✅' : 'NEIN');
+      logger.debug(' Admin-Status:', isAdmin ? 'JA ✅' : 'NEIN');
       
       if (!isAdmin) {
         // Nur für normale User: Whitelist-Prüfung
@@ -273,7 +274,7 @@
           throw new Error('Dein Public Key ist nicht in der Whitelist. Zugriff verweigert.');
         }
       } else {
-        console.log('✅ Admin-Login erkannt - Whitelist-Prüfung übersprungen');
+        logger.success('✅ Admin-Login erkannt - Whitelist-Prüfung übersprungen');
       }
 
       // Setze User
@@ -282,7 +283,7 @@
       // Speichere Admin-Status im Browser
         // Kein localStorage mehr: Admin-Status, Pubkey und Secret werden NICHT mehr im Browser gespeichert.
         // Admin-Status wird immer live vom Relay geladen.
-        console.log('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
+        logger.debug('� [SECURITY] Admin-Status, Pubkey und Secret werden NICHT im localStorage gespeichert.');
 
       // Initialisiere Gruppe
       await groupStore.initialize(secret, configRelay);

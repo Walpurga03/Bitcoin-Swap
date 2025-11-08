@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { logger } from '$lib/utils/logger';
 import type { GroupConfig, MarketplaceOffer, OfferReply } from '$lib/nostr/types';
 import { 
   deriveChannelId, 
@@ -53,7 +54,7 @@ function createGroupStore() {
      */
     initialize: async (secret: string, relay: string) => {
       try {
-        console.log('🔧 [STORE] Initialize Gruppe...');
+        logger.debug('🔧 [STORE] Initialize Gruppe...');
         const channelId = await deriveChannelId(secret);
         const groupKey = await deriveKeyFromSecret(secret);
         const secretHash = await deriveChannelId(secret); // Identisch mit channelId für Gruppen-Isolation
@@ -70,10 +71,10 @@ function createGroupStore() {
           offers: []
         }));
 
-        console.log('✅ [STORE] Gruppe initialisiert');
+        logger.success('✅ [STORE] Gruppe initialisiert');
         return { channelId, groupKey };
       } catch (error) {
-        console.error('Fehler beim Initialisieren der Gruppe:', error);
+        logger.error('Fehler beim Initialisieren der Gruppe:', error);
         throw error;
       }
     },
@@ -82,15 +83,15 @@ function createGroupStore() {
      * Lade Marketplace-Angebote
      */
     loadOffers: async () => {
-      console.log('🛒 [STORE] loadOffers() aufgerufen');
+      logger.debug('🛒 [STORE] loadOffers() aufgerufen');
       const state = get({ subscribe });
       
       if (!state.channelId || !state.groupKey || !state.relay) {
-        console.error('❌ [STORE] Gruppe nicht initialisiert für Offers!');
+        logger.error(' [STORE] Gruppe nicht initialisiert für Offers!');
         throw new Error('Gruppe nicht initialisiert');
       }
 
-      console.log('✅ [STORE] Gruppe initialisiert für Offers:', { 
+      logger.success('✅ [STORE] Gruppe initialisiert für Offers:', { 
         channelId: state.channelId?.substring(0, 16) + '...', 
         relay: state.relay
       });
@@ -103,7 +104,7 @@ function createGroupStore() {
           [state.relay]
         );
 
-        console.log('📦 [STORE] Angebote geladen:', events.length);
+        logger.debug('📦 [STORE] Angebote geladen:', events.length);
 
         const offers: MarketplaceOffer[] = events
           .filter((e: any) => e.decrypted)
@@ -125,7 +126,7 @@ function createGroupStore() {
             [state.relay]
           );
 
-          console.log('💌 [STORE] Interesse-Events geladen:', interests.length);
+          logger.debug('💌 [STORE] Interesse-Events geladen:', interests.length);
 
           // 3. Ordne Interessen den Angeboten zu
   // 🔐 VERBESSERUNG: Parse Pubkeys aus verschlüsselten Metadaten
@@ -144,7 +145,7 @@ function createGroupStore() {
         });
       } catch (e) {
         // Fallback für alte Events (vor Update)
-        console.warn('⚠️ Könnte Interesse-Metadaten nicht parsen, verwende Fallback');
+        logger.warn(' Könnte Interesse-Metadaten nicht parsen, verwende Fallback');
         offer.replies.push({
           id: interest.id,
           offerId: interest.offerId,
@@ -161,7 +162,7 @@ function createGroupStore() {
             offer.replies.sort((a, b) => a.created_at - b.created_at);
           });
 
-          console.log('✅ [STORE] Angebote mit Interessen:', 
+          logger.success('✅ [STORE] Angebote mit Interessen:', 
             offers.filter(o => o.replies.length > 0).length + '/' + offers.length
           );
         }
@@ -173,7 +174,7 @@ function createGroupStore() {
 
         return offers;
       } catch (error) {
-        console.error('❌ [STORE] Fehler beim Laden der Angebote:', error);
+        logger.error(' [STORE] Fehler beim Laden der Angebote:', error);
         throw error;
       }
     },
@@ -213,7 +214,7 @@ function createGroupStore() {
 
         return offer;
       } catch (error) {
-        console.error('Fehler beim Erstellen des Angebots:', error);
+        logger.error('Fehler beim Erstellen des Angebots:', error);
         throw error;
       }
     },
@@ -239,7 +240,7 @@ function createGroupStore() {
           [state.relay]
         );
       } catch (error) {
-        console.error('Fehler beim Senden des Interesses:', error);
+        logger.error('Fehler beim Senden des Interesses:', error);
         throw error;
       }
     },
@@ -262,7 +263,7 @@ function createGroupStore() {
           offers: state.offers.filter(o => o.id !== offerId)
         }));
       } catch (error) {
-        console.error('Fehler beim Löschen des Angebots:', error);
+        logger.error('Fehler beim Löschen des Angebots:', error);
         throw error;
       }
     },
@@ -278,7 +279,7 @@ function createGroupStore() {
       }
 
       try {
-        console.log('🗑️ [STORE] Ziehe Interesse zurück:', interestId.substring(0, 16) + '...');
+        logger.debug('🗑️ [STORE] Ziehe Interesse zurück:', interestId.substring(0, 16) + '...');
         
         await deleteEvent(interestId, privateKey, [state.relay], 'Interesse zurückgezogen');
 
@@ -291,9 +292,9 @@ function createGroupStore() {
           return { ...state, offers };
         });
 
-        console.log('✅ [STORE] Interesse erfolgreich zurückgezogen');
+        logger.success('✅ [STORE] Interesse erfolgreich zurückgezogen');
       } catch (error) {
-        console.error('❌ [STORE] Fehler beim Zurückziehen des Interesses:', error);
+        logger.error(' [STORE] Fehler beim Zurückziehen des Interesses:', error);
         throw error;
       }
     },

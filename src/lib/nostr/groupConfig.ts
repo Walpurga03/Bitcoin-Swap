@@ -8,6 +8,7 @@
  */
 
 import { finalizeEvent, getPublicKey, verifyEvent, type Event } from 'nostr-tools';
+import { logger, securityLogger } from '$lib/utils/logger';
 import { initPool } from './client';
 import { z } from 'zod';
 
@@ -83,18 +84,18 @@ export async function saveGroupConfig(
     }
 
     // Publiziere auf Relays
-    console.log('📡 Publiziere Gruppen-Config auf Relays:', relays);
+    logger.debug('📡 Publiziere Gruppen-Config auf Relays:', relays);
     const pool = initPool();
     
     for (const relay of relays) {
       try {
         await pool.publish(relays, signedEvent);
       } catch (e) {
-        console.warn(`⚠️ Fehler beim Publizieren auf ${relay}:`, e);
+        logger.warn(`⚠️ Fehler beim Publizieren auf ${relay}:`, e);
       }
     }
     
-    console.log('✅ Gruppen-Config gespeichert:', {
+    securityLogger.offer('✅ Gruppen-Config gespeichert:', {
       relay: config.relay,
       admin: adminPubkey.substring(0, 16) + '...',
       secret_hash: config.secret_hash.substring(0, 16) + '...'
@@ -102,7 +103,7 @@ export async function saveGroupConfig(
 
     return signedEvent.id;
   } catch (error) {
-    console.error('❌ Fehler beim Speichern der Gruppen-Config:', error);
+    logger.error(' Fehler beim Speichern der Gruppen-Config:', error);
     throw error;
   }
 }
@@ -119,14 +120,14 @@ export async function loadGroupConfig(
   delayMs: number = 1000
 ): Promise<GroupConfig | null> {
   try {
-    console.log('📥 Lade Gruppen-Config von Nostr für Secret-Hash:', secretHash.substring(0, 16) + '...');
+    logger.info(' Lade Gruppen-Config von Nostr für Secret-Hash:', secretHash.substring(0, 16) + '...');
     
     const pool = initPool();
     
     // Retry-Loop für frisch erstellte Configs
     for (let attempt = 1; attempt <= retries; attempt++) {
       if (attempt > 1) {
-        console.log(`  🔄 Retry ${attempt}/${retries} nach ${delayMs}ms...`);
+        logger.debug(`  🔄 Retry ${attempt}/${retries} nach ${delayMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
       
@@ -142,7 +143,7 @@ export async function loadGroupConfig(
 
       if (events.length > 0) {
         const event = events[0];
-        console.log('✅ Gruppen-Config geladen (Versuch', attempt + ')');
+        securityLogger.offer('✅ Gruppen-Config geladen (Versuch', attempt + ')');
 
         // Parse Content
         const config = JSON.parse(event.content) as GroupConfig;
@@ -153,13 +154,13 @@ export async function loadGroupConfig(
         return config;
       }
       
-      console.log(`  ⏳ Versuch ${attempt}/${retries}: Keine Config gefunden, warte...`);
+      logger.debug(`  ⏳ Versuch ${attempt}/${retries}: Keine Config gefunden, warte...`);
     }
 
-    console.warn('⚠️ Keine Gruppen-Config gefunden nach', retries, 'Versuchen für Secret-Hash:', secretHash);
+    logger.warn(' Keine Gruppen-Config gefunden nach', retries, 'Versuchen für Secret-Hash:', secretHash);
     return null;
   } catch (error) {
-    console.error('❌ Fehler beim Laden der Gruppen-Config:', error);
+    logger.error(' Fehler beim Laden der Gruppen-Config:', error);
     return null;
   }
 }
@@ -180,7 +181,7 @@ export async function loadGroupAdmin(
     }
     return null;
   } catch (error) {
-    console.error('❌ Fehler beim Laden des Admin-Pubkey:', error);
+    logger.error(' Fehler beim Laden des Admin-Pubkey:', error);
     return null;
   }
 }
@@ -199,8 +200,8 @@ export async function loadGroupConfigFromRelays(
 ): Promise<GroupConfig | null> {
   try {
     const secretHash = await deriveSecretHash(secret);
-    console.log('📥 Multi-Relay-Lookup für Secret-Hash:', secretHash.substring(0, 16) + '...');
-    console.log('📡 Durchsuche', relays.length, 'Relays...');
+    logger.info(' Multi-Relay-Lookup für Secret-Hash:', secretHash.substring(0, 16) + '...');
+    logger.debug('📡 Durchsuche', relays.length, 'Relays...');
     
     const pool = initPool();
     
@@ -220,13 +221,13 @@ export async function loadGroupConfigFromRelays(
           const event = events[0];
           // Verify signature
           if (verifyEvent(event)) {
-            console.log('✅ Valides Event gefunden auf:', relay);
+            securityLogger.offer('✅ Valides Event gefunden auf:', relay);
             return { relay, event };
           }
         }
         return null;
       } catch (err) {
-        console.warn('⚠️ Fehler bei Relay', relay, ':', err);
+        logger.warn(' Fehler bei Relay', relay, ':', err);
         return null;
       }
     });
@@ -243,7 +244,7 @@ export async function loadGroupConfigFromRelays(
     }
     
     if (validResults.length === 0) {
-      console.warn('⚠️ Keine GroupConfig auf', relays.length, 'Relays gefunden');
+      logger.warn(' Keine GroupConfig auf', relays.length, 'Relays gefunden');
       return null;
     }
     
@@ -251,8 +252,8 @@ export async function loadGroupConfigFromRelays(
     validResults.sort((a, b) => b.event.created_at - a.event.created_at);
     const best = validResults[0];
     
-    console.log('✅ Beste GroupConfig von Relay:', best.relay);
-    console.log('📊 Gefunden auf', validResults.length, 'von', relays.length, 'Relays');
+    securityLogger.offer('✅ Beste GroupConfig von Relay:', best.relay);
+    logger.debug(' Gefunden auf', validResults.length, 'von', relays.length, 'Relays');
     
     // Parse und validiere Content
     const config = JSON.parse(best.event.content) as GroupConfig;
@@ -260,7 +261,7 @@ export async function loadGroupConfigFromRelays(
     
     return config;
   } catch (error) {
-    console.error('❌ Fehler beim Multi-Relay-Lookup:', error);
+    logger.error(' Fehler beim Multi-Relay-Lookup:', error);
     return null;
   }
 }

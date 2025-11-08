@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createSecretBackup, formatSecretForDisplay } from '$lib/nostr/offerSecret';
+  import { logger } from '$lib/utils/logger';
 
   export let show = false;
   export let secret: string;
@@ -19,7 +20,7 @@
         copied = false;
       }, 2000);
     } catch (err) {
-      console.error('Fehler beim Kopieren:', err);
+      logger.error('Fehler beim Kopieren:', err);
       alert('Fehler beim Kopieren. Bitte manuell kopieren.');
     }
   }

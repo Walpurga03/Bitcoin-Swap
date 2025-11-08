@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { logger } from '$lib/utils/logger';
   import { getErrorMessage } from '$lib/utils';
   import { groupStore } from '$lib/stores/groupStore';
   import { userStore } from '$lib/stores/userStore';
@@ -43,10 +44,10 @@
       const whitelistData = await loadWhitelistFromNostr([group.relay], adminPubkey, channelId);
       whitelist = whitelistData?.pubkeys || [];
       
-      console.log('✅ Whitelist geladen:', whitelist.length, 'Einträge');
+      logger.success('✅ Whitelist geladen:', whitelist.length, 'Einträge');
     } catch (e: unknown) {
       error = 'Fehler beim Laden der Whitelist: ' + getErrorMessage(e);
-      console.error(e);
+      logger.error(e);
     } finally {
       loading = false;
     }
@@ -105,7 +106,7 @@
       setTimeout(() => success = '', 3000);
     } catch (e: unknown) {
       error = 'Fehler: ' + getErrorMessage(e);
-      console.error(e);
+      logger.error(e);
     } finally {
       loading = false;
     }
@@ -147,7 +148,7 @@
       setTimeout(() => success = '', 3000);
     } catch (e: unknown) {
       error = 'Fehler: ' + getErrorMessage(e);
-      console.error(e);
+      logger.error(e);
     } finally {
       loading = false;
     }
@@ -177,7 +178,7 @@
       });
       showQR = true;
     } catch (e) {
-      console.error('QR-Code-Fehler:', e);
+      logger.error('QR-Code-Fehler:', e);
       error = 'Fehler beim Generieren des QR-Codes';
     }
   }

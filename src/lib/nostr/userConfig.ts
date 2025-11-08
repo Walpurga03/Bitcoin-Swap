@@ -1,5 +1,6 @@
 
 import { finalizeEvent, getPublicKey } from 'nostr-tools';
+import { logger } from '$lib/utils/logger';
 import { createNIP17Message, decryptNIP17Message } from './crypto';
 import { fetchEvents, publishEvent } from './client';
 import type { NostrEvent, NostrFilter } from './types';
@@ -18,8 +19,8 @@ export async function saveUserConfig(
   relays: string[]
 ): Promise<string> {
   try {
-    console.log('💾 [USER-CONFIG] Speichere Config auf Nostr...');
-    console.log('  📡 Relays:', relays);
+    logger.debug(' [USER-CONFIG] Speichere Config auf Nostr...');
+    logger.debug('📡 Relays:', relays);
     
     const pubkey = getPublicKey(privateKey as any);
     
@@ -29,7 +30,7 @@ export async function saveUserConfig(
       updated_at: Math.floor(Date.now() / 1000)
     };
     
-    console.log('  📋 Config-Daten:', {
+    logger.debug('📋 Config-Daten:', {
       is_admin: configData.is_group_admin,
       has_secret: !!configData.group_secret,
       has_link: !!configData.invite_link
@@ -43,7 +44,7 @@ export async function saveUserConfig(
       privateKey
     );
     
-    console.log('  🔐 Config verschlüsselt mit NIP-17');
+    logger.debug('🔐 Config verschlüsselt mit NIP-17');
     
     // Erstelle Replaceable Event (Kind 30078 - Application Data)
     // Damit wird alte Config automatisch ersetzt
@@ -61,8 +62,8 @@ export async function saveUserConfig(
     
     const signedEvent = finalizeEvent(event, privateKey as any);
     
-    console.log('  ✅ Event erstellt (Kind 30078)');
-    console.log('  🆔 Event-ID:', signedEvent.id.substring(0, 16) + '...');
+    logger.debug('✅ Event erstellt (Kind 30078)');
+    logger.debug('🆔 Event-ID:', signedEvent.id.substring(0, 16) + '...');
     
     // Publiziere zu Relays
     const result = await publishEvent(signedEvent as NostrEvent, relays);
@@ -71,11 +72,11 @@ export async function saveUserConfig(
       throw new Error('❌ Relay nicht erreichbar. Bitte prüfe deine Internetverbindung und versuche es erneut.');
     }
     
-    console.log('  ✅ Config gespeichert auf', result.relays.length, 'Relays');
+    logger.debug('✅ Config gespeichert auf', result.relays.length, 'Relays');
     
     return signedEvent.id;
   } catch (error) {
-    console.error('❌ [USER-CONFIG] Fehler beim Speichern:', error);
+    logger.error(' [USER-CONFIG] Fehler beim Speichern:', error);
     
   // Werfe Fehler weiter - KEIN localStorage-Fallback! Kein localStorage mehr.
     if (error instanceof Error) {
@@ -89,8 +90,8 @@ export async function loadUserConfig(
   relays: string[]
 ): Promise<UserConfig | null> {
   try {
-    console.log('📥 [USER-CONFIG] Lade Config von Nostr...');
-    console.log('  📡 Relays:', relays);
+    logger.info(' [USER-CONFIG] Lade Config von Nostr...');
+    logger.debug('📡 Relays:', relays);
     
     const pubkey = getPublicKey(privateKey as any);
     
@@ -102,20 +103,20 @@ export async function loadUserConfig(
       limit: 1
     };
     
-    console.log('  🔍 Suche Config-Event...');
+    logger.debug('🔍 Suche Config-Event...');
     
     const events = await fetchEvents(relays, filter, 5000);
     
     if (events.length === 0) {
-      console.log('  ⚠️ Keine Config auf Relay gefunden');
+      logger.debug('⚠️ Keine Config auf Relay gefunden');
       return null;
     }
     
     // Nehme neuestes Event
     const latestEvent = events.sort((a, b) => b.created_at - a.created_at)[0];
     
-    console.log('  ✅ Config-Event gefunden:', latestEvent.id.substring(0, 16) + '...');
-    console.log('  📅 Erstellt:', new Date(latestEvent.created_at * 1000).toLocaleString());
+    logger.debug('✅ Config-Event gefunden:', latestEvent.id.substring(0, 16) + '...');
+    logger.debug('📅 Erstellt:', new Date(latestEvent.created_at * 1000).toLocaleString());
     
     // Entschlüssele mit NIP-17
     try {
@@ -128,8 +129,8 @@ export async function loadUserConfig(
       const decrypted = await decryptNIP17Message(wrappedEvent, privateKey);
       const config: UserConfig = JSON.parse(decrypted.content);
       
-      console.log('  🔓 Config entschlüsselt');
-      console.log('  ✅ Config geladen:', {
+      logger.debug('🔓 Config entschlüsselt');
+      logger.debug('✅ Config geladen:', {
         is_admin: config.is_group_admin,
         has_secret: !!config.group_secret,
         has_link: !!config.invite_link
@@ -137,11 +138,11 @@ export async function loadUserConfig(
       
       return config;
     } catch (decryptError) {
-      console.error('  ❌ Entschlüsselung fehlgeschlagen:', decryptError);
+      logger.error('  ❌ Entschlüsselung fehlgeschlagen:', decryptError);
       throw new Error('❌ Config konnte nicht entschlüsselt werden. Bitte prüfe deinen Private Key.');
     }
   } catch (error) {
-    console.error('❌ [USER-CONFIG] Fehler beim Laden:', error);
+    logger.error(' [USER-CONFIG] Fehler beim Laden:', error);
     
   // Werfe Fehler weiter - KEIN localStorage-Fallback! Kein localStorage mehr.
     if (error instanceof Error) {
@@ -155,7 +156,7 @@ export async function deleteUserConfig(
   relays: string[]
 ): Promise<void> {
   try {
-    console.log('🗑️ [USER-CONFIG] Lösche Config...');
+    logger.debug('🗑️ [USER-CONFIG] Lösche Config...');
     
     const pubkey = getPublicKey(privateKey as any);
     
@@ -187,12 +188,12 @@ export async function deleteUserConfig(
       const signedDelete = finalizeEvent(deleteEvent, privateKey as any);
       await publishEvent(signedDelete as NostrEvent, relays);
       
-      console.log('  ✅ Config-Event gelöscht von Relay');
+      logger.debug('✅ Config-Event gelöscht von Relay');
     }
     
-    console.log('  ✅ Config gelöscht');
+    logger.debug('✅ Config gelöscht');
   } catch (error) {
-    console.error('❌ [USER-CONFIG] Fehler beim Löschen:', error);
+    logger.error(' [USER-CONFIG] Fehler beim Löschen:', error);
     throw new Error('❌ Relay nicht erreichbar. Config konnte nicht gelöscht werden.');
   }
 }

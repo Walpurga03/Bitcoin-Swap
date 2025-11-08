@@ -11,6 +11,7 @@
  */
 
 import type { NostrFilter } from './types';
+import { logger, marketplaceLogger } from '$lib/utils/logger';
 
 import { SimplePool, finalizeEvent, type Event } from 'nostr-tools';
 
@@ -43,7 +44,7 @@ export async function createOffer(
   secretHash?: string // Gruppen-spezifischer Hash zur Filterung
 ): Promise<string> {
   try {
-    console.log('📝 Erstelle Angebot...');
+    logger.debug('📝 Erstelle Angebot...');
     
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + (72 * 60 * 60); // +72 Stunden
@@ -73,8 +74,8 @@ export async function createOffer(
     
     const signedEvent = finalizeEvent(event, tempKeypair.privateKey as any);
     
-    console.log('  ✅ Event signiert:', signedEvent.id.substring(0, 16) + '...');
-    console.log('  🔗 Verbinde zu Relay:', relay);
+    logger.debug('✅ Event signiert:', signedEvent.id.substring(0, 16) + '...');
+    logger.debug('🔗 Verbinde zu Relay:', relay);
     
     // Publiziere auf Relay mit Error-Handling
     const pool = new SimplePool();
@@ -86,7 +87,7 @@ export async function createOffer(
       // Timeout nach 3 Sekunden
       const timeoutPromise = new Promise<void>((resolve) => 
         setTimeout(() => {
-          console.log('  ⏱️ Timeout - Event wurde an Relay gesendet');
+          logger.debug('⏱️ Timeout - Event wurde an Relay gesendet');
           resolve();
         }, 3000)
       );
@@ -94,14 +95,14 @@ export async function createOffer(
       // Warte auf alle Relay-Promises oder Timeout
       await Promise.race([
         Promise.all(publishPromises).then(() => {
-          console.log('  📤 Event vom Relay bestätigt');
+          logger.debug('📤 Event vom Relay bestätigt');
         }),
         timeoutPromise
       ]);
       
-      console.log('  ⏰ Läuft ab in 72h');
+      logger.debug('⏰ Läuft ab in 72h');
     } catch (publishError) {
-      console.warn('⚠️ Relay-Fehler (Event wurde trotzdem signiert):', publishError);
+      logger.warn(' Relay-Fehler (Event wurde trotzdem signiert):', publishError);
     } finally {
       // Schließe Pool sofort
       pool.close([relay]);
@@ -109,7 +110,7 @@ export async function createOffer(
     
     return signedEvent.id;
   } catch (error) {
-    console.error('❌ Fehler beim Erstellen des Angebots:', error);
+    logger.error(' Fehler beim Erstellen des Angebots:', error);
     throw error;
   }
 }
@@ -128,7 +129,7 @@ export async function deleteOffer(
   relay: string
 ): Promise<void> {
   try {
-    console.log('🗑️ Lösche Angebot:', offerId.substring(0, 16) + '...');
+    logger.debug('🗑️ Lösche Angebot:', offerId.substring(0, 16) + '...');
     
     const deletionEvent = {
       kind: 5,
@@ -140,7 +141,7 @@ export async function deleteOffer(
     
     const signedDeletion = finalizeEvent(deletionEvent, tempPrivateKey as any);
     
-    console.log('  ✅ Deletion Event signiert');
+    logger.debug('✅ Deletion Event signiert');
     
     // Publiziere Deletion Event mit Error-Handling
     const pool = new SimplePool();
@@ -149,26 +150,26 @@ export async function deleteOffer(
       const publishPromises = pool.publish([relay], signedDeletion);
       const timeoutPromise = new Promise<void>((resolve) => 
         setTimeout(() => {
-          console.log('  ⏱️ Timeout - Deletion Event gesendet');
+          logger.debug('⏱️ Timeout - Deletion Event gesendet');
           resolve();
         }, 3000)
       );
       
       await Promise.race([
         Promise.all(publishPromises).then(() => {
-          console.log('  📤 Deletion Event bestätigt');
+          logger.debug('📤 Deletion Event bestätigt');
         }),
         timeoutPromise
       ]);
       
-      console.log('  ✅ Angebot gelöscht');
+      logger.debug('✅ Angebot gelöscht');
     } catch (publishError) {
-      console.warn('⚠️ Relay-Fehler beim Löschen:', publishError);
+      logger.warn(' Relay-Fehler beim Löschen:', publishError);
     } finally {
       pool.close([relay]);
     }
   } catch (error) {
-    console.error('❌ Fehler beim Löschen des Angebots:', error);
+    logger.error(' Fehler beim Löschen des Angebots:', error);
     throw error;
   }
 }
@@ -189,7 +190,7 @@ export async function loadOffers(
   secretHash?: string // Gruppen-spezifischer Hash zur Filterung
 ): Promise<Offer[]> {
   try {
-    console.log('📥 Lade Angebote...');
+    logger.info(' Lade Angebote...');
     
     const pool = new SimplePool();
     
@@ -206,7 +207,7 @@ export async function loadOffers(
     }
     
     try {
-      console.log('  🔍 Query-Filter:', JSON.stringify(filter, null, 2));
+      logger.debug('🔍 Query-Filter:', JSON.stringify(filter, null, 2));
       
       const queryPromise = pool.querySync([relay], filter);
       const timeoutPromise = new Promise<any[]>((_, reject) => 
@@ -215,10 +216,10 @@ export async function loadOffers(
       
       const events = await Promise.race([queryPromise, timeoutPromise]);
       
-      console.log(`  ✅ ${events.length} Events gefunden`);
+      logger.debug(`  ✅ ${events.length} Events gefunden`);
       
       if (events.length > 0) {
-        console.log('  📋 Events:', events.map(e => ({
+        logger.debug('📋 Events:', events.map(e => ({
           id: e.id.substring(0, 16) + '...',
           pubkey: e.pubkey.substring(0, 16) + '...',
           tags: e.tags
@@ -249,18 +250,18 @@ export async function loadOffers(
       // Filtere abgelaufene Angebote raus
       const activeOffers = offers.filter(offer => !offer.isExpired);
       
-      console.log(`  ✅ ${activeOffers.length} aktive Angebote (${offers.length - activeOffers.length} abgelaufen)`);
+      logger.debug(`  ✅ ${activeOffers.length} aktive Angebote (${offers.length - activeOffers.length} abgelaufen)`);
       
       return activeOffers;
     } catch (queryError) {
-      console.warn('⚠️ Relay-Fehler beim Laden:', queryError);
+      logger.warn(' Relay-Fehler beim Laden:', queryError);
       return []; // Leeres Array bei Fehler
     } finally {
       // Schließe Pool im finally-Block
       pool.close([relay]);
     }
   } catch (error) {
-    console.error('❌ Fehler beim Laden der Angebote:', error);
+    logger.error(' Fehler beim Laden der Angebote:', error);
     throw error;
   }
 }
@@ -297,7 +298,7 @@ export async function hasActiveOffer(
     const offers = await loadOffers(relay, channelId);
     return offers.length > 0;
   } catch (error) {
-    console.error('❌ Fehler beim Prüfen auf aktive Angebote:', error);
+    logger.error(' Fehler beim Prüfen auf aktive Angebote:', error);
     return false;
   }
 }

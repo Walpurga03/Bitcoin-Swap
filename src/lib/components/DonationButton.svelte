@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { logger } from '$lib/utils/logger';
   import QRCode from 'qrcode';
 
   let showDonation = false;
@@ -20,7 +21,7 @@
         }
       });
     } catch (err) {
-      console.error('Fehler beim Generieren des QR-Codes:', err);
+      logger.error('Fehler beim Generieren des QR-Codes:', err);
     }
   });
 
@@ -39,7 +40,7 @@
         copied = false;
       }, 2000);
     } catch (err) {
-      console.error('Fehler beim Kopieren:', err);
+      logger.error('Fehler beim Kopieren:', err);
       alert(`Lightning-Adresse:\n${LIGHTNING_ADDRESS}`);
     }
   }

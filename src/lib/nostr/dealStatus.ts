@@ -12,6 +12,7 @@
  */
 
 import { SimplePool, finalizeEvent, type Event as NostrEvent } from 'nostr-tools';
+import { logger, marketplaceLogger } from '$lib/utils/logger';
 
 export interface Deal {
   id: string;
@@ -45,10 +46,10 @@ export async function createDeal(
   const pool = new SimplePool();
 
   try {
-    console.log('🤝 [DEAL] Erstelle Deal-Status...');
-    console.log('  Angebot:', offerId.substring(0, 16) + '...');
-    console.log('  Käufer:', buyerPubkey.substring(0, 16) + '...');
-    console.log('  Verkäufer:', sellerPubkey.substring(0, 16) + '...');
+    logger.debug('🤝 [DEAL] Erstelle Deal-Status...');
+    logger.debug('Angebot:', offerId.substring(0, 16) + '...');
+    logger.debug('Käufer:', buyerPubkey.substring(0, 16) + '...');
+    logger.debug('Verkäufer:', sellerPubkey.substring(0, 16) + '...');
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -68,16 +69,16 @@ export async function createDeal(
       created_at: now
     }, sellerPrivateKey as any);
 
-    console.log('📡 [DEAL] Publiziere Deal-Status auf Relay...');
+    logger.debug('📡 [DEAL] Publiziere Deal-Status auf Relay...');
     await pool.publish([relay], event as NostrEvent);
 
-    console.log('✅ [DEAL] Deal erstellt:', event.id.substring(0, 16) + '...');
+    marketplaceLogger.offer('✅ [DEAL] Deal erstellt:', event.id.substring(0, 16) + '...');
     
     pool.close([relay]);
     return event.id;
   } catch (error) {
     pool.close([relay]);
-    console.error('❌ [DEAL] Fehler beim Erstellen:', error);
+    logger.error(' [DEAL] Fehler beim Erstellen:', error);
     throw new Error('Fehler beim Erstellen des Deals');
   }
 }
@@ -96,7 +97,7 @@ export async function loadDeal(
   const pool = new SimplePool();
 
   try {
-    console.log('📥 [DEAL] Lade Deal-Status für Angebot:', offerId.substring(0, 16) + '...');
+    logger.info(' [DEAL] Lade Deal-Status für Angebot:', offerId.substring(0, 16) + '...');
 
     const events = await pool.querySync([relay], {
       kinds: [30081],
@@ -106,7 +107,7 @@ export async function loadDeal(
     });
 
     if (events.length === 0) {
-      console.log('⚠️ [DEAL] Kein Deal gefunden');
+      logger.debug('⚠️ [DEAL] Kein Deal gefunden');
       pool.close([relay]);
       return null;
     }
@@ -114,7 +115,7 @@ export async function loadDeal(
     const event = events[0];
     const deal = parseDealEvent(event);
     
-    console.log('✅ [DEAL] Deal gefunden:', {
+    marketplaceLogger.offer('✅ [DEAL] Deal gefunden:', {
       id: deal.id.substring(0, 16) + '...',
       status: deal.status,
       buyer: deal.buyerPubkey.substring(0, 16) + '...',
@@ -125,7 +126,7 @@ export async function loadDeal(
     return deal;
   } catch (error) {
     pool.close([relay]);
-    console.error('❌ [DEAL] Fehler beim Laden:', error);
+    logger.error(' [DEAL] Fehler beim Laden:', error);
     return null;
   }
 }
@@ -144,7 +145,7 @@ export async function loadMyDeals(
   const pool = new SimplePool();
 
   try {
-    console.log('📥 [DEAL] Lade meine Deals...');
+    logger.info(' [DEAL] Lade meine Deals...');
 
     // Suche nach Deals wo User als Käufer oder Verkäufer beteiligt ist
     const events = await pool.querySync([relay], {
@@ -154,7 +155,7 @@ export async function loadMyDeals(
       limit: 50
     });
 
-    console.log(`📊 [DEAL] ${events.length} Deal-Events gefunden`);
+    logger.debug(`📊 [DEAL] ${events.length} Deal-Events gefunden`);
 
     const deals = events
       .map(parseDealEvent)
@@ -164,13 +165,13 @@ export async function loadMyDeals(
       )
       .sort((a, b) => b.createdAt - a.createdAt); // Neueste zuerst
 
-    console.log(`✅ [DEAL] ${deals.length} Deals geladen`);
+    logger.debug(`✅ [DEAL] ${deals.length} Deals geladen`);
 
     pool.close([relay]);
     return deals;
   } catch (error) {
     pool.close([relay]);
-    console.error('❌ [DEAL] Fehler beim Laden:', error);
+    logger.error(' [DEAL] Fehler beim Laden:', error);
     return [];
   }
 }
@@ -192,9 +193,9 @@ export async function updateDealStatus(
   const pool = new SimplePool();
 
   try {
-    console.log('🔄 [DEAL] Aktualisiere Deal-Status...');
-    console.log('  Angebot:', offerId.substring(0, 16) + '...');
-    console.log('  Neuer Status:', newStatus);
+    logger.debug('🔄 [DEAL] Aktualisiere Deal-Status...');
+    logger.debug('Angebot:', offerId.substring(0, 16) + '...');
+    logger.debug('Neuer Status:', newStatus);
 
     // Lade aktuellen Deal
     const currentDeal = await loadDeal(offerId, relay);
@@ -223,12 +224,12 @@ export async function updateDealStatus(
 
     await pool.publish([relay], event as NostrEvent);
 
-    console.log('✅ [DEAL] Status aktualisiert:', newStatus);
+    marketplaceLogger.offer('✅ [DEAL] Status aktualisiert:', newStatus);
     
     pool.close([relay]);
   } catch (error) {
     pool.close([relay]);
-    console.error('❌ [DEAL] Fehler beim Aktualisieren:', error);
+    logger.error(' [DEAL] Fehler beim Aktualisieren:', error);
     throw new Error('Fehler beim Aktualisieren des Deal-Status');
   }
 }

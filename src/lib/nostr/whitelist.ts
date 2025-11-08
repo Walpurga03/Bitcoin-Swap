@@ -9,6 +9,7 @@
 import { createEvent, publishEvent, fetchEvents } from './client';
 import { nip19 } from 'nostr-tools';
 import { GROUP_TAG, EVENT_KINDS } from '$lib/config';
+import { logger, securityLogger } from '$lib/utils/logger';
 
 // Event Kind für Whitelist (Replaceable Event)
 const WHITELIST_KIND = EVENT_KINDS.WHITELIST;
@@ -37,10 +38,10 @@ export async function loadWhitelist(
 ): Promise<WhitelistData | null> {
   try {
     const dTag = getWhitelistDTag(channelId);
-    console.log('📋 [WHITELIST] Lade Whitelist vom Relay...');
-    console.log('  Admin Pubkey:', adminPubkey.substring(0, 16) + '...');
-    console.log('  Channel ID:', channelId.substring(0, 16) + '...');
-    console.log('  d-Tag:', dTag);
+    logger.debug('📋 [WHITELIST] Lade Whitelist vom Relay...');
+    logger.debug('Admin Pubkey:', adminPubkey.substring(0, 16) + '...');
+    logger.debug('Channel ID:', channelId.substring(0, 16) + '...');
+    logger.debug('d-Tag:', dTag);
     
     const events = await fetchEvents(relays, {
       kinds: [WHITELIST_KIND],
@@ -50,18 +51,18 @@ export async function loadWhitelist(
     });
 
     if (events.length === 0) {
-      console.log('⚠️ [WHITELIST] Keine Whitelist für diese Gruppe gefunden');
+      logger.warn(' [WHITELIST] Keine Whitelist für diese Gruppe gefunden');
       return null;
     }
 
     const event = events[0];
     const data = JSON.parse(event.content) as WhitelistData;
     
-    console.log('✅ [WHITELIST] Whitelist geladen:', data.pubkeys.length, 'Einträge');
+    securityLogger.whitelist('✅ [WHITELIST] Whitelist geladen:', data.pubkeys.length, 'Einträge');
     
     return data;
   } catch (error) {
-    console.error('❌ [WHITELIST] Fehler beim Laden:', error);
+    logger.error(' [WHITELIST] Fehler beim Laden:', error);
     return null;
   }
 }
@@ -77,9 +78,9 @@ export async function saveWhitelist(
 ): Promise<boolean> {
   try {
     const dTag = getWhitelistDTag(channelId);
-    console.log('💾 [WHITELIST] Speichere Whitelist auf Relay...');
-    console.log('  Channel ID:', channelId.substring(0, 16) + '...');
-    console.log('  d-Tag:', dTag);
+    logger.debug('💾 [WHITELIST] Speichere Whitelist auf Relay...');
+    logger.debug('Channel ID:', channelId.substring(0, 16) + '...');
+    logger.debug('d-Tag:', dTag);
     
     const { getPublicKey } = await import('nostr-tools');
     const adminPubkey = getPublicKey(adminPrivateKey as any);
@@ -105,14 +106,14 @@ export async function saveWhitelist(
     const result = await publishEvent(event, relays);
     
     if (result.success) {
-      console.log('✅ [WHITELIST] Whitelist für Gruppe gespeichert');
+      securityLogger.whitelist('✅ [WHITELIST] Whitelist für Gruppe gespeichert');
       return true;
     } else {
-      console.error('❌ [WHITELIST] Fehler beim Speichern');
+      logger.error(' [WHITELIST] Fehler beim Speichern');
       return false;
     }
   } catch (error) {
-    console.error('❌ [WHITELIST] Fehler:', error);
+    logger.error(' [WHITELIST] Fehler:', error);
     return false;
   }
 }
@@ -122,7 +123,7 @@ export async function saveWhitelist(
  */
 export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): boolean {
   if (!whitelist) {
-    console.warn('⚠️ [WHITELIST] Keine Whitelist vorhanden - Zugriff verweigert');
+    logger.warn(' [WHITELIST] Keine Whitelist vorhanden - Zugriff verweigert');
     return false;
   }
 
@@ -131,7 +132,7 @@ export function isInWhitelist(pubkey: string, whitelist: WhitelistData | null): 
     allowed => normalizePublicKey(allowed) === normalizedPubkey
   );
 
-  console.log('🔍 [WHITELIST] Prüfe Pubkey:', normalizedPubkey.substring(0, 16) + '...', '→', isAllowed ? '✅ Erlaubt' : '❌ Verweigert');
+  logger.debug(' [WHITELIST] Prüfe Pubkey:', normalizedPubkey.substring(0, 16) + '...', '→', isAllowed ? '✅ Erlaubt' : '❌ Verweigert');
   
   return isAllowed;
 }
@@ -154,7 +155,7 @@ function normalizePublicKey(pubkey: string): string {
     // Ansonsten als hex behandeln
     return pubkey.toLowerCase();
   } catch (error) {
-    console.error('Fehler beim Normalisieren des Public Keys:', error);
+    logger.error('Fehler beim Normalisieren des Public Keys:', error);
     return pubkey.toLowerCase();
   }
 }
@@ -185,7 +186,7 @@ export async function addToWhitelist(
     
     return true; // Bereits vorhanden
   } catch (error) {
-    console.error('Fehler beim Hinzufügen zur Whitelist:', error);
+    logger.error('Fehler beim Hinzufügen zur Whitelist:', error);
     return false;
   }
 }
@@ -215,7 +216,7 @@ export async function removeFromWhitelist(
     
     return await saveWhitelist(pubkeys, adminPrivateKey, relays, channelId);
   } catch (error) {
-    console.error('Fehler beim Entfernen aus Whitelist:', error);
+    logger.error('Fehler beim Entfernen aus Whitelist:', error);
     return false;
   }
 }
@@ -240,10 +241,10 @@ export async function setPrivateChatWhitelist(
   channelId: string
 ): Promise<boolean> {
   try {
-    console.log('🔒 [WHITELIST] Setze Private-Chat-Whitelist...');
-    console.log('  Anbieter (echter Key):', offerCreatorRealPubkey.substring(0, 16) + '...');
-    console.log('  Anbieter (temp Key):', offerCreatorTempPubkey.substring(0, 16) + '...');
-    console.log('  Interessent:', interestedUserPubkey.substring(0, 16) + '...');
+    logger.debug('🔒 [WHITELIST] Setze Private-Chat-Whitelist...');
+    logger.debug('Anbieter (echter Key):', offerCreatorRealPubkey.substring(0, 16) + '...');
+    logger.debug('Anbieter (temp Key):', offerCreatorTempPubkey.substring(0, 16) + '...');
+    logger.debug('Interessent:', interestedUserPubkey.substring(0, 16) + '...');
     
     // Normalisiere alle Public Keys
     const normalizedRealKey = normalizePublicKey(offerCreatorRealPubkey);
@@ -257,20 +258,20 @@ export async function setPrivateChatWhitelist(
     // Entferne Duplikate (falls temp key = real key)
     const uniquePubkeys = [...new Set(pubkeys)];
     
-    console.log('  Whitelist wird gesetzt auf', uniquePubkeys.length, 'User');
+    logger.debug('Whitelist wird gesetzt auf', uniquePubkeys.length, 'User');
     
     const success = await saveWhitelist(uniquePubkeys, adminPrivateKey, relays, channelId);
     
     if (success) {
-      console.log('✅ [WHITELIST] Private-Chat-Whitelist gesetzt');
-      console.log('  Nur noch diese User haben Zugriff auf die Gruppe');
+      securityLogger.whitelist('✅ [WHITELIST] Private-Chat-Whitelist gesetzt');
+      logger.debug('Nur noch diese User haben Zugriff auf die Gruppe');
     } else {
-      console.error('❌ [WHITELIST] Fehler beim Setzen der Private-Chat-Whitelist');
+      logger.error(' [WHITELIST] Fehler beim Setzen der Private-Chat-Whitelist');
     }
     
     return success;
   } catch (error) {
-    console.error('❌ [WHITELIST] Fehler:', error);
+    logger.error(' [WHITELIST] Fehler:', error);
     return false;
   }
 }

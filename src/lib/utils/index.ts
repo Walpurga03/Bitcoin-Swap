@@ -1,4 +1,5 @@
 import type { InviteLinkData } from '$lib/nostr/types';
+  import { logger } from '$lib/utils/logger';
 
 /**
  * Parse einen Einladungslink und extrahiere Relay und Secret
@@ -22,7 +23,7 @@ export function parseInviteLink(url: string): InviteLinkData | null {
       secret: decodedSecret
     };
   } catch (error) {
-    console.error('Fehler beim Parsen des Einladungslinks:', error);
+    logger.error('Fehler beim Parsen des Einladungslinks:', error);
     return null;
   }
 }

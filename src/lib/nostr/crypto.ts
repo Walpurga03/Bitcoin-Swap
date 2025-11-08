@@ -1,4 +1,5 @@
 import { getPublicKey, nip44, nip19 } from 'nostr-tools';
+import { logger } from '$lib/utils/logger';
 
 /**
  * Leite einen Channel-ID Hash vom Secret ab
@@ -33,7 +34,7 @@ export function nip44Encrypt(content: string, privateKey: string, recipientPubke
     const encrypted = nip44.v2.encrypt(content, conversationKey);
     return encrypted;
   } catch (error) {
-    console.error('NIP-44 Verschlüsselung fehlgeschlagen:', error);
+    logger.error('NIP-44 Verschlüsselung fehlgeschlagen:', error);
     throw new Error('Verschlüsselung fehlgeschlagen');
   }
 }
@@ -47,7 +48,7 @@ export function nip44Decrypt(encrypted: string, privateKey: string, senderPubkey
     const decrypted = nip44.v2.decrypt(encrypted, conversationKey);
     return decrypted;
   } catch (error) {
-    console.error('NIP-44 Entschlüsselung fehlgeschlagen:', error);
+    logger.error('NIP-44 Entschlüsselung fehlgeschlagen:', error);
     throw new Error('Entschlüsselung fehlgeschlagen');
   }
 }
@@ -87,7 +88,7 @@ export async function encryptForGroup(content: string, groupKey: string): Promis
     
     return bytesToHex(combined);
   } catch (error) {
-    console.error('Gruppen-Verschlüsselung fehlgeschlagen:', error);
+    logger.error('Gruppen-Verschlüsselung fehlgeschlagen:', error);
     throw new Error('Verschlüsselung fehlgeschlagen');
   }
 }
@@ -223,7 +224,7 @@ export function nip44DecryptWithConversationKey(
     const decrypted = nip44.v2.decrypt(encrypted, conversationKey);
     return decrypted;
   } catch (error) {
-    console.error('❌ NIP-44 Entschlüsselung fehlgeschlagen:', error);
+    logger.error(' NIP-44 Entschlüsselung fehlgeschlagen:', error);
     throw new Error('NIP-44 Entschlüsselung fehlgeschlagen');
   }
 }
@@ -243,7 +244,7 @@ export function getConversationKey(
     );
     return conversationKey;
   } catch (error) {
-    console.error('❌ Conversation Key Generierung fehlgeschlagen:', error);
+    logger.error(' Conversation Key Generierung fehlgeschlagen:', error);
     throw new Error('Conversation Key konnte nicht generiert werden');
   }
 }
@@ -277,7 +278,7 @@ export async function encryptMetadata(
     
     return { content, iv };
   } catch (error) {
-    console.error('❌ Metadaten-Verschlüsselung fehlgeschlagen:', error);
+    logger.error(' Metadaten-Verschlüsselung fehlgeschlagen:', error);
     throw error;
   }
 }
@@ -296,7 +297,7 @@ export async function decryptMetadata(
     const decrypted = await decryptForGroup(encrypted, groupKey);
     return JSON.parse(decrypted);
   } catch (error) {
-    console.error('❌ Metadaten-Entschlüsselung fehlgeschlagen:', error);
+    logger.error(' Metadaten-Entschlüsselung fehlgeschlagen:', error);
     throw error;
   }
 }
@@ -325,7 +326,7 @@ export async function createNIP17Message(
   try {
     const { finalizeEvent, getPublicKey } = await import('nostr-tools');
     
-    console.log('🎁 [NIP-17] Erstelle Gift-Wrapped Message...');
+    logger.debug('🎁 [NIP-17] Erstelle Gift-Wrapped Message...');
     
     // 1. Generiere temporären Key für den Wrapper
     const tempKey = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
@@ -346,14 +347,14 @@ export async function createNIP17Message(
     
     const signedInnerEvent = finalizeEvent(innerEvent, senderPrivateKey as any);
     
-    console.log('  ✅ Inneres Event erstellt (Kind 14)');
+    logger.debug('✅ Inneres Event erstellt (Kind 14)');
     
     // 3. Verschlüssele inneres Event mit NIP-44
     const conversationKey = getConversationKey(tempKey, recipientPublicKey);
     const innerEventString = JSON.stringify(signedInnerEvent);
     const encryptedInner = nip44.v2.encrypt(innerEventString, conversationKey);
     
-    console.log('  🔐 Inneres Event verschlüsselt');
+    logger.debug('🔐 Inneres Event verschlüsselt');
     
     // 4. Erstelle äußeres Event (Kind 1059 - Gift Wrap)
     const outerEvent = {
@@ -366,15 +367,15 @@ export async function createNIP17Message(
     
     const signedOuterEvent = finalizeEvent(outerEvent, tempKey as any);
     
-    console.log('  ✅ Äußeres Event erstellt (Kind 1059 - Gift Wrap)');
-    console.log('  📦 NIP-17 Message bereit zum Versenden');
+    logger.debug('✅ Äußeres Event erstellt (Kind 1059 - Gift Wrap)');
+    logger.debug('📦 NIP-17 Message bereit zum Versenden');
     
     return {
       innerEvent: signedInnerEvent,
       wrappedEvent: signedOuterEvent
     };
   } catch (error) {
-    console.error('❌ [NIP-17] Fehler beim Erstellen:', error);
+    logger.error(' [NIP-17] Fehler beim Erstellen:', error);
     throw error;
   }
 }
@@ -392,7 +393,7 @@ export async function decryptNIP17Message(
   createdAt: number;
 }> {
   try {
-    console.log('🎁 [NIP-17] Entschlüssele Gift-Wrapped Message...');
+    logger.debug('🎁 [NIP-17] Entschlüssele Gift-Wrapped Message...');
     
     // 1. Entschlüssele mit NIP-44 (wrapped event content)
     const conversationKey = getConversationKey(recipientPrivateKey, wrappedEvent.pubkey);
@@ -401,13 +402,13 @@ export async function decryptNIP17Message(
       conversationKey
     );
     
-    console.log('  ✅ Äußeres Event entschlüsselt');
+    logger.debug('✅ Äußeres Event entschlüsselt');
     
     // 2. Parse inneres Event
     const innerEvent = JSON.parse(decryptedInnerString);
     
-    console.log('  ✅ Inneres Event geparst');
-    console.log('  📨 Nachricht von:', innerEvent.pubkey.substring(0, 16) + '...');
+    logger.debug('✅ Inneres Event geparst');
+    logger.debug('📨 Nachricht von:', innerEvent.pubkey.substring(0, 16) + '...');
     
     return {
       content: innerEvent.content,
@@ -415,7 +416,7 @@ export async function decryptNIP17Message(
       createdAt: innerEvent.created_at
     };
   } catch (error) {
-    console.error('❌ [NIP-17] Fehler beim Entschlüsseln:', error);
+    logger.error(' [NIP-17] Fehler beim Entschlüsseln:', error);
     throw error;
   }
 }
@@ -431,7 +432,7 @@ export function verifyEventSignature(event: any): boolean {
     const { verifySignature } = require('nostr-tools');
     return verifySignature(event);
   } catch (error) {
-    console.error('❌ Signatur-Validierung fehlgeschlagen:', error);
+    logger.error(' Signatur-Validierung fehlgeschlagen:', error);
     return false;
   }
 }
