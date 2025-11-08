@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { getErrorMessage } from '$lib/utils';
   import { validateOfferSecret, formatSecretForDisplay } from '$lib/nostr/offerSecret';
 
   export let show = false;
@@ -38,8 +39,8 @@
       
       // Modal schließen
       handleClose();
-    } catch (e: any) {
-      error = e.message || 'Fehler beim Login';
+    } catch (e: unknown) {
+      error = getErrorMessage(e) || 'Fehler beim Login';
     } finally {
       loading = false;
     }

@@ -7,7 +7,7 @@
   import { logger, marketplaceLogger, securityLogger } from '$lib/utils/logger';
   
 
-  import { formatTimestamp, truncatePubkey, getTimeRemaining, isExpiringSoon } from '$lib/utils';
+  import { formatTimestamp, truncatePubkey, getTimeRemaining, isExpiringSoon, getErrorMessage } from '$lib/utils';
   import {
     generateOfferSecret,
     deriveKeypairFromSecret,
@@ -223,9 +223,9 @@
         }
       }, 10000);
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Fehler beim Laden der Daten', e);
-      error = e.message || 'Fehler beim Laden der Daten';
+      error = getErrorMessage(e) || 'Fehler beim Laden der Daten';
     }
   });
 
@@ -283,8 +283,8 @@
       setTimeout(() => {
         error = '';
       }, 3000);
-    } catch (e: any) {
-      error = '❌ ' + (e.message || 'Fehler beim Erstellen des Angebots');
+    } catch (e: unknown) {
+      error = '❌ ' + (getErrorMessage(e) || 'Fehler beim Erstellen des Angebots');
     } finally {
       loading = false;
     }
@@ -315,8 +315,8 @@
       
       error = '';
       alert('✅ Angebot erfolgreich gelöscht!');
-    } catch (e: any) {
-      error = '❌ ' + (e.message || 'Fehler beim Löschen');
+    } catch (e: unknown) {
+      error = '❌ ' + (getErrorMessage(e) || 'Fehler beim Löschen');
     } finally {
       loading = false;
     }
@@ -363,9 +363,9 @@
       error = '';
       alert(`✅ Interesse gezeigt!\n\n⏳ Warte auf Auswahl durch den Angebotsgeber.\n\n🎭 Dein Interesse ist vollständig anonym!`);
       
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Fehler beim Senden des Interesses', e);
-      error = '❌ ' + (e.message || 'Fehler beim Senden des Interesses');
+      error = '❌ ' + (getErrorMessage(e) || 'Fehler beim Senden des Interesses');
     } finally {
       loading = false;
     }
@@ -410,9 +410,9 @@
       
       showInterestList = true;
       loading = false;
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Fehler beim Laden der Interesse-Signale', e);
-      error = '❌ ' + (e.message || 'Fehler beim Laden der Interesse-Signale');
+      error = '❌ ' + (getErrorMessage(e) || 'Fehler beim Laden der Interesse-Signale');
       loading = false;
     }
   }
@@ -460,9 +460,9 @@
       await loadMyDealsFromRelay();
 
       alert('✅ Deal erstellt!\n\nDu kannst jetzt mit dem ausgewählten Partner außerhalb der App kommunizieren.');
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Fehler beim Erstellen des Deals', e);
-      error = '❌ ' + (e.message || 'Fehler beim Erstellen des Deals');
+      error = '❌ ' + (getErrorMessage(e) || 'Fehler beim Erstellen des Deals');
     } finally {
       loading = false;
     }
@@ -514,9 +514,9 @@
       
       alert('✅ Angebot erfolgreich gelöscht!');
       
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Fehler beim Löschen des Angebots', e);
-      error = '❌ Fehler beim Löschen: ' + (e.message || 'Unbekannter Fehler');
+      error = '❌ Fehler beim Löschen: ' + (getErrorMessage(e) || 'Unbekannter Fehler');
     } finally {
       loading = false;
     }
@@ -552,9 +552,9 @@
 
       alert('✅ Erfolgreich mit Secret angemeldet!\n\nDu kannst jetzt dein Angebot verwalten.');
       
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Secret-Login Fehler', e);
-      error = '❌ Fehler beim Login: ' + (e.message || 'Unbekannter Fehler');
+      error = '❌ Fehler beim Login: ' + (getErrorMessage(e) || 'Unbekannter Fehler');
       offerSecret = null;
       offerKeypair = null;
       sessionStorage.removeItem('offerSecret');

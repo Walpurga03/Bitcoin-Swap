@@ -10,6 +10,8 @@
  * - isOfferExpired() - Prüfe ob Angebot abgelaufen
  */
 
+import type { NostrFilter } from './types';
+
 import { SimplePool, finalizeEvent, type Event } from 'nostr-tools';
 
 export interface Offer {
@@ -192,7 +194,7 @@ export async function loadOffers(
     const pool = new SimplePool();
     
     // Filter für Kind 42 Events (Channel Messages)
-    const filter: any = {
+    const filter: NostrFilter = {
       kinds: [42],
       '#e': [channelId],
       limit: 100
@@ -200,7 +202,7 @@ export async function loadOffers(
     
     // WICHTIG: Filtere nur Angebote dieser Gruppe
     if (secretHash) {
-      filter['#g'] = [secretHash];
+      filter['#g'] = [secretHash];  // Custom group hash tag
     }
     
     try {

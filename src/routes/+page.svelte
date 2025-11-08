@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getErrorMessage } from '$lib/utils';
   // @ts-ignore
   import { goto } from '$app/navigation';
   import { userStore } from '$lib/stores/userStore';
@@ -168,8 +169,8 @@
 
       // Navigiere direkt zum Angebotsraum (Link wird später im WhitelistModal generiert)
       await goto('/group');
-    } catch (e: any) {
-      error = e.message || 'Ein Fehler ist aufgetreten';
+    } catch (e: unknown) {
+      error = getErrorMessage(e) || 'Ein Fehler ist aufgetreten';
     } finally {
       loading = false;
     }
@@ -288,8 +289,8 @@
 
       // Weiterleitung zum Marketplace (kein Gruppen-Chat mehr!)
       await goto('/group');
-    } catch (e: any) {
-      error = e.message || 'Ein Fehler ist aufgetreten';
+    } catch (e: unknown) {
+      error = getErrorMessage(e) || 'Ein Fehler ist aufgetreten';
     } finally {
       loading = false;
     }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { deriveChannelId } from '$lib/nostr/crypto';
-  import { createInviteLink, parseInviteLink } from '$lib/utils';
+  import { createInviteLink, parseInviteLink , getErrorMessage} from '$lib/utils';
 
   let secret = 'premium-group123';
   let relay = 'wss://nostr-relay.online';
@@ -14,8 +14,8 @@
     try {
       channelId = await deriveChannelId(secret);
       testResults = [...testResults, `✅ Channel-ID generiert: ${channelId}`];
-    } catch (e: any) {
-      testResults = [...testResults, `❌ Fehler: ${e.message}`];
+    } catch (e: unknown) {
+      testResults = [...testResults, `❌ Fehler: ${getErrorMessage(e)}`];
     }
   }
 
@@ -23,8 +23,8 @@
     try {
       inviteLink = createInviteLink(domain, relay, secret);
       testResults = [...testResults, `✅ Einladungslink erstellt: ${inviteLink}`];
-    } catch (e: any) {
-      testResults = [...testResults, `❌ Fehler: ${e.message}`];
+    } catch (e: unknown) {
+      testResults = [...testResults, `❌ Fehler: ${getErrorMessage(e)}`];
     }
   }
 
@@ -36,8 +36,8 @@
       } else {
         testResults = [...testResults, `❌ Parsen fehlgeschlagen`];
       }
-    } catch (e: any) {
-      testResults = [...testResults, `❌ Fehler: ${e.message}`];
+    } catch (e: unknown) {
+      testResults = [...testResults, `❌ Fehler: ${getErrorMessage(e)}`];
     }
   }
 
@@ -51,8 +51,8 @@
       } else {
         testResults = [...testResults, `❌ Duplikat-Test fehlgeschlagen: IDs unterschiedlich`];
       }
-    } catch (e: any) {
-      testResults = [...testResults, `❌ Fehler: ${e.message}`];
+    } catch (e: unknown) {
+      testResults = [...testResults, `❌ Fehler: ${getErrorMessage(e)}`];
     }
   }
 
@@ -66,8 +66,8 @@
       } else {
         testResults = [...testResults, `❌ Fehler: Gleiche IDs für unterschiedliche Secrets`];
       }
-    } catch (e: any) {
-      testResults = [...testResults, `❌ Fehler: ${e.message}`];
+    } catch (e: unknown) {
+      testResults = [...testResults, `❌ Fehler: ${getErrorMessage(e)}`];
     }
   }
 

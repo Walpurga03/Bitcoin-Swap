@@ -102,25 +102,42 @@ export function generateRandomId(): string {
 }
 
 /**
- * Debounce-Funktion für Rate-Limiting
+ * Debounce function - limit rate of function calls
  */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null;
-  
+
   return function executedFunction(...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
     };
-    
-    if (timeout) {
+
+    if (timeout !== null) {
       clearTimeout(timeout);
     }
     timeout = setTimeout(later, wait);
   };
+}
+
+/**
+ * Extract error message from unknown error type
+ * Safely handles Error objects, strings, and unknown types
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String(error.message);
+  }
+  return 'Unbekannter Fehler';
 }
 
 /**

@@ -74,7 +74,7 @@ export interface DMMessage {
 export interface RelayConnection {
   url: string;
   connected: boolean;
-  relay?: any;
+  relay?: import('nostr-tools').SimplePool;
 }
 
 // Filter for fetching events
@@ -89,6 +89,8 @@ export interface NostrFilter {
   since?: number;
   until?: number;
   limit?: number;
+  // Allow custom tags (e.g., '#g' for group hash)
+  [key: `#${string}`]: string[] | undefined;
 }
 
 // Invite Link Data
@@ -157,5 +159,5 @@ export interface EncryptedMetadata {
   offerId?: string;
   offerContent?: string;
   created_at?: number;
-  [key: string]: any;
+  [key: string]: string | number | undefined;
 }

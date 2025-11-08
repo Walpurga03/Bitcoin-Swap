@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getErrorMessage } from '$lib/utils';
   import { groupStore } from '$lib/stores/groupStore';
   import { userStore } from '$lib/stores/userStore';
   import QRCode from 'qrcode';
@@ -43,8 +44,8 @@
       whitelist = whitelistData?.pubkeys || [];
       
       console.log('✅ Whitelist geladen:', whitelist.length, 'Einträge');
-    } catch (e: any) {
-      error = 'Fehler beim Laden der Whitelist: ' + e.message;
+    } catch (e: unknown) {
+      error = 'Fehler beim Laden der Whitelist: ' + getErrorMessage(e);
       console.error(e);
     } finally {
       loading = false;
@@ -102,8 +103,8 @@
       success = '✅ User zur Whitelist hinzugefügt!';
       
       setTimeout(() => success = '', 3000);
-    } catch (e: any) {
-      error = 'Fehler: ' + e.message;
+    } catch (e: unknown) {
+      error = 'Fehler: ' + getErrorMessage(e);
       console.error(e);
     } finally {
       loading = false;
@@ -144,8 +145,8 @@
       success = '✅ User aus Whitelist entfernt!';
       
       setTimeout(() => success = '', 3000);
-    } catch (e: any) {
-      error = 'Fehler: ' + e.message;
+    } catch (e: unknown) {
+      error = 'Fehler: ' + getErrorMessage(e);
       console.error(e);
     } finally {
       loading = false;
