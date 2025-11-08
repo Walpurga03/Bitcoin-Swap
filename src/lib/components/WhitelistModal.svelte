@@ -47,7 +47,7 @@
       logger.success('✅ Whitelist geladen:', whitelist.length, 'Einträge');
     } catch (e: unknown) {
       error = 'Fehler beim Laden der Whitelist: ' + getErrorMessage(e);
-      logger.error(e);
+      logger.error('Fehler beim Laden der Whitelist', e);
     } finally {
       loading = false;
     }
@@ -106,7 +106,7 @@
       setTimeout(() => success = '', 3000);
     } catch (e: unknown) {
       error = 'Fehler: ' + getErrorMessage(e);
-      logger.error(e);
+      logger.error('Fehler beim Hinzufügen zur Whitelist', e);
     } finally {
       loading = false;
     }
@@ -148,7 +148,7 @@
       setTimeout(() => success = '', 3000);
     } catch (e: unknown) {
       error = 'Fehler: ' + getErrorMessage(e);
-      logger.error(e);
+      logger.error('Fehler beim Entfernen aus Whitelist', e);
     } finally {
       loading = false;
     }

@@ -95,7 +95,7 @@ export async function saveGroupConfig(
       }
     }
     
-    securityLogger.offer('✅ Gruppen-Config gespeichert:', {
+    logger.info('✅ Gruppen-Config gespeichert:', {
       relay: config.relay,
       admin: adminPubkey.substring(0, 16) + '...',
       secret_hash: config.secret_hash.substring(0, 16) + '...'
@@ -143,7 +143,7 @@ export async function loadGroupConfig(
 
       if (events.length > 0) {
         const event = events[0];
-        securityLogger.offer('✅ Gruppen-Config geladen (Versuch', attempt + ')');
+        logger.info('✅ Gruppen-Config geladen (Versuch', attempt + ')');
 
         // Parse Content
         const config = JSON.parse(event.content) as GroupConfig;
@@ -221,7 +221,7 @@ export async function loadGroupConfigFromRelays(
           const event = events[0];
           // Verify signature
           if (verifyEvent(event)) {
-            securityLogger.offer('✅ Valides Event gefunden auf:', relay);
+            logger.info('✅ Valides Event gefunden auf:', relay);
             return { relay, event };
           }
         }
@@ -252,7 +252,7 @@ export async function loadGroupConfigFromRelays(
     validResults.sort((a, b) => b.event.created_at - a.event.created_at);
     const best = validResults[0];
     
-    securityLogger.offer('✅ Beste GroupConfig von Relay:', best.relay);
+    logger.info('✅ Beste GroupConfig von Relay:', best.relay);
     logger.debug(' Gefunden auf', validResults.length, 'von', relays.length, 'Relays');
     
     // Parse und validiere Content
