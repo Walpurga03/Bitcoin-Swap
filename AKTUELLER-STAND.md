@@ -19,8 +19,8 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr:
 ### 1️⃣ **Admin erstellt Gruppe**
 
 **Was macht der Admin?**
-- Erstellt ein **Gruppen-Secret** (geheimer Text, z.B. "BitcoinMünchen2025")
-- Konfiguriert das **Relay** (z.B. wss://nostr-relay.online)
+- Erstellt ein **Gruppen-Secret** (geheimer Text, z.B. "abcde12345")
+- Konfiguriert das **Relay** (z.B. wss://damus.io)
 - Erstellt eine **Whitelist** mit erlaubten Mitgliedern
 
 **Was wird gespeichert?**
@@ -36,7 +36,7 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr:
 
 **Admin teilt aus:**
 - **Einladungs-Link** mit eingebettetem Secret → Als QR-Code oder Link
-- Format: `https://app-url.com/join?secret=BitcoinMünchen2025`
+- Format: `https://app-url.com/join?secret=abcde12345`
 - Mitglieder scannen QR-Code ODER klicken auf Link
 - ➡️ Secret wird automatisch aus dem Link extrahiert
 

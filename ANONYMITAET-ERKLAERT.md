@@ -187,64 +187,127 @@ Ergebnis:
 
 ## 🔐 Wie funktioniert die Verschlüsselung?
 
-### **Die Farb-Analogie (einfach erklärt):**
+### **Die Farb-Analogie (Diffie-Hellman Schlüsselaustausch):**
 
-Stell dir vor, Verschlüsselung funktioniert wie Farben mischen:
+Die Verschlüsselung basiert auf dem **Diffie-Hellman-Prinzip**: Zwei Parteien erzeugen unabhängig voneinander den gleichen geheimen Schlüssel, ohne ihn jemals direkt auszutauschen.
 
-#### **Alice verschlüsselt:**
+**Visualisierung mit Farben:**
 
-```
-Alice hat:
-  🔴 Ihre geheime rote Farbe (nur sie kennt sie)
-  🟡 Bob's öffentliche gelbe Farbe (jeder sieht sie)
-  
-Alice mischt:
-  🔴 + 🟡 = 🟠 Orange
-  
-Alice schreibt Nachricht mit Orange:
-  "Ich bin Alice und habe Interesse!"
-  → K8HJ3LP9QWERTYXCVB... (Orange-verschlüsselt)
-```
-
-#### **Bob entschlüsselt:**
-
-```
-Bob hat:
-  🟡 Seine geheime gelbe Farbe (nur er kennt sie)
-  🔴 Alice's öffentliche rote Farbe (jeder sieht sie)
-  
-Bob mischt:
-  🟡 + 🔴 = 🟠 Orange (DAS GLEICHE Orange!)
-  
-Bob liest Nachricht mit Orange:
-  K8HJ3LP9QWERTYXCVB...
-  → "Ich bin Alice und habe Interesse!" ✅
-```
-
-#### **Was andere Leute sehen:**
-
-```
-Andere haben:
-  🔵 Ihre blaue Farbe
-  🔴 Alice's öffentliche rote Farbe
-  
-Sie mischen:
-  🔵 + 🔴 = 🟣 Lila (NICHT Orange!)
-  
-Sie versuchen zu lesen mit Lila:
-  K8HJ3LP9QWERTYXCVB...
-  → "8#Kx9!2@$..." (Kauderwelsch) ❌
-```
-
-**Nur wer die RICHTIGE Farbe hat, kann lesen!**
+Die Verschlüsselung funktioniert wie das Mischen von Farben. Jede Person hat **zwei Farben**: eine geheime und eine öffentliche.
 
 ---
 
-## 🎭 Zusammenfassung: Wer sieht was?
+#### **1. Ausgangssituation - Jeder hat seine eigenen Farben:**
 
-### **Auf dem Server (Relay):**
+```
+Alice:
+  🔴 Geheime Farbe (privater Schlüssel)    → Nur Alice kennt diese
+  🟠 Öffentliche Farbe (public key)        → Alle können sie sehen
+  
+Bob:
+  🟡 Geheime Farbe (privater Schlüssel)    → Nur Bob kennt diese
+  🟢 Öffentliche Farbe (public key)        → Alle können sie sehen
+  
+Charlie (Angreifer):
+  🔵 Geheime Farbe (privater Schlüssel)    → Nur Charlie kennt diese
+  🟣 Öffentliche Farbe (public key)        → Alle können sie sehen
+```
 
-| Event | Was gespeichert ist | Wer es sehen kann |
+**Wichtig:** Die geheime Farbe verlässt NIEMALS die Person!
+
+---
+
+#### **2. Alice will eine verschlüsselte Nachricht an Bob senden:**
+
+```
+Alice nimmt:
+  🔴 Ihre GEHEIME rote Farbe (privater Schlüssel)
+  🟢 Bob's ÖFFENTLICHE grüne Farbe (public key)
+  
+Alice mischt:
+  🔴 + 🟢 = 🟤 Brauner Shared Secret
+  
+Alice verschlüsselt mit 🟤:
+  Klartext:      "Ich bin Alice und habe Interesse!"
+  Verschlüsselt: K8HJ3LP9QWERTYXCVB...
+  
+Alice sendet:
+  📨 K8HJ3LP9QWERTYXCVB... (verschlüsselt) → öffentliches Netzwerk
+```
+
+---
+
+#### **3. Bob empfängt die Nachricht und entschlüsselt:**
+
+```
+Bob nimmt:
+  🟡 Seine GEHEIME gelbe Farbe (privater Schlüssel)
+  🟠 Alice's ÖFFENTLICHE orange Farbe (public key)
+  
+Bob mischt:
+  🟡 + 🟠 = 🟤 Brauner Shared Secret
+  
+🎯 MAGIE: Das ist DER GLEICHE braune Schlüssel wie bei Alice!
+  
+Bob entschlüsselt mit 🟤:
+  Verschlüsselt: K8HJ3LP9QWERTYXCVB...
+  Klartext:      "Ich bin Alice und habe Interesse!" ✅
+```
+
+**Warum funktioniert das?**
+- 🔴 (Alice geheim) + 🟢 (Bob öffentlich) = 🟤
+- 🟡 (Bob geheim) + 🟠 (Alice öffentlich) = 🟤
+- Mathematisch das GLEICHE Ergebnis! (Diffie-Hellman)
+
+---
+
+#### **4. Charlie (Angreifer) versucht zu entschlüsseln:**
+
+```
+Charlie sieht öffentlich:
+  🟠 Alice's öffentliche Farbe
+  🟢 Bob's öffentliche Farbe
+  📨 Verschlüsselte Nachricht: K8HJ3LP9QWERTYXCVB...
+  
+Charlie versucht Option 1:
+  🔵 Seine GEHEIME blaue Farbe + 🟠 Alice's öffentliche = 🪻 Lila
+  Mit 🪻 entschlüsseln: K8HJ3LP9QWERTYXCVB... → "xG#9!?@..." ❌ Müll
+  
+Charlie versucht Option 2:
+  🔵 Seine GEHEIME blaue Farbe + 🟢 Bob's öffentliche = ⬛ Dunkelblau
+  Mit ⬛ entschlüsseln: K8HJ3LP9QWERTYXCVB... → "2$aK!..." ❌ Müll
+  
+Charlie versucht Option 3:
+  🟠 Alice's öffentliche + 🟢 Bob's öffentliche = 🧡 Gelb-Orange
+  Mit 🧡 entschlüsseln: K8HJ3LP9QWERTYXCVB... → "!9Lm#..." ❌ Müll
+```
+
+**❌ Charlie kann NICHT 🟤 erzeugen, weil er braucht:**
+- Entweder 🔴 (Alice's geheime Farbe) → hat er NICHT
+- Oder 🟡 (Bob's geheime Farbe) → hat er NICHT
+
+**Nur Alice + Bob können 🟤 erzeugen!**
+
+---
+
+#### **5. Zusammenfassung - Wer kann was mischen?**
+
+```
+✅ Alice kann:
+   🔴 (geheim) + 🟢 (Bob öffentlich) = 🟤 ← RICHTIG!
+   
+✅ Bob kann:
+   🟡 (geheim) + 🟠 (Alice öffentlich) = 🟤 ← RICHTIG!
+   
+❌ Charlie kann nur:
+   🔵 (geheim) + 🟠 (Alice öffentlich) = 🪻 ← FALSCH!
+   🔵 (geheim) + 🟢 (Bob öffentlich) = ⬛ ← FALSCH!
+   🟠 + 🟢 (beide öffentlich) = 🧡 ← FALSCH!
+   
+🎯 Nur mit dem RICHTIGEN geheimen Schlüssel kann man 🟤 erzeugen!
+```
+
+---
 |-------|-------------------|-------------------|
 | **Angebot** | ANONYM_XYZ123: "Verkaufe BTC" | ALLE (aber nicht wer Bob ist) |
 | **Interesse** | ANONYM_ABC789: verschlüsselt | ALLE (aber nicht wer Alice ist & nicht lesbar) |
