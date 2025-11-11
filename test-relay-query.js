@@ -1,24 +1,34 @@
 #!/usr/bin/env node
 
 /**
- * Relay Query Tool - ANONYMITÄT-EDITION 🎭
- * Überwacht alle Event-Kinds die zum Relay gesendet werden
+ * Relay Query Tool - AKTUELLER STAND (10. Nov 2025) 🎭
+ * Zeigt NUR die Event-Kinds die WIRKLICH implementiert & aktiv sind!
  * 
- * 🎭 ANONYMITÄT:
- * - Alle Angebote & Interesse-Signale sind ANONYM!
+ * 🎭 VOLLSTÄNDIGE ANONYMITÄT:
+ * - Alle Angebote & Interesse-Signale sind KOMPLETT ANONYM!
  * - Events signiert mit temp-pubkeys (deterministisch aus Secret)
- * - Echte Identitäten nur verschlüsselt oder in Tags
- * - Auf Relay: Niemand sieht WER Angebot erstellt oder Interesse zeigt
+ * - Echte Identitäten NUR verschlüsselt im Content
+ * - Auf Relay: Niemand sieht WER Angebot erstellt oder Interesse zeigt!
  * 
- * Event-Kinds:
- * - Kind 42: Marketplace-Angebote (Channel Messages) - 🎭 TEMP-PUBKEY
- * - Kind 30000: GroupConfig & Whitelist (Addressable Events)
- * - Kind 30078: Interesse-Signale (verschlüsselt, NIP-04) - 🎭 TEMP-PUBKEY
- * - Kind 30079: Absage-Nachrichten (verschlüsselt, NIP-04)
- * - Kind 30081: Deal-Status (öffentlich)
- * - Kind 1059: NIP-17 Gift-Wrapped Messages (Deal-Rooms)
- * - Kind 5: Deletion Events (NIP-09)
- * - Kind 4: Verschlüsselte DMs (NIP-04, deprecated)
+ * 📋 AKTIV IMPLEMENTIERTE EVENT-KINDS:
+ * 
+ * MARKETPLACE (Anonym):
+ * - Kind 42: Marketplace-Angebote - 🎭 TEMP-PUBKEY (72h Expiration)
+ * - Kind 30078: Interesse-Signale - 🎭 TEMP-PUBKEY (NIP-04 verschlüsselt)
+ * 
+ * GRUPPEN-VERWALTUNG:
+ * - Kind 30000: GroupConfig (Relay, Admin-Pubkey, Secret-Hash)
+ * - Kind 30000: Whitelist (Erlaubte User-Pubkeys)
+ * - Kind 0: User-Profile (Name, Display-Name, NIP-05)
+ * 
+ * ⏳ NOCH NICHT IMPLEMENTIERT (werden nicht angezeigt):
+ * - Kind 30081: Deal-Status Updates (geplant)
+ * - Kind 5: Deletion Events (geplant)
+ * 
+ * ❌ NICHT MEHR GENUTZT (gelöscht im Code-Cleanup):
+ * - Kind 30079: Absage-Nachrichten (war Teil von offerSelection.ts - gelöscht!)
+ * - Kind 1059: NIP-17 Gift-Wrapped Messages (war Teil des Chat-Systems - gelöscht!)
+ * - Kind 4: Alte NIP-04 DMs (deprecated, nie verwendet)
  */
 
 import { SimplePool } from 'nostr-tools/pool';
@@ -31,14 +41,14 @@ import { SimplePool } from 'nostr-tools/pool';
 const RELAY = 'wss://nostr-relay.online';
 
 // Channel-ID (SHA-256 Hash des Gruppen-Secrets)
-const CHANNEL_ID = 'f4a5d22ba76486124a972c9ca132825a3115289ac795fd65302c07106308dc5b';
+const CHANNEL_ID = '1ff9850352a21c9b1d1d72d9fb5a059d5efb18460ce08873c0b9fe5348205c0a';
 
 // Optional: Secret-Hash deiner Gruppe (wird als #g Tag verwendet)
 // Wenn du den Hash nicht kennst, setze auf null und das Script zeigt alle Angebote
 const SECRET_HASH = null; // z.B. 'abc123...' oder null für alle
 
 // Zeitfilter: Wie viele Stunden zurück sollen Events angezeigt werden?
-const HOURS_TO_SHOW = 0.15; // Ändere diese Zahl, um mehr/weniger Events zu sehen
+const HOURS_TO_SHOW = 100; // Ändere diese Zahl, um mehr/weniger Events zu sehen
 
 // Nur gefüllte Sektionen anzeigen?
 const HIDE_EMPTY_SECTIONS = true; // true = nur Sektionen mit Inhalt anzeigen
@@ -231,153 +241,46 @@ async function queryRelay() {
     }
 
     // ============================================================
-    // 3. ABSAGE-NACHRICHTEN (Kind 30079)
+    // 3. USER-PROFILE (Kind 0) - Öffentliche Profile
     // ============================================================
-    const rejections = await pool.querySync([RELAY], {
-      kinds: [30079],
+    // 3. USER-PROFILE (Kind 0) - Öffentliche Profile
+    // ============================================================
+    const profiles = await pool.querySync([RELAY], {
+      kinds: [0],
       since: HOURS_AGO,
       limit: 20
     });
-
-    if (!HIDE_EMPTY_SECTIONS || rejections.length > 0) {
-      console.log('\n\n❌ ABSAGE-NACHRICHTEN (Kind 30079)');
+    
+    if (!HIDE_EMPTY_SECTIONS || profiles.length > 0) {
+      console.log('\n\n👤 USER-PROFILE (Kind 0) - ÖFFENTLICH');
       console.log('   ' + '='.repeat(55));
-      console.log(`   ✅ Gefunden: ${rejections.length} Absagen (verschlüsselt)`);
+      console.log(`   ✅ Gefunden: ${profiles.length} User-Profile`);
+      console.log(`   📝 Enthält: Name, Display-Name, NIP-05, etc.`);
     }
     
-    if (rejections.length > 0) {
-      rejections.forEach(event => {
-        const dTag = event.tags.find(t => t[0] === 'd')?.[1] || 'kein d-tag';
-        const pTag = event.tags.find(t => t[0] === 'p')?.[1];
-        
-        console.log(`\n   ❌ Absage:`);
-        console.log(`      ID: ${event.id.substring(0, 16)}...`);
-        console.log(`      d-Tag: ${dTag}`);
-        console.log(`      Von: ${event.pubkey.substring(0, 16)}...`);
-        console.log(`      An: ${pTag ? pTag.substring(0, 16) + '...' : 'N/A'}`);
-        console.log(`      Alter: ${formatAge(event.created_at)}`);
-        console.log(`      🔒 Content: [NIP-04 verschlüsselt]`);
-      });
-    }
-
-    // ============================================================
-    // 4. NIP-17 GIFT-WRAPPED MESSAGES (Kind 1059)
-    // ============================================================
-    const giftWrapped = await pool.querySync([RELAY], {
-      kinds: [1059],
-      since: HOURS_AGO,
-      limit: 20
-    });
-
-    if (!HIDE_EMPTY_SECTIONS || giftWrapped.length > 0) {
-      console.log('\n\n🎁 NIP-17 GIFT-WRAPPED MESSAGES (Kind 1059)');
-      console.log('   ' + '='.repeat(55));
-      console.log(`   ✅ Gefunden: ${giftWrapped.length} Gift-Wrapped Messages`);
-    }
-    
-    if (giftWrapped.length > 0) {
-      giftWrapped.forEach(event => {
-        const pTag = event.tags.find(t => t[0] === 'p')?.[1];
-        
-        console.log(`\n   🎁 Gift-Wrapped Message:`);
-        console.log(`      ID: ${event.id.substring(0, 16)}...`);
-        console.log(`      Von: ${event.pubkey.substring(0, 16)}...`);
-        console.log(`      An: ${pTag ? pTag.substring(0, 16) + '...' : 'N/A'}`);
-        console.log(`      Alter: ${formatAge(event.created_at)}`);
-        console.log(`      🔒 Content: [NIP-17 verschlüsselt]`);
-      });
-    }
-
-    // ============================================================
-    // 5. DELETION EVENTS (Kind 5) - Nur für diese Gruppe
-    // ============================================================
-    // WICHTIG: Lade zuerst GroupConfig um Admin-Pubkey zu kennen
-    const groupConfigsForAdmin = await pool.querySync([RELAY], {
-      kinds: [30000],
-      since: HOURS_AGO - (24 * 60 * 60), // 24h zurück für Admin
-      limit: 10
-    });
-    
-    const adminPubkey = groupConfigsForAdmin.find(e => {
-      const dTag = e.tags.find(t => t[0] === 'd')?.[1] || '';
-      return dTag.includes(CHANNEL_ID);
-    })?.pubkey;
-    
-    const deletions = await pool.querySync([RELAY], {
-      kinds: [5],
-      since: HOURS_AGO,
-      limit: 100
-    });
-    
-    // Filtere Deletion Events: Nur die vom Admin (Whitelist/Angebote dieser Gruppe)
-    const relevantDeletions = adminPubkey 
-      ? deletions.filter(event => event.pubkey === adminPubkey)
-      : [];
-    
-    if (!HIDE_EMPTY_SECTIONS || relevantDeletions.length > 0) {
-      console.log('\n\n🗑️ DELETION EVENTS (Kind 5 - Nur diese Gruppe)');
-      console.log('   ' + '='.repeat(55));
-      console.log(`   ✅ Gefunden: ${relevantDeletions.length} relevante Deletion Events`);
-      if (deletions.length > relevantDeletions.length) {
-        console.log(`   ℹ️ ${deletions.length - relevantDeletions.length} andere Deletion Events gefiltert`);
-      }
-    }
-    
-    if (relevantDeletions.length > 0) {
-      relevantDeletions.forEach(event => {
-        const eTags = event.tags.filter(t => t[0] === 'e');
-        const aTags = event.tags.filter(t => t[0] === 'a');
-        
-        console.log(`\n   🗑️ Deletion Event:`);
-        console.log(`      ID: ${event.id.substring(0, 16)}...`);
-        console.log(`      Author: ${event.pubkey.substring(0, 16)}...`);
-        console.log(`      Alter: ${formatAge(event.created_at)}`);
-        
-        if (eTags.length > 0) {
-          console.log(`      Löscht Events (e-tags):`);
-          eTags.forEach(tag => {
-            console.log(`        - ${tag[1].substring(0, 16)}...`);
-          });
-        }
-        
-        if (aTags.length > 0) {
-          console.log(`      Löscht Addressable Events (a-tags):`);
-          aTags.forEach(tag => {
-            console.log(`        - ${tag[1]}`);
-          });
+    if (profiles.length > 0) {
+      profiles.forEach((event, idx) => {
+        try {
+          const content = JSON.parse(event.content);
+          console.log(`\n   👤 Profil ${idx + 1}:`);
+          console.log(`      Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`      Pubkey: ${event.pubkey.substring(0, 16)}...`);
+          console.log(`      📅 Erstellt: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          
+          if (content.name) console.log(`      👤 Name: ${content.name}`);
+          if (content.display_name) console.log(`      📛 Display-Name: ${content.display_name}`);
+          if (content.nip05) console.log(`      ✅ NIP-05: ${content.nip05}`);
+          if (content.about) console.log(`      📝 About: ${content.about.substring(0, 60)}${content.about.length > 60 ? '...' : ''}`);
+          if (content.picture) console.log(`      🖼️ Picture: ${content.picture.substring(0, 50)}...`);
+        } catch (e) {
+          console.log(`\n   👤 Profil ${idx + 1}:`);
+          console.log(`      ⚠️ Content nicht parsebar`);
         }
       });
     }
 
     // ============================================================
-    // 6. ALTE NIP-04 DMs (Kind 4)
-    // ============================================================
-    const oldDMs = await pool.querySync([RELAY], {
-      kinds: [4],
-      since: HOURS_AGO,
-      limit: 10
-    });
-    
-    if (!HIDE_EMPTY_SECTIONS || oldDMs.length > 0) {
-      console.log('\n\n💬 ALTE NIP-04 DMs (Kind 4 - DEPRECATED)');
-      console.log('   ' + '='.repeat(55));
-      console.log(`   ✅ Gefunden: ${oldDMs.length} alte DMs`);
-    }
-    
-    if (oldDMs.length > 0) {
-      console.log(`   ⚠️ Hinweis: Diese sollten durch NIP-17 (Kind 1059) ersetzt werden!`);
-      oldDMs.forEach(event => {
-        const pTag = event.tags.find(t => t[0] === 'p')?.[1];
-        console.log(`\n   💬 Alte DM:`);
-        console.log(`      ID: ${event.id.substring(0, 16)}...`);
-        console.log(`      Von: ${event.pubkey.substring(0, 16)}...`);
-        console.log(`      An: ${pTag ? pTag.substring(0, 16) + '...' : 'N/A'}`);
-        console.log(`      Alter: ${formatAge(event.created_at)}`);
-      });
-    }
-
-    // ============================================================
-    // 7. KIND 30000 EVENTS (GroupConfig & Whitelist)
+    // 4. KIND 30000 EVENTS (GroupConfig & Whitelist)
     // ============================================================
     console.log('\n\n🏗️ KIND 30000 EVENTS (GroupConfig & Whitelist)');
     console.log('   ' + '='.repeat(55));
@@ -463,19 +366,22 @@ async function queryRelay() {
     }
 
     // ============================================================
-    // ZUSAMMENFASSUNG
+    // ZUSAMMENFASSUNG - NUR AKTIVE FEATURES
     // ============================================================
     console.log('\n\n' + '='.repeat(60));
-    console.log('📊 ZUSAMMENFASSUNG');
+    console.log('📊 ZUSAMMENFASSUNG - AKTIV IMPLEMENTIERTE EVENTS');
     console.log('='.repeat(60));
-    console.log(`📦 Marketplace-Angebote (Kind 42): ${activeOffers.length} aktiv${expiredOffers > 0 ? `, ${expiredOffers} abgelaufen` : ''}`);
-    console.log(`💌 Interesse-Signale (Kind 30078): ${interests.length}`);
-    console.log(`❌ Absagen (Kind 30079): ${rejections.length}`);
-    console.log(`🎁 Gift-Wrapped Messages (Kind 1059): ${giftWrapped.length}`);
-    console.log(`🗑️ Deletion Events (Kind 5): ${relevantDeletions.length}${relevantDeletions.length < deletions.length ? ` (${deletions.length - relevantDeletions.length} andere gefiltert)` : ''}`);
-    console.log(`💬 Alte DMs (Kind 4): ${oldDMs.length}${oldDMs.length > 0 ? ' ⚠️' : ''}`);
-    console.log(`🏗️ GroupConfigs: ${currentGroupConfigs.length}`);
-    console.log(`🔐 Whitelists: ${whitelists.length}`);
+    console.log('\n🎭 MARKETPLACE (Anonym):');
+    console.log(`   📦 Marketplace-Angebote (Kind 42): ${activeOffers.length} aktiv${expiredOffers > 0 ? `, ${expiredOffers} abgelaufen` : ''}`);
+    console.log(`   💌 Interesse-Signale (Kind 30078): ${interests.length}`);
+    
+    console.log('\n🏗️ GRUPPEN-VERWALTUNG:');
+    console.log(`   🏗️ GroupConfigs (Kind 30000): ${currentGroupConfigs.length}`);
+    console.log(`   🔐 Whitelists (Kind 30000): ${whitelists.length}`);
+    console.log(`   👤 User-Profile (Kind 0): ${profiles.length}`);
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 TOTAL EVENTS: ' + (activeOffers.length + interests.length + currentGroupConfigs.length + whitelists.length + profiles.length));
     console.log('='.repeat(60));
     
     console.log('\n✅ Query abgeschlossen!\n');
