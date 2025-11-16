@@ -48,6 +48,13 @@ export function nip44Decrypt(encrypted: string, privateKey: string, senderPubkey
     const decrypted = nip44.v2.decrypt(encrypted, conversationKey);
     return decrypted;
   } catch (error) {
+    // Prüfe ob es ein "invalid MAC" Fehler ist (Nachricht nicht für uns)
+    if (error instanceof Error && error.message === 'invalid MAC') {
+      // Durchreichen ohne zusätzliches Logging (wird in decryptNIP17Message behandelt)
+      throw error;
+    }
+    
+    // Andere Fehler loggen
     logger.error('NIP-44 Entschlüsselung fehlgeschlagen:', error);
     throw new Error('Entschlüsselung fehlgeschlagen');
   }
@@ -304,119 +311,207 @@ export async function decryptMetadata(
 
 /**
  * ============================================
- * NIP-17 Gift-Wrapped Messages
+ * NIP-17 Gift-Wrapped Messages (KORREKTE IMPLEMENTATION)
  * ============================================
  * 
- * NIP-17 ist der Standard für D2D (1:1) verschlüsselte Nachrichten
+ * NIP-17 3-Schichten-Modell für maximale Anonymität:
  * 
- * Format:
- * 1. Innere Nachricht: Kind 14 (verschlüsselt mit NIP-44)
- * 2. Äußere Nachricht: Kind 1059 (Gift-Wrapped)
- * 3. Nur Recipient kann äußeres Event entschlüsseln
+ * Schicht 1: Kind 14 (Chat Message) - Klartext mit Sender/Empfänger
+ * Schicht 2: Kind 13 (Seal) - Kind 14 verschlüsselt + signiert
+ * Schicht 3: Kind 1059 (Gift Wrap) - Kind 13 verschlüsselt mit Random-Key
+ * 
+ * Relay sieht nur: Random-Pubkey → Empfänger (keine Sender-Info!)
  */
 
+/**
+ * Generiere zufälligen Zeitstempel (bis zu 2 Tage in der Vergangenheit)
+ * Verhindert Timing-Analyse
+ */
+function randomPastTimestamp(): number {
+  const now = Math.floor(Date.now() / 1000);
+  const twoDays = 2 * 24 * 60 * 60;
+  const randomOffset = Math.floor(Math.random() * twoDays);
+  return now - randomOffset;
+}
+
+/**
+ * Erstelle NIP-17 Gift-Wrapped Message (3-Schichten)
+ * 
+ * @param messageContent - Nachrichtentext
+ * @param recipientPublicKey - Empfänger Pubkey
+ * @param senderPrivateKey - Sender Private Key
+ * @param roomId - Optional: Room-ID für Gruppierung
+ */
 export async function createNIP17Message(
   messageContent: string,
   recipientPublicKey: string,
-  senderPrivateKey: string
+  senderPrivateKey: string,
+  roomId?: string
 ): Promise<{
-  innerEvent: any;
-  wrappedEvent: any;
+  sealEvent: any;
+  giftWrapEvent: any;
 }> {
   try {
     const { finalizeEvent, getPublicKey } = await import('nostr-tools');
     
-    logger.debug('🎁 [NIP-17] Erstelle Gift-Wrapped Message...');
+    logger.debug('🎁 [NIP-17] Erstelle Gift-Wrapped Message (3-Schichten)...');
     
-    // 1. Generiere temporären Key für den Wrapper
-    const tempKey = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-    const tempPubkey = getPublicKey(tempKey as any);
-    
-    // 2. Erstelle inneres Event (Kind 14 - Sealed Direct Message)
     const senderPubkey = getPublicKey(senderPrivateKey as any);
-    const now = Math.floor(Date.now() / 1000);
     
-    const innerEvent = {
+    // ==========================================
+    // SCHICHT 1: Kind 14 (Chat Message - UNSIGNED!)
+    // ==========================================
+    const chatMessage = {
       kind: 14,
-      created_at: now,
-      tags: [['p', recipientPublicKey]],
-
+      created_at: randomPastTimestamp(),
+      tags: [
+        ['p', recipientPublicKey],
+        ...(roomId ? [['subject', roomId]] : [])
+      ],
       content: messageContent,
       pubkey: senderPubkey
     };
     
-    const signedInnerEvent = finalizeEvent(innerEvent, senderPrivateKey as any);
+    logger.debug('📝 Schicht 1: Chat Message (Kind 14) erstellt');
     
-    logger.debug('✅ Inneres Event erstellt (Kind 14)');
+    // ==========================================
+    // SCHICHT 2: Kind 13 (Seal)
+    // ==========================================
+    // Verschlüssele Chat Message mit NIP-44 (Sender → Empfänger)
+    const chatMessageString = JSON.stringify(chatMessage);
+    const encryptedChatMessage = nip44Encrypt(
+      chatMessageString,
+      senderPrivateKey,
+      recipientPublicKey
+    );
     
-    // 3. Verschlüssele inneres Event mit NIP-44
-    const conversationKey = getConversationKey(tempKey, recipientPublicKey);
-    const innerEventString = JSON.stringify(signedInnerEvent);
-    const encryptedInner = nip44.v2.encrypt(innerEventString, conversationKey);
-    
-    logger.debug('🔐 Inneres Event verschlüsselt');
-    
-    // 4. Erstelle äußeres Event (Kind 1059 - Gift Wrap)
-    const outerEvent = {
-      kind: 1059,
-      created_at: now + 1,
-      tags: [['p', recipientPublicKey]],
-      content: encryptedInner,
-      pubkey: tempPubkey
+    const sealEvent = {
+      kind: 13,
+      created_at: randomPastTimestamp(),
+      tags: [], // KEINE Tags! (verhindert Metadata-Leak)
+      content: encryptedChatMessage,
+      pubkey: senderPubkey
     };
     
-    const signedOuterEvent = finalizeEvent(outerEvent, tempKey as any);
+    const signedSeal = finalizeEvent(sealEvent, senderPrivateKey as any);
     
-    logger.debug('✅ Äußeres Event erstellt (Kind 1059 - Gift Wrap)');
-    logger.debug('📦 NIP-17 Message bereit zum Versenden');
+    logger.debug('🔒 Schicht 2: Seal (Kind 13) erstellt + signiert');
+    
+    // ==========================================
+    // SCHICHT 3: Kind 1059 (Gift Wrap)
+    // ==========================================
+    // Generiere RANDOM Key (Einweg-Schlüssel!)
+    const randomPrivateKey = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+    const randomPublicKey = getPublicKey(randomPrivateKey as any);
+    
+    // Verschlüssele Seal mit NIP-44 (Random → Empfänger)
+    const sealString = JSON.stringify(signedSeal);
+    const encryptedSeal = nip44Encrypt(
+      sealString,
+      randomPrivateKey,
+      recipientPublicKey
+    );
+    
+    const giftWrapEvent = {
+      kind: 1059,
+      created_at: randomPastTimestamp(),
+      tags: [['p', recipientPublicKey]], // NUR Empfänger-Tag!
+      content: encryptedSeal,
+      pubkey: randomPublicKey // ⚠️ RANDOM Pubkey (nicht Sender!)
+    };
+    
+    const signedGiftWrap = finalizeEvent(giftWrapEvent, randomPrivateKey as any);
+    
+    logger.debug('🎁 Schicht 3: Gift Wrap (Kind 1059) erstellt');
+    logger.debug('   → Random Pubkey:', randomPublicKey.substring(0, 16) + '...');
+    logger.debug('   → Empfänger:', recipientPublicKey.substring(0, 16) + '...');
+    logger.debug('✅ NIP-17 Message bereit (3-Schichten verschlüsselt)');
     
     return {
-      innerEvent: signedInnerEvent,
-      wrappedEvent: signedOuterEvent
+      sealEvent: signedSeal,
+      giftWrapEvent: signedGiftWrap
     };
   } catch (error) {
-    logger.error(' [NIP-17] Fehler beim Erstellen:', error);
+    logger.error('❌ [NIP-17] Fehler beim Erstellen:', error);
     throw error;
   }
 }
 
 /**
- * Entschlüssele NIP-17 Gift-Wrapped Message
- * Nur der Recipient kann diese entschlüsseln
+ * Entschlüssele NIP-17 Gift-Wrapped Message (3-Schichten)
+ * 
+ * @param giftWrapEvent - Kind 1059 Event vom Relay
+ * @param recipientPrivateKey - Empfänger Private Key
  */
 export async function decryptNIP17Message(
-  wrappedEvent: any,
+  giftWrapEvent: any,
   recipientPrivateKey: string
 ): Promise<{
   content: string;
   senderPubkey: string;
   createdAt: number;
+  roomId?: string;
 }> {
   try {
-    logger.debug('🎁 [NIP-17] Entschlüssele Gift-Wrapped Message...');
+    logger.debug('🎁 [NIP-17] Entschlüssele Gift-Wrapped Message (3-Schichten)...');
     
-    // 1. Entschlüssele mit NIP-44 (wrapped event content)
-    const conversationKey = getConversationKey(recipientPrivateKey, wrappedEvent.pubkey);
-    const decryptedInnerString = nip44DecryptWithConversationKey(
-      wrappedEvent.content,
-      conversationKey
+    // ==========================================
+    // SCHICHT 3: Kind 1059 (Gift Wrap) entschlüsseln
+    // ==========================================
+    logger.debug('🔓 Schritt 1: Entschlüssele Gift Wrap (Kind 1059)...');
+    
+    // Gift Wrap verwendet Random-Key → Empfänger-Key
+    const sealString = nip44Decrypt(
+      giftWrapEvent.content,
+      recipientPrivateKey,
+      giftWrapEvent.pubkey // Random Pubkey vom Wrapper
     );
     
-    logger.debug('✅ Äußeres Event entschlüsselt');
+    const sealEvent = JSON.parse(sealString);
     
-    // 2. Parse inneres Event
-    const innerEvent = JSON.parse(decryptedInnerString);
+    logger.debug('✅ Gift Wrap entschlüsselt → Seal Event (Kind 13)');
     
-    logger.debug('✅ Inneres Event geparst');
-    logger.debug('📨 Nachricht von:', innerEvent.pubkey.substring(0, 16) + '...');
+    // ==========================================
+    // SCHICHT 2: Kind 13 (Seal) entschlüsseln
+    // ==========================================
+    logger.debug('🔓 Schritt 2: Entschlüssele Seal (Kind 13)...');
+    
+    // Seal verwendet Sender-Key → Empfänger-Key
+    const chatMessageString = nip44Decrypt(
+      sealEvent.content,
+      recipientPrivateKey,
+      sealEvent.pubkey // Echter Sender Pubkey
+    );
+    
+    const chatMessage = JSON.parse(chatMessageString);
+    
+    logger.debug('✅ Seal entschlüsselt → Chat Message (Kind 14)');
+    
+    // ==========================================
+    // SCHICHT 1: Kind 14 (Chat Message) auslesen
+    // ==========================================
+    logger.debug('📨 Nachricht von:', chatMessage.pubkey.substring(0, 16) + '...');
+    
+    // Extrahiere Room-ID falls vorhanden
+    const subjectTag = chatMessage.tags?.find((tag: string[]) => tag[0] === 'subject');
+    const roomId = subjectTag ? subjectTag[1] : undefined;
+    
+    logger.debug('✅ NIP-17 Message komplett entschlüsselt');
     
     return {
-      content: innerEvent.content,
-      senderPubkey: innerEvent.pubkey,
-      createdAt: innerEvent.created_at
+      content: chatMessage.content,
+      senderPubkey: chatMessage.pubkey,
+      createdAt: chatMessage.created_at,
+      roomId
     };
   } catch (error) {
-    logger.error(' [NIP-17] Fehler beim Entschlüsseln:', error);
+    // Wenn "invalid MAC", dann ist die Nachricht nicht für uns → stiller Fehler
+    if (error instanceof Error && error.message === 'invalid MAC') {
+      logger.debug('🔇 [NIP-17] Gift Wrap nicht für diesen User (invalid MAC - überspringe)');
+      throw new Error('NOT_FOR_THIS_USER');
+    }
+    
+    logger.error('❌ [NIP-17] Fehler beim Entschlüsseln:', error);
     throw error;
   }
 }

@@ -1,0 +1,10 @@
+Hier ist mein Workflow:
+1. User ( admin) Neue Gruppe mit neuem Secret erstellt.
+2. Whitelist mit Usern (NPUB) zwei stück hinzugefügt.
+3. Die beiden User melden sich mit dem Einladungslink in einem anderen Browser (Chromium und Firefox) mit NSec an.nunsind gesamt drei user auf dem marktplatz.
+4. Ein User erstellt ein Angebot und speichert das Secret ab.
+5. Die zwei anderen User zeigen Interesse.
+6. Der Angebotsgeber sucht einen Interessenten aus.
+7. Bei der Auswahl sollten alle Whitelist-User + Admin eine private, verschlüsselte Nachricht bekommen und gleichzeitig das Angebot verschwinden.
+8. Alle anderen erhalten eine Meldung, dass das Angebot nicht mehr verfügbar ist. Nur die zwei Angebotsersteller und der ausgewählte User erhalten in dieser Nachricht die Möglichkeit, den Chatraum zu starten. Dieser sollte genau gleich aussehen wie die anderen (Anonymität).
+9. Der Angebotsgeber hat einen Button „Chat beenden” und dann sind alle wieder in der Anfangs-Marktplatz-Ansicht, wo ein Angebot erstellt werden kann.

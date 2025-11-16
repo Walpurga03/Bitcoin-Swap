@@ -38,13 +38,13 @@ export async function saveUserConfig(
     
     // Verschlüssele Config mit NIP-17 (zu sich selbst)
     const configJson = JSON.stringify(configData);
-    const { wrappedEvent } = await createNIP17Message(
+    const { giftWrapEvent } = await createNIP17Message(
       configJson,
       pubkey,  // Recipient = Self (zu sich selbst verschlüsselt!)
       privateKey
     );
     
-    logger.debug('🔐 Config verschlüsselt mit NIP-17');
+    logger.debug('🔐 Config verschlüsselt mit NIP-17 (3-Schichten)');
     
     // Erstelle Replaceable Event (Kind 30078 - Application Data)
     // Damit wird alte Config automatisch ersetzt
@@ -56,7 +56,7 @@ export async function saveUserConfig(
         ['encrypted', 'nip17'],              // Markierung für Verschlüsselung
         ['app', 'bitcoin-swap-network']      // App-Identifier
       ],
-      content: wrappedEvent.content,  // NIP-17 verschlüsselter Content
+      content: giftWrapEvent.content,  // NIP-17 verschlüsselter Content
       pubkey: pubkey
     };
     
@@ -120,16 +120,22 @@ export async function loadUserConfig(
     
     // Entschlüssele mit NIP-17
     try {
-      // Erstelle temporäres wrapped Event für Entschlüsselung
-      const wrappedEvent = {
-        ...latestEvent,
-        kind: 1059  // Gift-Wrapped Event
+      // Das gespeicherte Event IST bereits ein Gift Wrap (Kind 30078 mit NIP-17 Content)
+      // Wir müssen nur den Content als Gift Wrap behandeln
+      const giftWrapEvent = {
+        kind: 1059,  // Gift-Wrapped Event
+        pubkey: pubkey, // Zu sich selbst verschlüsselt
+        content: latestEvent.content,
+        created_at: latestEvent.created_at,
+        id: latestEvent.id,
+        sig: latestEvent.sig,
+        tags: []
       };
       
-      const decrypted = await decryptNIP17Message(wrappedEvent, privateKey);
+      const decrypted = await decryptNIP17Message(giftWrapEvent, privateKey);
       const config: UserConfig = JSON.parse(decrypted.content);
       
-      logger.debug('🔓 Config entschlüsselt');
+      logger.debug('🔓 Config entschlüsselt (3-Schichten)');
       logger.debug('✅ Config geladen:', {
         is_admin: config.is_group_admin,
         has_secret: !!config.group_secret,

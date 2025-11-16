@@ -169,19 +169,57 @@ Ergebnis:
 1. Bob sieht: "Alice hat Interesse"
 2. Bob klickt: "Deal starten mit Alice"
 
-### **Was passiert:**
+### **Was passiert (Whitelist-Broadcast für maximale Privatsphäre):**
 
 ```
-✅ Deal wird erstellt
-✅ Beide bekommen eine verschlüsselte Nachricht (NIP-17)
-✅ Jetzt können Bob und Alice direkt kommunizieren
+📢 ALLE Whitelist-Mitglieder bekommen eine verschlüsselte Nachricht:
+┌──────────────────────────────────────────────────┐
+│ Alice (ausgewählt):                              │
+│ 🎉 "Du wurdest ausgewählt!"                      │
+│ + Chat-Einladung mit Link zum Deal-Room         │
+│                                                  │
+│ Alle anderen 48 Mitglieder:                     │
+│ 📢 "Angebot vergeben - Versuch es nächstes Mal!"│
+│                                                  │
+│ 🔐 Alle Nachrichten:                             │
+│ • Verschlüsselt (NIP-17 Gift Wraps)              │
+│ • Sehen identisch aus für den Relay              │
+│ • Niemand kann unterscheiden welche die          │
+│   Einladung ist!                                 │
+└──────────────────────────────────────────────────┘
+
+✅ Deal-Room wird erstellt
+✅ Bob und Alice können direkt kommunizieren
+✅ Relay kann NICHT erkennen wer ausgewählt wurde
+```
+
+### **Warum Whitelist-Broadcast?**
+
+**Problem OHNE Broadcast:**
+```
+❌ Nur Alice bekommt Nachricht
+→ Relay sieht: "Nur Alice hat eine Nachricht bekommen"
+→ Relay weiß: "Alice wurde ausgewählt!"
+→ Relay kann korrelieren: "Alice hatte Interesse gezeigt"
+→ Anonymität kaputt! ❌
+```
+
+**Lösung MIT Broadcast:**
+```
+✅ ALLE 50 Mitglieder bekommen Nachricht
+→ Relay sieht: "50 verschlüsselte Nachrichten"
+→ Relay weiß NICHT welche die Einladung ist
+→ Relay kann NICHT unterscheiden wer ausgewählt wurde
+→ Perfekte Anonymität! ✅✅✅
 ```
 
 ### **Was andere Leute sehen:**
 
+- ✅ Alle bekommen eine verschlüsselte Nachricht (sieht gleich aus)
 - ❌ Sie sehen NICHT dass Bob und Alice einen Deal haben
-- ❌ Sie können die Nachrichten NICHT lesen
-- ✅ Nur Bob und Alice können kommunizieren
+- ❌ Sie können NICHT erkennen wer ausgewählt wurde
+- ❌ Sie können die Nachrichten NICHT lesen (verschlüsselt)
+- ✅ Nur Bob und Alice können im privaten Chat kommunizieren
 
 ---
 
@@ -353,6 +391,13 @@ Charlie versucht Option 3:
    - Alle Gruppenmitglieder wissen wer in der Gruppe ist
    - Aber sie wissen NICHT wer welches Angebot erstellt hat
 
+3. **Whitelist-Broadcast Benachrichtigungen:**
+   - Alle Mitglieder bekommen bei jedem Angebot 2 Benachrichtigungen:
+     - Phase 1: "Neues Angebot verfügbar"
+     - Phase 2: "Angebot vergeben" (Einladung ODER Absage)
+   - ✅ **ABER:** Niemand kann erkennen wer die Einladung bekommen hat!
+   - ✅ Alle Nachrichten sehen verschlüsselt und identisch aus
+
 ---
 
 ## 💡 Wichtige Hinweise
@@ -399,9 +444,11 @@ Charlie versucht Option 3:
 ### **F: Können andere Gruppenmitglieder sehen was ich mache?**
 
 ❌ **Nein!** Sie sehen nur:
-- "Jemand hat ein Angebot erstellt"
-- "Jemand hat Interesse gezeigt"
-- Sie wissen NICHT dass DU es bist
+- "Jemand hat ein Angebot erstellt" (anonyme ID)
+- "Jemand hat Interesse gezeigt" (anonyme ID)
+- Sie bekommen Benachrichtigungen über neue Angebote und vergebene Deals
+- **ABER:** Sie wissen NICHT dass DU es bist
+- **ABER:** Sie wissen NICHT wer ausgewählt wurde (Whitelist-Broadcast verschleiert das!)
 
 ### **F: Was passiert wenn ich mein Secret verliere?**
 

@@ -389,3 +389,74 @@ export function loadMyInterestSignals(): Array<{ offerId: string; tempSecret: st
   
   return interests;
 }
+
+/**
+ * Lösche ALLE Interesse-Signale eines Angebots
+ * 
+ * Wird vom Angebotsgeber aufgerufen wenn er sein Angebot löscht.
+ * Lädt alle Interesse-Signale vom Relay und löscht sie mit Kind 5 Events.
+ * 
+ * @param offerId - ID des Angebots
+ * @param offerSecret - Secret des Angebots (um Signale zu entschlüsseln und temp-keys zu finden)
+ * @param relay - Relay-URL
+ * 
+ * @example
+ * // Beim Löschen eines Angebots:
+ * await deleteAllInterestSignals(offerId, offerSecret, relay);
+ */
+export async function deleteAllInterestSignals(
+  offerId: string,
+  offerSecret: string,
+  relay: string
+): Promise<void> {
+  try {
+    marketplaceLogger.interest(`🗑️ Lösche alle Interesse-Signale für Angebot ${offerId.substring(0, 16)}...`);
+    
+    // 1. Lade alle Interesse-Signale für dieses Angebot
+    const filter: NostrFilter = {
+      kinds: [30078],
+      '#e': [offerId],
+      '#t': ['bitcoin-interest']
+    };
+    
+    const events = await fetchEvents([relay], filter, 5000);
+    
+    if (events.length === 0) {
+      logger.debug('ℹ️ Keine Interesse-Signale zum Löschen gefunden');
+      return;
+    }
+    
+    marketplaceLogger.interest(`📦 ${events.length} Interesse-Signal(e) gefunden`);
+    
+    // 2. Für jedes Event: Erstelle Kind 5 (Deletion Event)
+    // WICHTIG: Wir können die Events NICHT löschen (haben nicht den temp-privateKey)
+    // Aber wir können ein Deletion Event mit unserem Angebots-Key erstellen
+    // um zu signalisieren dass das Angebot nicht mehr verfügbar ist
+    
+    const offerKeypair = deriveKeypairFromSecret(offerSecret);
+    
+    for (const event of events) {
+      try {
+        // Erstelle Deletion Event für dieses Interesse-Signal
+        const tags = [
+          ['e', event.id],
+          ['k', '30078']
+        ];
+        const content = 'Angebot wurde gelöscht';
+        
+        const deleteEvent = await createEvent(5, content, tags, offerKeypair.privateKey);
+        await publishEvent(deleteEvent, [relay]);
+        
+        logger.debug(`✅ Deletion Event für ${event.id.substring(0, 16)}... erstellt`);
+      } catch (error) {
+        logger.error(`❌ Fehler beim Löschen von ${event.id.substring(0, 16)}...`, error);
+      }
+    }
+    
+    marketplaceLogger.interest(`✅ ${events.length} Deletion Events erstellt`);
+    
+  } catch (error) {
+    logger.error('❌ Fehler beim Löschen aller Interesse-Signale:', error);
+    // Nicht werfen - Angebot soll trotzdem gelöscht werden
+  }
+}

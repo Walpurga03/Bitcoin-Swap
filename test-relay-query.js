@@ -16,19 +16,17 @@
  * - Kind 42: Marketplace-Angebote - 🎭 TEMP-PUBKEY (72h Expiration)
  * - Kind 30078: Interesse-Signale - 🎭 TEMP-PUBKEY (NIP-04 verschlüsselt)
  * 
+ * DEAL-ROOMS & BENACHRICHTIGUNGEN (NIP-17):
+ * - Kind 1059: Gift Wrap - 🔐 NIP-17 verschlüsselte Nachrichten (Einladungen, Broadcasts, Chat)
+ * - Kind 30081: Deal-Status Updates (pending/active/completed/cancelled)
+ * 
  * GRUPPEN-VERWALTUNG:
  * - Kind 30000: GroupConfig (Relay, Admin-Pubkey, Secret-Hash)
  * - Kind 30000: Whitelist (Erlaubte User-Pubkeys)
  * - Kind 0: User-Profile (Name, Display-Name, NIP-05)
  * 
- * ⏳ NOCH NICHT IMPLEMENTIERT (werden nicht angezeigt):
- * - Kind 30081: Deal-Status Updates (geplant)
- * - Kind 5: Deletion Events (geplant)
- * 
- * ❌ NICHT MEHR GENUTZT (gelöscht im Code-Cleanup):
- * - Kind 30079: Absage-Nachrichten (war Teil von offerSelection.ts - gelöscht!)
- * - Kind 1059: NIP-17 Gift-Wrapped Messages (war Teil des Chat-Systems - gelöscht!)
- * - Kind 4: Alte NIP-04 DMs (deprecated, nie verwendet)
+ * ⏳ GEPLANT:
+ * - Kind 5: Deletion Events (Aufräumen alter Events)
  */
 
 import { SimplePool } from 'nostr-tools/pool';
@@ -41,20 +39,22 @@ import { SimplePool } from 'nostr-tools/pool';
 const RELAY = 'wss://nostr-relay.online';
 
 // Channel-ID (SHA-256 Hash des Gruppen-Secrets)
-const CHANNEL_ID = '1ff9850352a21c9b1d1d72d9fb5a059d5efb18460ce08873c0b9fe5348205c0a';
+// ⚠️ WICHTIG: Trage hier deine aktuelle Channel-ID ein!
+// Du findest sie in der Browser-Konsole oder im groupStore
+const CHANNEL_ID = '9deef10d9d9d2bfcba6dd62e5a792477d59ca99c34cd784d15ce3d8642ff5c3f';
 
 // Optional: Secret-Hash deiner Gruppe (wird als #g Tag verwendet)
 // Wenn du den Hash nicht kennst, setze auf null und das Script zeigt alle Angebote
 const SECRET_HASH = null; // z.B. 'abc123...' oder null für alle
 
-// Zeitfilter: Wie viele Stunden zurück sollen Events angezeigt werden?
-const HOURS_TO_SHOW = 100; // Ändere diese Zahl, um mehr/weniger Events zu sehen
+// Zeitfilter: Wie viele Minuten zurück sollen Events angezeigt werden?
+const MINUTES_TO_SHOW = 10; // Standard: 30 Minuten (erweitert für Debugging)
 
 // Nur gefüllte Sektionen anzeigen?
 const HIDE_EMPTY_SECTIONS = true; // true = nur Sektionen mit Inhalt anzeigen
 
 // Berechnung des Zeitstempels (nicht ändern)
-const HOURS_AGO = Math.floor(Date.now() / 1000) - (HOURS_TO_SHOW * 60 * 60);
+const MINUTES_AGO = Math.floor(Date.now() / 1000) - (MINUTES_TO_SHOW * 60);
 
 // ============================================================
 
@@ -74,8 +74,8 @@ async function queryRelay() {
   console.log('🎭 RELAY QUERY TOOL - Bitcoin-Tausch-Netzwerk (ANONYM)');
   console.log('='.repeat(60));
   console.log('📡 Relay:', RELAY);
-  console.log('⏰ Zeitfilter: Letzte', HOURS_TO_SHOW, 'Stunde(n)');
-  console.log('📅 Zeige Events seit:', formatDate(HOURS_AGO));
+  console.log('⏰ Zeitfilter: Letzte', MINUTES_TO_SHOW, 'Minute(n)');
+  console.log('📅 Zeige Events seit:', formatDate(MINUTES_AGO));
   console.log('📍 Channel-ID:', CHANNEL_ID.substring(0, 16) + '...');
   if (SECRET_HASH) {
     console.log('🔐 Secret-Hash:', SECRET_HASH.substring(0, 16) + '...');
@@ -94,7 +94,7 @@ async function queryRelay() {
     const filter = {
       kinds: [42],
       '#e': [CHANNEL_ID],
-      since: HOURS_AGO,
+      since: MINUTES_AGO,
       limit: 100
     };
     
@@ -173,7 +173,7 @@ async function queryRelay() {
     // ============================================================
     const interests = await pool.querySync([RELAY], {
       kinds: [30078],
-      since: HOURS_AGO,
+      since: MINUTES_AGO,
       limit: 50
     });
     
@@ -207,6 +207,12 @@ async function queryRelay() {
       
       console.log(`\n   📊 Interesse-Signale gruppiert nach ${interestsByOffer.size} Angebot(en):\n`);
       
+      // Zeige auch verwaiste Interesse-Signale (ohne e-Tag)
+      const orphanedInterests = interests.filter(event => !event.tags.find(t => t[0] === 'e'));
+      if (orphanedInterests.length > 0) {
+        console.log(`   ⚠️ ${orphanedInterests.length} Interesse-Signal(e) OHNE Angebots-Verknüpfung (fehlt e-Tag)!\n`);
+      }
+      
       // Zeige Interesse-Signale gruppiert nach Angebot
       for (const [offerId, signals] of interestsByOffer.entries()) {
         // Finde das zugehörige Angebot
@@ -238,6 +244,82 @@ async function queryRelay() {
         });
         console.log('');
       }
+      
+      // Zeige verwaiste Interesse-Signale im Detail
+      if (orphanedInterests.length > 0) {
+        console.log(`\n   🗑️ VERWAISTE INTERESSE-SIGNALE (Details):\n`);
+        orphanedInterests.forEach((event, idx) => {
+          const dTag = event.tags.find(t => t[0] === 'd')?.[1] || 'kein d-tag';
+          const pTag = event.tags.find(t => t[0] === 'p')?.[1];
+          const tTag = event.tags.find(t => t[0] === 't')?.[1];
+          
+          console.log(`      ${idx + 1}. ⚠️ Verwaist:`);
+          console.log(`         Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`         🎭 TEMP-Pubkey: ${event.pubkey.substring(0, 16)}...`);
+          console.log(`         📅 Erstellt: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          console.log(`         ❌ KEIN e-Tag (Angebots-ID fehlt!)`);
+          if (pTag) console.log(`         📌 p-Tag: ${pTag.substring(0, 16)}...`);
+          console.log('');
+        });
+      }
+    }
+
+    // ============================================================
+    // 2b. DELETION EVENTS (Kind 5) - Gelöschte Events
+    // ============================================================
+    console.log('\n\n🗑️ DELETION EVENTS (Kind 5) - GELÖSCHTE EVENTS');
+    console.log('   ' + '='.repeat(55));
+    
+    const deletionEvents = await pool.querySync([RELAY], {
+      kinds: [5],
+      since: MINUTES_AGO,
+      limit: 100
+    });
+    
+    console.log(`   📊 Gesamt gefunden: ${deletionEvents.length} Deletion Events`);
+    
+    if (deletionEvents.length > 0) {
+      // Gruppiere nach gelöschtem Event-Typ
+      const deletedOffers = deletionEvents.filter(e => e.tags.some(t => t[0] === 'k' && t[1] === '42'));
+      const deletedInterests = deletionEvents.filter(e => e.tags.some(t => t[0] === 'k' && t[1] === '30078'));
+      const deletedOthers = deletionEvents.filter(e => 
+        !e.tags.some(t => t[0] === 'k' && (t[1] === '42' || t[1] === '30078'))
+      );
+      
+      console.log(`\n   📊 NACH TYP:`);
+      console.log(`      🗑️ Gelöschte Angebote (Kind 42): ${deletedOffers.length}`);
+      console.log(`      🗑️ Gelöschte Interesse-Signale (Kind 30078): ${deletedInterests.length}`);
+      if (deletedOthers.length > 0) {
+        console.log(`      🗑️ Andere: ${deletedOthers.length}`);
+      }
+      
+      if (deletedOffers.length > 0) {
+        console.log(`\n   📋 GELÖSCHTE ANGEBOTE:\n`);
+        deletedOffers.forEach((event, idx) => {
+          const eTag = event.tags.find(t => t[0] === 'e')?.[1];
+          console.log(`      ${idx + 1}. 🗑️ Deletion Event:`);
+          console.log(`         Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`         Author: ${event.pubkey.substring(0, 16)}...`);
+          console.log(`         Gelöschtes Event: ${eTag ? eTag.substring(0, 16) + '...' : 'N/A'}`);
+          console.log(`         📅 Gelöscht: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          console.log(`         📝 Grund: ${event.content || 'Kein Grund angegeben'}`);
+          console.log('');
+        });
+      }
+      
+      if (deletedInterests.length > 0) {
+        console.log(`\n   📋 GELÖSCHTE INTERESSE-SIGNALE:\n`);
+        deletedInterests.forEach((event, idx) => {
+          const eTag = event.tags.find(t => t[0] === 'e')?.[1];
+          console.log(`      ${idx + 1}. 🗑️ Deletion Event:`);
+          console.log(`         Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`         Author: ${event.pubkey.substring(0, 16)}...`);
+          console.log(`         Gelöschtes Signal: ${eTag ? eTag.substring(0, 16) + '...' : 'N/A'}`);
+          console.log(`         📅 Gelöscht: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          console.log(`         📝 Grund: ${event.content || 'Kein Grund angegeben'}`);
+          console.log('');
+        });
+      }
     }
 
     // ============================================================
@@ -247,7 +329,7 @@ async function queryRelay() {
     // ============================================================
     const profiles = await pool.querySync([RELAY], {
       kinds: [0],
-      since: HOURS_AGO,
+      since: MINUTES_AGO,
       limit: 20
     });
     
@@ -280,14 +362,238 @@ async function queryRelay() {
     }
 
     // ============================================================
-    // 4. KIND 30000 EVENTS (GroupConfig & Whitelist)
+    // 4. NIP-17 GIFT WRAP EVENTS (Kind 1059) - Verschlüsselte Nachrichten
+    // ============================================================
+    console.log('\n\n🎁 NIP-17 GIFT WRAP EVENTS (Kind 1059) - ANONYME BENACHRICHTIGUNGEN');
+    console.log('   ' + '='.repeat(55));
+    
+    const giftWraps = await pool.querySync([RELAY], {
+      kinds: [1059],
+      since: MINUTES_AGO,
+      limit: 200
+    });
+    
+    console.log(`   📊 Gesamt gefunden: ${giftWraps.length} Gift Wrap Events`);
+    console.log(`   🔐 VOLLSTÄNDIG VERSCHLÜSSELT: Niemand kann Inhalt lesen!`);
+    console.log(`   🎭 Random-Pubkeys: Relay sieht NICHT wer sendet!`);
+    console.log(`   📬 Nur p-Tag sichtbar: Zeigt Empfänger-Pubkey`);
+    console.log(`   ⚖️ ANONYMITÄT: Alle Events haben identische Größe (Padding)!`);
+    
+    if (giftWraps.length === 0) {
+      if (!HIDE_EMPTY_SECTIONS) {
+        console.log(`   ℹ️ Keine Gift Wrap Events gefunden`);
+        console.log(`   💡 Erstelle Deal-Einladungen oder sende Benachrichtigungen`);
+      }
+    } else {
+      // Gruppiere nach Empfänger (p-Tag)
+      const giftWrapsByRecipient = new Map();
+      
+      giftWraps.forEach(event => {
+        const pTag = event.tags.find(t => t[0] === 'p')?.[1];
+        if (pTag) {
+          if (!giftWrapsByRecipient.has(pTag)) {
+            giftWrapsByRecipient.set(pTag, []);
+          }
+          giftWrapsByRecipient.get(pTag).push(event);
+        }
+      });
+      
+      console.log(`\n   📊 Nachrichten verteilt an ${giftWrapsByRecipient.size} Empfänger:\n`);
+      
+      // Zeige Gift Wraps gruppiert nach Empfänger
+      let recipientIdx = 1;
+      for (const [recipientPubkey, wraps] of giftWrapsByRecipient.entries()) {
+        console.log(`   📬 Empfänger ${recipientIdx}: ${recipientPubkey.substring(0, 16)}...`);
+        console.log(`      📨 ${wraps.length} verschlüsselte Nachricht(en)\n`);
+        
+        wraps.forEach((event, idx) => {
+          console.log(`         ${idx + 1}. 🎁 Gift Wrap:`);
+          console.log(`            Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`            🎭 Random-Pubkey: ${event.pubkey.substring(0, 16)}... (NICHT der echte Sender!)`);
+          console.log(`            📬 Empfänger: ${recipientPubkey.substring(0, 16)}...`);
+          console.log(`            📅 Timestamp: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          console.log(`            ⚠️ HINWEIS: Timestamp ist randomisiert (±2 Tage)!`);
+          console.log(`            🔒 Content: [NIP-44 verschlüsselt - ${event.content.length} Zeichen]`);
+          console.log(`            � Content-Größe: ${event.content.length} bytes`);
+          console.log(`            �🔐 Mögliche Typen:`);
+          console.log(`               • deal_finalized (role: partner/observer)`);
+          console.log(`               • invitation (Chat-Einladung)`);
+          console.log(`               • broadcast (Benachrichtigung)`);
+          console.log(`            🔍 Nur Empfänger kann entschlüsseln!`);
+          if (idx < wraps.length - 1) console.log('');
+        });
+        console.log('');
+        recipientIdx++;
+      }
+      
+      // ANONYMITÄTS-ANALYSE: Gruppiere nach Content-Größe
+      const sizeGroups = new Map();
+      giftWraps.forEach(event => {
+        const size = event.content.length;
+        if (!sizeGroups.has(size)) {
+          sizeGroups.set(size, []);
+        }
+        sizeGroups.get(size).push(event);
+      });
+      
+      console.log(`   ⚖️ ANONYMITÄTS-ANALYSE (Content-Größen):`);
+      console.log(`      📊 ${sizeGroups.size} unterschiedliche Größe(n) gefunden:\n`);
+      
+      for (const [size, events] of Array.from(sizeGroups.entries()).sort((a, b) => b[1].length - a[1].length)) {
+        const percentage = ((events.length / giftWraps.length) * 100).toFixed(1);
+        console.log(`      📦 ${size} bytes: ${events.length} Events (${percentage}%)`);
+        
+        if (events.length >= 3) {
+          console.log(`         ✅ ANONYM: ${events.length} identische Events - Partner nicht erkennbar!`);
+        } else if (events.length === 2) {
+          console.log(`         ⚠️ WARNUNG: Nur 2 Events - könnte auf Partner hindeuten`);
+        } else {
+          console.log(`         ❌ LEAK: Einzelnes Event - Empfänger ist auffällig!`);
+        }
+      }
+      
+      console.log(`\n   🕒 TIMING-ANALYSE (Zeitliche Verteilung):`);
+      
+      // Gruppiere nach 5-Sekunden-Intervallen
+      const timeGroups = new Map();
+      giftWraps.forEach(event => {
+        const interval = Math.floor(event.created_at / 5) * 5; // 5-Sekunden-Intervalle
+        if (!timeGroups.has(interval)) {
+          timeGroups.set(interval, []);
+        }
+        timeGroups.get(interval).push(event);
+      });
+      
+      const clusteredIntervals = Array.from(timeGroups.entries()).filter(([_, events]) => events.length >= 3);
+      
+      if (clusteredIntervals.length > 0) {
+        console.log(`      📊 ${clusteredIntervals.length} Zeitfenster mit 3+ Events (verdächtig!):\n`);
+        
+        clusteredIntervals.slice(0, 3).forEach(([interval, events]) => {
+          const delays = events.map((e, i) => i > 0 ? e.created_at - events[i-1].created_at : 0).slice(1);
+          const avgDelay = delays.length > 0 ? (delays.reduce((a, b) => a + b, 0) / delays.length).toFixed(1) : 0;
+          
+          console.log(`         ⏰ ${formatDate(interval)}: ${events.length} Events`);
+          console.log(`            📏 Durchschn. Delay: ${avgDelay}s`);
+          if (parseFloat(avgDelay) > 10) {
+            console.log(`            ✅ Gut verteilt (>${avgDelay}s Abstand)`);
+          } else {
+            console.log(`            ⚠️ Zu schnell (<${avgDelay}s Abstand) - könnte auffallen`);
+          }
+        });
+      } else {
+        console.log(`      ✅ Events gut über Zeit verteilt - keine auffälligen Cluster`);
+      }
+      
+      // Statistik nach Zeitraum
+      const last10min = giftWraps.filter(e => (Date.now() / 1000 - e.created_at) < 600).length;
+      const last1hour = giftWraps.filter(e => (Date.now() / 1000 - e.created_at) < 3600).length;
+      
+      console.log(`   📊 AKTIVITÄT:`);
+      console.log(`      🕐 Letzte 10 Minuten: ${last10min} Nachrichten`);
+      console.log(`      🕐 Letzte Stunde: ${last1hour} Nachrichten`);
+      console.log(`      📈 Gesamt (${MINUTES_TO_SHOW} Min): ${giftWraps.length} Nachrichten`);
+    }
+
+    // ============================================================
+    // 5. DEAL-STATUS EVENTS (Kind 30081) - Deal Tracking
+    // ============================================================
+    console.log('\n\n🤝 DEAL-STATUS EVENTS (Kind 30081) - DEAL TRACKING');
+    console.log('   ' + '='.repeat(55));
+    
+    const dealStatuses = await pool.querySync([RELAY], {
+      kinds: [30081],
+      since: MINUTES_AGO,
+      limit: 100
+    });
+    
+    console.log(`   📊 Gesamt gefunden: ${dealStatuses.length} Deal-Status Events`);
+    console.log(`   📝 Status-Typen: pending, active, completed, cancelled`);
+    
+    if (dealStatuses.length === 0) {
+      if (!HIDE_EMPTY_SECTIONS) {
+        console.log(`   ℹ️ Keine Deal-Status Events gefunden`);
+        console.log(`   💡 Starte einen Deal um Status-Updates zu sehen`);
+      }
+    } else {
+      // Gruppiere nach Status
+      const statusCounts = {
+        pending: 0,
+        active: 0,
+        completed: 0,
+        cancelled: 0,
+        unknown: 0
+      };
+      
+      dealStatuses.forEach(event => {
+        try {
+          const content = JSON.parse(event.content);
+          const status = content.status || 'unknown';
+          if (statusCounts.hasOwnProperty(status)) {
+            statusCounts[status]++;
+          } else {
+            statusCounts.unknown++;
+          }
+        } catch {
+          statusCounts.unknown++;
+        }
+      });
+      
+      console.log(`\n   📊 STATUS-VERTEILUNG:`);
+      console.log(`      ⏳ Pending: ${statusCounts.pending}`);
+      console.log(`      ✅ Active: ${statusCounts.active}`);
+      console.log(`      🎉 Completed: ${statusCounts.completed}`);
+      console.log(`      ❌ Cancelled: ${statusCounts.cancelled}`);
+      if (statusCounts.unknown > 0) {
+        console.log(`      ❓ Unknown: ${statusCounts.unknown}`);
+      }
+      
+      console.log(`\n   📋 DEAL-DETAILS:\n`);
+      
+      dealStatuses.forEach((event, idx) => {
+        const dTag = event.tags.find(t => t[0] === 'd')?.[1] || 'kein d-Tag';
+        
+        try {
+          const content = JSON.parse(event.content);
+          
+          console.log(`   🤝 Deal ${idx + 1}:`);
+          console.log(`      Event-ID: ${event.id.substring(0, 16)}...`);
+          console.log(`      d-Tag: ${dTag.substring(0, 32)}...`);
+          console.log(`      Author: ${event.pubkey.substring(0, 16)}...`);
+          console.log(`      📅 Erstellt: ${formatDate(event.created_at)} (${formatAge(event.created_at)} alt)`);
+          console.log(`      📊 Status: ${content.status || 'N/A'}`);
+          
+          if (content.offerId) {
+            console.log(`      📦 Angebots-ID: ${content.offerId.substring(0, 16)}...`);
+          }
+          if (content.buyer) {
+            console.log(`      👤 Buyer: ${content.buyer.substring(0, 16)}...`);
+          }
+          if (content.seller) {
+            console.log(`      👤 Seller: ${content.seller.substring(0, 16)}...`);
+          }
+          if (content.timestamp) {
+            console.log(`      ⏰ Deal-Timestamp: ${formatDate(content.timestamp)}`);
+          }
+          
+          console.log('');
+        } catch (e) {
+          console.log(`   🤝 Deal ${idx + 1}:`);
+          console.log(`      ⚠️ Content nicht parsebar`);
+          console.log('');
+        }
+      });
+    }
+
+    // ============================================================
+    // 6. KIND 30000 EVENTS (GroupConfig & Whitelist)
     // ============================================================
     console.log('\n\n🏗️ KIND 30000 EVENTS (GroupConfig & Whitelist)');
     console.log('   ' + '='.repeat(55));
     
     const kind30000Events = await pool.querySync([RELAY], {
       kinds: [30000],
-      since: HOURS_AGO,
+      since: MINUTES_AGO,
       limit: 100
     });
     
@@ -366,7 +672,7 @@ async function queryRelay() {
     }
 
     // ============================================================
-    // ZUSAMMENFASSUNG - NUR AKTIVE FEATURES
+    // ZUSAMMENFASSUNG - ALLE AKTIVEN FEATURES
     // ============================================================
     console.log('\n\n' + '='.repeat(60));
     console.log('📊 ZUSAMMENFASSUNG - AKTIV IMPLEMENTIERTE EVENTS');
@@ -374,6 +680,11 @@ async function queryRelay() {
     console.log('\n🎭 MARKETPLACE (Anonym):');
     console.log(`   📦 Marketplace-Angebote (Kind 42): ${activeOffers.length} aktiv${expiredOffers > 0 ? `, ${expiredOffers} abgelaufen` : ''}`);
     console.log(`   💌 Interesse-Signale (Kind 30078): ${interests.length}`);
+    console.log(`   🗑️ Gelöschte Events (Kind 5): ${deletionEvents.length}`);
+    
+    console.log('\n🔐 DEAL-ROOMS & BENACHRICHTIGUNGEN (NIP-17):');
+    console.log(`   🎁 Gift Wrap Events (Kind 1059): ${giftWraps.length}`);
+    console.log(`   🤝 Deal-Status Events (Kind 30081): ${dealStatuses.length}`);
     
     console.log('\n🏗️ GRUPPEN-VERWALTUNG:');
     console.log(`   🏗️ GroupConfigs (Kind 30000): ${currentGroupConfigs.length}`);
@@ -381,7 +692,7 @@ async function queryRelay() {
     console.log(`   👤 User-Profile (Kind 0): ${profiles.length}`);
     
     console.log('\n' + '='.repeat(60));
-    console.log('🎯 TOTAL EVENTS: ' + (activeOffers.length + interests.length + currentGroupConfigs.length + whitelists.length + profiles.length));
+    console.log('🎯 TOTAL EVENTS: ' + (activeOffers.length + interests.length + deletionEvents.length + giftWraps.length + dealStatuses.length + currentGroupConfigs.length + whitelists.length + profiles.length));
     console.log('='.repeat(60));
     
     console.log('\n✅ Query abgeschlossen!\n');

@@ -507,22 +507,23 @@ export async function sendDealMessage(
     
     const { createNIP17Message } = await import('$lib/nostr/crypto');
     
-    // 🔐 VERBESSERUNG: Verwende NIP-17 statt groupKey!
-    // NIP-17 = nur Sender + Recipient können lesen
-    const { wrappedEvent } = await createNIP17Message(
+    // 🔐 NIP-17 mit 3-Schichten-Verschlüsselung
+    // Nur Sender + Recipient können lesen
+    const { giftWrapEvent } = await createNIP17Message(
       content,
       recipientPubkey,
-      privateKey
+      privateKey,
+      dealId // Room-ID für Gruppierung
     );
 
-    logger.debug('NIP-17 Message erstellt (nur Recipient kann lesen)');
+    logger.debug('NIP-17 Message erstellt (3-Schichten verschlüsselt)');
     
-    // Veröffentliche wrapped Event
-    const result = await publishEvent(wrappedEvent as NostrEvent, relays);
+    // Veröffentliche Gift Wrap Event (Kind 1059)
+    const result = await publishEvent(giftWrapEvent as NostrEvent, relays);
 
     logger.success('Nachricht gesendet: ' + result.relays.length + '/' + relays.length + ' Relays');
 
-    return wrappedEvent as NostrEvent;
+    return giftWrapEvent as NostrEvent;
   } catch (error) {
     logger.error('Fehler beim Senden der Deal-Message', error);
     throw error;
