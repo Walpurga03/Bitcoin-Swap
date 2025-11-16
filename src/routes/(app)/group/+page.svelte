@@ -306,7 +306,20 @@
       // Lade Angebote neu
       await loadAllOffers();
       
-      alert('✅ Angebot und Interesse-Signale gelöscht!\n\nInteressent: ' + selectedPubkey.substring(0, 16) + '...');
+      logger.info('🤝 Schritt 3: Erstelle Deal-Status Event...');
+      
+      // Erstelle Deal zwischen Anbieter und Interessent
+      const dealId = await createDeal(
+        selectedOffer.id,           // Offer ID
+        selectedPubkey,             // Buyer: Ausgewählter Interessent
+        $userStore.pubkey,          // Seller: Ich (Anbieter)
+        $userStore.privateKey,      // Mein Private Key
+        $groupStore.relay           // Relay
+      );
+      
+      logger.success('✅ Deal erstellt! ID: ' + dealId.substring(0, 16) + '...');
+      
+      alert('✅ Deal erstellt!\n\nAngebot gelöscht\nInteressent: ' + selectedPubkey.substring(0, 16) + '...\nDeal-ID: ' + dealId.substring(0, 16) + '...');
       
       // Schließe Modal
       showInterestList = false;

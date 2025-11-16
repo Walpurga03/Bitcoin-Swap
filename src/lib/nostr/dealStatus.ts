@@ -70,7 +70,23 @@ export async function createDeal(
     }, sellerPrivateKey as any);
 
     logger.debug('📡 [DEAL] Publiziere Deal-Status auf Relay...');
-    await pool.publish([relay], event as NostrEvent);
+    
+    // Publish mit Timeout (wie in marketplace.ts)
+    const publishPromises = pool.publish([relay], event as NostrEvent);
+    
+    const timeoutPromise = new Promise<void>((resolve) => 
+      setTimeout(() => {
+        logger.debug('⏱️ Timeout - Event wurde an Relay gesendet');
+        resolve();
+      }, 3000)
+    );
+    
+    await Promise.race([
+      Promise.all(publishPromises).then(() => {
+        logger.debug('📤 Event vom Relay bestätigt');
+      }),
+      timeoutPromise
+    ]);
 
     marketplaceLogger.offer('✅ [DEAL] Deal erstellt:', event.id.substring(0, 16) + '...');
     
@@ -222,7 +238,22 @@ export async function updateDealStatus(
       created_at: now
     }, privateKey as any);
 
-    await pool.publish([relay], event as NostrEvent);
+    // Publish mit Timeout
+    const publishPromises = pool.publish([relay], event as NostrEvent);
+    
+    const timeoutPromise = new Promise<void>((resolve) => 
+      setTimeout(() => {
+        logger.debug('⏱️ Timeout - Update wurde an Relay gesendet');
+        resolve();
+      }, 3000)
+    );
+    
+    await Promise.race([
+      Promise.all(publishPromises).then(() => {
+        logger.debug('📤 Update vom Relay bestätigt');
+      }),
+      timeoutPromise
+    ]);
 
     marketplaceLogger.offer('✅ [DEAL] Status aktualisiert:', newStatus);
     
