@@ -11,8 +11,8 @@
    - Einladungslinks werden generiert
 
 3. **User treten bei**
-   - User melden sich mit Einladungslink + NSec an (verschiedene Browser)
-   - Gesamt: 3 User auf dem Marktplatz (Admin + 2 Whitelist-User)
+   - User melden sich mit Einladungslink + NSec an (verschiedene Browser oder Pc/Hand/tablet)
+   - Gesamt: N User auf dem Marktplatz (Admin + N Whitelist-User)
 
 4. **Angebot erstellen**
    - User erstellt Angebot mit temporärem Keypair (anonym!)
@@ -20,7 +20,7 @@
    - Angebot erscheint für alle User
 
 5. **Interesse zeigen**
-   - 2 andere User zeigen Interesse (ebenfalls mit Temp-Keypairs, anonym!)
+   - N andere User zeigen Interesse (ebenfalls mit Temp-Keypairs, anonym!)
    - Jeder Interest Signal ist verschlüsselt
    - Relay sieht nur Temp-Pubkeys (keine echten Identitäten!)
 
@@ -37,7 +37,7 @@
    - ✅ **Relay sieht nur:** Temp-Key → Temp-Key (verschlüsselt)
    - ✅ **Abgelehnte Interessenten:** Sehen gelöschtes Angebot (kein Alert, Privacy!)
    - ✅ **Angebot wird gelöscht** (für alle sichtbar)
-   - ✅ **Schönes Modal-Popup:** Beide Parteien (Angebotsgeber + Gewinner) sehen elegantes Modal mit Room-ID und "Zum Chat" Button
+   - ✅ **Schönes Modal-Popup:** Beide Parteien (Angebotsgeber + Auserwählter) sehen elegantes Modal mit Room-ID und "Zum Chat" Button
 
 8. **Chat-Room (P2P WebRTC)**
    - ✅ **Navigation:** Beide Parteien navigieren zu `/deal/[roomId]`
