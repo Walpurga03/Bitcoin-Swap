@@ -103,6 +103,20 @@ export function generateRandomId(): string {
 }
 
 /**
+ * Generiere eine zufällige Room-ID für Chitchatter-ähnliche P2P Räume
+ * Format: 16 Zeichen alphanumerisch (a-z, 0-9)
+ * Beispiel: "a7k2m9x4p1q8s3w6"
+ */
+export function generateRoomId(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 16; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
  * Debounce function - limit rate of function calls
  */
 export function debounce<T extends (...args: any[]) => any>(

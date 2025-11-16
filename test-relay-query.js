@@ -41,7 +41,7 @@ const RELAY = 'wss://nostr-relay.online';
 // Channel-ID (SHA-256 Hash des Gruppen-Secrets)
 // ⚠️ WICHTIG: Trage hier deine aktuelle Channel-ID ein!
 // Du findest sie in der Browser-Konsole oder im groupStore
-const CHANNEL_ID = '9deef10d9d9d2bfcba6dd62e5a792477d59ca99c34cd784d15ce3d8642ff5c3f';
+const CHANNEL_ID = 'f47194428f379b988b9bc2e4739f0804ac30ccebebc88b77a103186f20f013f4';
 
 // Optional: Secret-Hash deiner Gruppe (wird als #g Tag verwendet)
 // Wenn du den Hash nicht kennst, setze auf null und das Script zeigt alle Angebote

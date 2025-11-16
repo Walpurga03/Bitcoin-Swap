@@ -4,16 +4,12 @@
   import { goto } from '$app/navigation';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
-  import { dealRoomStore } from '$lib/stores/dealRoomStore';
   import { logger, marketplaceLogger, securityLogger } from '$lib/utils/logger';
   import { truncatePubkey, getTimeRemaining, isExpiringSoon, getErrorMessage } from '$lib/utils';
   import { generateOfferSecret, deriveKeypairFromSecret, validateOfferSecret } from '$lib/nostr/offerSecret';
   import { createOffer as createOfferMarketplace, deleteOffer as deleteOfferMarketplace, loadOffers, type Offer } from '$lib/nostr/marketplace';
-  import { createDeal, loadMyDeals, updateDealStatus, type Deal } from '$lib/nostr/dealStatus';
   import WhitelistModal from '$lib/components/WhitelistModal.svelte';
-  import DealStatusCard from '$lib/components/DealStatusCard.svelte';
   import InterestListSimple from '$lib/components/InterestListSimple.svelte';
-  import DealInvitations from '$lib/components/DealInvitations.svelte';
   import SecretBackupModal from '$lib/components/SecretBackupModal.svelte';
   import SecretLoginModal from '$lib/components/SecretLoginModal.svelte';
   
@@ -30,8 +26,7 @@
   let showWhitelistModal = false;
   let showInterestList = false;
   let selectedOffer: Offer | null = null;
-  let myDeals: Deal[] = [];
-  let interests: Array<{ pubkey: string; name?: string; timestamp: number }> = [];
+  let interests: Array<{ pubkey: string; tempPubkey: string; name?: string; timestamp: number }> = [];
   let myInterestOfferIds: Set<string> = new Set();
   let interestCounts: Record<string, number> = {};
   let autoRefreshInterval: NodeJS.Timeout;
@@ -40,16 +35,9 @@
   $: hasActiveOffer = offerKeypair && offers.some(offer => offer.tempPubkey === offerKeypair?.publicKey);
   $: anyOfferExists = offers.length > 0;
 
-  async function loadMyDealsFromRelay(): Promise<void> {
-    if (!$userStore.pubkey || !$groupStore.relay) return;
-
+  async function loadMyInterestsFromStorage(): Promise<void> {
     try {
-      myDeals = await loadMyDeals($userStore.pubkey, $groupStore.relay);
-      
       myInterestOfferIds.clear();
-      for (const deal of myDeals) {
-        if (deal.status === 'active') myInterestOfferIds.add(deal.offerId);
-      }
       
       const { loadMyInterestSignals } = await import('$lib/nostr/interestSignal');
       const localInterests = loadMyInterestSignals();
@@ -59,7 +47,88 @@
       
       myInterestOfferIds = myInterestOfferIds;
     } catch (e) {
-      logger.warn('Fehler beim Laden von Deals', e);
+      logger.warn('Fehler beim Laden von Interest Signals', e);
+    }
+  }
+
+  /**
+   * Prüfe auf eingehende NIP-04 Deal-Benachrichtigungen
+   * 
+   * Lädt alle Interest Temp-Keys aus sessionStorage und prüft
+   * ob es verschlüsselte Nachrichten für sie gibt.
+   */
+  async function checkForDealNotifications(): Promise<void> {
+    if (!$groupStore.relay) return;
+    
+    try {
+      logger.debug('🔄 Auto-Refresh: Suche nach Deal-Benachrichtigungen...');
+      
+      // Lade alle Interest Temp-Keys
+      const { loadMyInterestSignals } = await import('$lib/nostr/interestSignal');
+      const myInterests = loadMyInterestSignals();
+      
+      if (myInterests.length === 0) {
+        return; // Keine Interessen = keine Benachrichtigungen zu erwarten
+      }
+      
+      const { deriveKeypairFromSecret } = await import('$lib/nostr/offerSecret');
+      const { loadEncryptedMessages } = await import('$lib/nostr/nip04');
+      
+      // Prüfe für jeden Interest Temp-Key
+      for (const interest of myInterests) {
+        try {
+          const tempKeypair = deriveKeypairFromSecret(interest.tempSecret);
+          
+          // Lade NIP-04 Messages für diesen Temp-Key
+          const messages = await loadEncryptedMessages(
+            tempKeypair.publicKey,
+            tempKeypair.privateKey,
+            $groupStore.relay,
+            Math.floor(Date.now() / 1000) - 3600 // Letzte Stunde
+          );
+          
+          // Verarbeite Nachrichten
+          for (const msg of messages) {
+            try {
+              const data = JSON.parse(msg.content);
+              
+              if (data.type === 'deal-accepted') {
+                logger.success('🎉 [DEAL-BENACHRICHTIGUNG] Dein Interesse wurde AKZEPTIERT!');
+                logger.info(`📦 Angebot: ${data.offerId.substring(0, 16)}...`);
+                logger.info(`🔑 Room-ID: ${data.roomId}`);
+                logger.info(`📝 Inhalt: ${data.offerContent}`);
+                
+                // Alert User
+                alert(
+                  '🎉 Dein Interesse wurde akzeptiert!\n\n' +
+                  `Angebot: ${data.offerContent}\n\n` +
+                  `Room-ID: ${data.roomId}\n\n` +
+                  'Navigiere zum Chat-Room...'
+                );
+                
+                // TODO: Navigation zum Chat
+                // goto(`/deal/${data.roomId}`);
+                
+                // Entferne Interest aus localStorage (Deal abgeschlossen)
+                sessionStorage.removeItem(`interest-secret-${interest.offerId}`);
+                
+              } else {
+                // Unbekannter Message Type
+                logger.warn('⚠️ Unbekannter Nachrichtentyp:', data.type);
+              }
+              
+            } catch (parseError) {
+              logger.warn('Konnte Nachricht nicht parsen', parseError);
+            }
+          }
+          
+        } catch (keyError) {
+          logger.warn(`Fehler beim Prüfen von Interest ${interest.offerId}`, keyError);
+        }
+      }
+      
+    } catch (e) {
+      logger.warn('Fehler beim Prüfen von Deal-Benachrichtigungen', e);
     }
   }
 
@@ -121,12 +190,14 @@
       }
       
       await loadAllOffers();
-      await loadMyDealsFromRelay();
+      await loadMyInterestsFromStorage();
+      await checkForDealNotifications();
 
       autoRefreshInterval = setInterval(async () => {
         try {
           await loadAllOffers();
-          await loadMyDealsFromRelay();
+          await loadMyInterestsFromStorage();
+          await checkForDealNotifications();
         } catch (e) {
           logger.error('Auto-Refresh Fehler', e);
         }
@@ -247,7 +318,8 @@
       const signals = await loadInterestSignals(offer.id, offerKeypair.privateKey, $groupStore.relay);
       
       interests = signals.map(signal => ({
-        pubkey: signal.interestedPubkey,
+        pubkey: signal.interestedPubkey,     // Echter Pubkey (für Anzeige)
+        tempPubkey: signal.tempPubkey,       // Temp-Pubkey (für NIP-04!)
         name: signal.userName || undefined,
         timestamp: signal.timestamp
       }));
@@ -274,21 +346,69 @@
       loading = true;
       error = '';
       
-      logger.info('🗑️ Schritt 1: Lösche alle Interesse-Signale...');
+      // Schritt 0: Generiere Room-ID für Chat
+      logger.info('🎲 Schritt 0: Generiere Room-ID...');
+      const { generateRoomId } = await import('$lib/utils');
+      const roomId = generateRoomId();
+      logger.success('✅ Room-ID generiert: ' + roomId);
+      
+      // Schritt 1: Sende NIP-04 Nachricht NUR an den Gewinner
+      logger.info('📤 Schritt 1: Sende Benachrichtigung an ausgewählten Interessent...');
       
       if (!offerSecret) {
-        throw new Error('Angebots-Secret fehlt - kann Interesse-Signale nicht löschen');
+        throw new Error('Angebots-Secret fehlt');
       }
       
-      // Lösche alle Interesse-Signale für dieses Angebot
+      // Hole alle Interessenten für dieses Angebot
+      const allInterests = interests || [];
+      logger.info(`📊 ${allInterests.length} Interessenten gefunden`);
+      
+      // Finde den ausgewählten Interessenten
+      const winner = allInterests.find(i => i.pubkey === selectedPubkey);
+      
+      if (!winner) {
+        throw new Error('Ausgewählter Interessent nicht gefunden!');
+      }
+      
+      const { sendEncryptedMessage } = await import('$lib/nostr/nip04');
+      
+      const message = JSON.stringify({
+        type: 'deal-accepted',
+        roomId: roomId,
+        offerId: selectedOffer.id,
+        offerContent: selectedOffer.content.substring(0, 100),
+        timestamp: Math.floor(Date.now() / 1000)
+      });
+      
+      try {
+        logger.info(`📧 Sende 🎉 DEAL-AKZEPTIERT an ${winner.pubkey.substring(0, 16)}... (Temp: ${winner.tempPubkey.substring(0, 8)})`);
+        
+        await sendEncryptedMessage(
+          offerKeypair.privateKey,  // Sender: Temp-Key vom Angebot (anonym!)
+          winner.tempPubkey,         // Empfänger: Interest TEMP-Key des Gewinners!
+          message,
+          $groupStore.relay
+        );
+        
+        logger.success('✅ Benachrichtigung an Gewinner gesendet');
+      } catch (e) {
+        logger.error('❌ Fehler beim Senden der Benachrichtigung:', e);
+        throw new Error('Konnte Benachrichtigung nicht senden');
+      }
+      
+      logger.info('💡 Abgelehnte Interessenten: Sehen dass Angebot gelöscht wurde (Privacy!)');
+      
+      // Schritt 2: Lösche alle Interesse-Signale
+      logger.info('🗑️ Schritt 2: Lösche alle Interesse-Signale...');
+      
       const { deleteAllInterestSignals } = await import('$lib/nostr/interestSignal');
       await deleteAllInterestSignals(selectedOffer.id, offerSecret, $groupStore.relay);
       
       logger.success('✅ Interesse-Signale gelöscht');
       
-      logger.info('🗑️ Schritt 2: Lösche Angebot...');
+      // Schritt 3: Lösche Angebot
+      logger.info('🗑️ Schritt 3: Lösche Angebot...');
       
-      // Lösche das Angebot selbst
       await deleteOfferMarketplace(
         selectedOffer.id,
         offerKeypair.privateKey,
@@ -306,20 +426,20 @@
       // Lade Angebote neu
       await loadAllOffers();
       
-      logger.info('🤝 Schritt 3: Erstelle Deal-Status Event...');
+      logger.success('🎉 Fertig! Deal abgeschlossen.');
+      logger.info(`💬 Room-ID für Chat: ${roomId}`);
+      logger.info(`👤 Gewinner: ${winner.pubkey.substring(0, 16)}...`);
       
-      // Erstelle Deal zwischen Anbieter und Interessent
-      const dealId = await createDeal(
-        selectedOffer.id,           // Offer ID
-        selectedPubkey,             // Buyer: Ausgewählter Interessent
-        $userStore.pubkey,          // Seller: Ich (Anbieter)
-        $userStore.privateKey,      // Mein Private Key
-        $groupStore.relay           // Relay
+      alert(
+        '✅ Deal abgeschlossen!\n\n' +
+        `Gewinner: ${selectedPubkey.substring(0, 16)}...\n` +
+        `Benachrichtigung gesendet ✅\n\n` +
+        `Room-ID: ${roomId}\n\n` +
+        '💬 Nächster Schritt: Navigiere zum Chat-Room!'
       );
       
-      logger.success('✅ Deal erstellt! ID: ' + dealId.substring(0, 16) + '...');
-      
-      alert('✅ Deal erstellt!\n\nAngebot gelöscht\nInteressent: ' + selectedPubkey.substring(0, 16) + '...\nDeal-ID: ' + dealId.substring(0, 16) + '...');
+      // TODO: Navigation zum Chat-Room
+      // goto(`/deal/${roomId}`);
       
       // Schließe Modal
       showInterestList = false;
@@ -469,42 +589,6 @@
       </button>
     </div>
 
-    <!-- Meine aktiven Deals -->
-    {#if myDeals.length > 0}
-      <div class="my-deals-section">
-        <h2>🤝 Meine Deals</h2>
-        {#each myDeals as deal (deal.id)}
-          <DealStatusCard
-            {deal}
-            userPubkey={$userStore.pubkey || ''}
-            onComplete={async () => {
-              if (!$userStore.privateKey || !$groupStore.relay) return;
-              try {
-                await updateDealStatus(deal.offerId, 'completed', $userStore.privateKey, $groupStore.relay);
-                await loadMyDealsFromRelay();
-                alert('✅ Deal als abgeschlossen markiert!');
-              } catch (e) {
-                logger.error('Fehler beim Abschließen', e);
-                alert('❌ Fehler beim Abschließen des Deals');
-              }
-            }}
-            onCancel={async () => {
-              if (!$userStore.privateKey || !$groupStore.relay) return;
-              if (!confirm('Deal wirklich abbrechen?')) return;
-              try {
-                await updateDealStatus(deal.offerId, 'cancelled', $userStore.privateKey, $groupStore.relay);
-                await loadMyDealsFromRelay();
-                alert('❌ Deal abgebrochen');
-              } catch (e) {
-                logger.error('Fehler beim Abbrechen', e);
-                alert('❌ Fehler beim Abbrechen des Deals');
-              }
-            }}
-          />
-        {/each}
-      </div>
-    {/if}
-
     {#if anyOfferExists && !showOfferForm}
       <div class="info-banner">
         ℹ️ Es existiert bereits ein aktives Angebot. Nur 1 Angebot gleichzeitig erlaubt.
@@ -537,9 +621,6 @@
         </small>
       </form>
     {/if}
-
-    <!-- Deal-Einladungen anzeigen -->
-    <DealInvitations />
 
     <div class="offers-list">
       {#if loading && offers.length === 0}
@@ -887,16 +968,6 @@
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-  }
-
-  /* Deals */
-  .my-deals-section {
-    margin: 2rem 0;
-  }
-
-  .my-deals-section h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
   }
 
   /* Responsive */
