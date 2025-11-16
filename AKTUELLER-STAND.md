@@ -1,16 +1,17 @@
 # 📊 Aktueller Stand - Bitcoin-Tausch-Netzwerk
 
-**Stand:** 14. November 2025  
-**Status:** ✅ Kern-Features implementiert & funktionsfähig (inkl. Deal-Rooms mit NIP-17)
+**Stand:** 16. November 2025  
+**Status:** ✅ Vollständig implementiert & produktionsbereit (inkl. P2P WebRTC Chat)
 
 ---
 
 ## 🎯 Was ist implementiert?
 
-Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr:
+Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr + WebRTC:
 - **Komplett anonym:** Niemand sieht wer Angebote erstellt oder Interesse zeigt
 - **Dezentral:** Läuft auf Nostr-Relays, keine zentrale Datenbank
-- **Privatsphäre:** Echte Identitäten nur verschlüsselt gespeichert
+- **Privatsphäre:** Echte Identitäten nur verschlüsselt oder via P2P ausgetauscht
+- **P2P Chat:** WebRTC-basierter Chat ohne Relay-Metadaten (Chitchatter-Prinzip)
 
 ---
 
@@ -206,76 +207,156 @@ Nur ein verschlüsselter Text ist sichtbar.
 
 ---
 
-### 6️⃣ **Deal-Room erstellen & Privater Chat (NIP-17)**
+### 6️⃣ **Deal-Benachrichtigung & Chat-Einladung (NIP-04 + Modal)**
 
 **✅ Was funktioniert JETZT:**
 
 **Angebots-Ersteller wählt Interessenten aus:**
 1. Sieht **Liste aller Interessenten** mit Namen und Pubkeys
 2. Klickt auf **"Auswählen"** bei einem Interessenten
-3. System erstellt automatisch:
-   - **Deal-Status** (Kind 30081) für Marketplace-Tracking
-   - **Deal-Room** (privater Chat-Raum)
-   - **📢 Whitelist-Broadcast Phase 2:** ALLE Whitelist-Mitglieder bekommen NIP-17 Nachricht:
-     - **Ausgewählter Partner (1 Person):** "🎉 Du wurdest ausgewählt!" + Chat-Einladung
-     - **Alle anderen (X-1 Personen):** "📢 Angebot vergeben - Versuch es nächstes Mal wieder!"
-     - **Relay sieht:** X verschlüsselte Gift Wraps (alle identisch)
-     - **Relay kann NICHT unterscheiden:** Wer die Einladung vs. Absage bekommen hat
+3. System führt folgende Schritte aus:
 
-**Whitelist-Broadcast für maximale Privatsphäre:**
-- **Phase 1 (Angebot erstellt):** ALLE Mitglieder bekommen "Neues Angebot" Benachrichtigung
-- **Phase 2 (Deal vergeben):** ALLE Mitglieder bekommen Nachricht (1x Einladung, Rest Absagen)
-- **Relay-Perspektive:** Kann NIEMALS erkennen:
-  - ❌ Wer hat das Angebot erstellt?
-  - ❌ Wer hat Interesse gezeigt?
-  - ❌ Wer wurde ausgewählt?
-- **Perfekte Anonymität:** Interesse-Signal bleibt vollständig anonym! ✅
+**Schritt 1: Room-ID Generierung**
+- Generiert **16-stellige alphanumerische Room-ID** (z.B. "a7k3m9x2p5w8q1z4")
+- Format: `[a-z0-9]{16}` - Kryptographisch sicher zufällig
+- Diese ID wird für den P2P WebRTC Room verwendet
 
-**Interessent erhält Einladung:**
-1. Sieht **Einladungs-Notification** in der App
-2. Zeigt Angebots-Titel und persönliche Nachricht
-3. Kann **Annehmen** oder **Ablehnen**
-4. Bei Annahme: Automatische Weiterleitung zum privaten Chat
+**Schritt 2: NIP-04 Benachrichtigung (Privacy-optimiert)**
+- **NUR der ausgewählte Interessent** erhält verschlüsselte NIP-04 Nachricht mit:
+  - Room-ID (für P2P Chat)
+  - Offer-ID
+  - Angebots-Inhalt (gekürzt)
+- **Verschlüsselung:** Temp-Key → Temp-Key (maximale Anonymität!)
+- **Relay sieht nur:** 1 verschlüsseltes Event (kann NICHT unterscheiden wer ausgewählt wurde)
+- **Abgelehnte Interessenten:** Sehen nur, dass Angebot gelöscht wurde (keine Benachrichtigung)
 
-**Privater Chat (NIP-17):**
-- ✅ **Ende-zu-Ende verschlüsselt** (3-Schichten: Kind 14 → 13 → 1059)
-- ✅ **Vollständig anonym** (Relay sieht nur zufällige Pubkeys)
-- ✅ **Echtzeit-Messaging** mit Auto-Scroll
-- ✅ **Nur die 2 Partner** können Nachrichten lesen
-- ✅ **Timing-Obfuscation** (randomisierte Timestamps ±2 Tage)
+**Schritt 3: Angebot löschen**
+- Alle Interest-Signale werden gelöscht
+- Angebot wird vom Relay entfernt
+- Für alle sichtbar: Angebot ist nicht mehr verfügbar
 
-**🔐 Sicherheits-Architektur (NIP-17):**
+**Schritt 4: Modal-Popup (beide Parteien)**
+- **Angebotsgeber:** Sieht elegantes Modal mit:
+  - "✅ Deal abgeschlossen!"
+  - Room-ID (monospace Font)
+  - "🚀 Zum Chat" Button
+  - "Später" Button
+- **Gewinner:** Empfängt Auto-Listener Benachrichtigung (alle 10s) und sieht:
+  - "🎉 Dein Interesse wurde akzeptiert!"
+  - Room-ID
+  - "🚀 Zum Chat" Button
+  - "Später" Button
 
+**Modal-Design:**
+- Dunkles Theme (var(--surface-color))
+- Pink/Violett Gradient Header
+- Room-ID in elegantem Box-Design
+- Smooth Slide-in Animation
+- Responsive & professionell
+
+**Privacy-Vorteil dieser Architektur:**
+- ✅ Relay sieht nur 1 Event (statt N Events für alle Interessenten)
+- ✅ Relay kann NICHT erkennen wer ausgewählt wurde
+- ✅ Abgelehnte Interessenten bekommen KEINE Nachricht (perfekte Privacy!)
+- ✅ Nur Angebotsgeber und Gewinner kennen die Room-ID
+
+---
+
+### 7️⃣ **P2P WebRTC Chat (Trystero)**
+
+**✅ Vollständig implementiert - Chitchatter-Prinzip:**
+
+**Navigation zum Chat:**
+1. Beide Parteien klicken auf "🚀 Zum Chat" im Modal
+2. Automatische Navigation zu `/deal/[roomId]`
+3. Page lädt und startet P2P-Verbindung
+
+**P2P Verbindung (Trystero):**
+- **Technologie:** WebRTC über Trystero (Torrent Strategy)
+- **Keine zentrale Instanz:** Direkte Peer-to-Peer Verbindung
+- **App-ID:** `bitcoin-swap-chat` (für Room-Namespacing)
+- **Room-ID:** Aus NIP-04 Nachricht (16 Zeichen)
+
+**Identity Exchange (via P2P!):**
+1. User A betritt Room → Sendet `{ name: "Max", npub: "npub1..." }` via P2P
+2. User B empfängt → Speichert in lokaler Map
+3. User B sendet ebenfalls seine Identity → User A empfängt
+4. **WICHTIG:** Diese Daten gehen NIEMALS über Nostr-Relay!
+5. **Fallback:** Falls kein Name → Zeigt verkürzten NPUB
+
+**Chat-Features:**
+- ✅ **Echtzeit-Messaging:** Sofortige P2P Übertragung
+- ✅ **Namen anzeigen:** "Max Mustermann: Hallo!" statt "Peer abc123: Hallo!"
+- ✅ **System-Nachrichten:** "Max Mustermann ist beigetreten"
+- ✅ **Peer-Counter:** Zeigt Anzahl verbundener Peers
+- ✅ **Connection-Status:** 🔄 Verbinde... → ✅ Verbunden → ❌ Getrennt
+- ✅ **Dunkles Theme:** Pink/Violett Gradients für eigene Nachrichten
+- ✅ **Timestamps:** Zeigt Uhrzeit bei jeder Nachricht
+
+**Chat-UI (Dunkles Theme):**
 ```
-Nachricht "Hallo!" 
-  ↓
-Kind 14 (Chat Message)
-  ↓ NIP-44 Verschlüsselung mit Partner-Pubkey
-  ↓
-Kind 13 (Seal) + Sender-Pubkey
-  ↓ NIP-44 Verschlüsselung mit Random-Pubkey
-  ↓
-Kind 1059 (Gift Wrap) + Random-Pubkey + Random-Timestamp
-  ↓ Publiziert auf Relays
-  ↓
-Relay sieht: ✅ Gift Wrap mit zufälligem Pubkey
-             ❌ NICHT wer die Nachricht gesendet hat!
-             ❌ NICHT den tatsächlichen Zeitpunkt!
-             ❌ NICHT wer ausgewählt wurde (Whitelist-Broadcast!)
+┌─────────────────────────────────────────────┐
+│ 🔒 Private Deal Chat           [Header]    │
+│ Room: a7k3m9x2p5w8q1z4                      │
+│ 🔄 Verbunden | 👥 1 Peer                   │
+├─────────────────────────────────────────────┤
+│                                             │
+│  System: Max Mustermann ist beigetreten     │
+│                                             │
+│  ┌─────────────────────────┐               │
+│  │ Max Mustermann:         │               │
+│  │ Hallo! Wann treffen?    │  [Fremde]     │
+│  │                  14:23  │               │
+│  └─────────────────────────┘               │
+│                                             │
+│               ┌─────────────────────────┐  │
+│    [Eigene]   │ Du:                     │  │
+│               │ Morgen um 15 Uhr?       │  │
+│               │                  14:25  │  │
+│               └─────────────────────────┘  │
+│                                             │
+├─────────────────────────────────────────────┤
+│ [Nachricht eingeben...]        [Senden]    │
+├─────────────────────────────────────────────┤
+│           [Chat beenden]                    │
+└─────────────────────────────────────────────┘
 ```
 
-**Was ist PRIVAT (Relay sieht es NICHT):**
-- ✅ **Sender-Identität:** Nur zufällig generierter Pubkey sichtbar
-- ✅ **Nachrichteninhalt:** Ende-zu-Ende verschlüsselt
-- ✅ **Tatsächlicher Timestamp:** Randomisiert (±2 Tage)
-- ✅ **Beziehung zwischen Nutzern:** Keine Metadaten über Deals
-- ✅ **Wer ausgewählt wurde:** Whitelist-Broadcast verschleiert Einladung unter vielen Nachrichten
+**Styling-Details:**
+- Hintergrund: var(--bg-secondary) - Dunkelgrau
+- Message-Bubbles (eigene): Pink/Violett Gradient
+- Message-Bubbles (fremd): var(--surface-color) mit Border
+- System-Nachrichten: Gestrichelte Border, zentriert
+- Scrollbar: Custom Dark-Themed
+- Animationen: Smooth Slide-in für neue Nachrichten
+- Responsive: Mobile-optimiert
 
-**Was ist SICHTBAR (aber mit Whitelist-Broadcast geschützt):**
-- ⚠️ **Empfänger-Pubkey:** Im p-Tag (aber ALLE bekommen Nachricht)
-- ⚠️ **Anzahl Nachrichten:** Relay kann zählen (aber durch Broadcast normale Gruppen-Kommunikation)
+**"Chat beenden" Funktion:**
+- Button am Ende der Page
+- Confirmation-Dialog: "Chat wirklich beenden?"
+- Bei Bestätigung: `goto('/group')` zurück zum Marktplatz
+- Peer erhält automatisch "Peer hat Chat verlassen" Nachricht
 
-**➡️ Siehe [DEAL-ROOMS-NIP17.md](./DEAL-ROOMS-NIP17.md) für vollständige Dokumentation!**
+**🔐 Privacy-Garantien:**
+- ✅ **Keine Relay-Metadaten:** Chat läuft komplett über WebRTC
+- ✅ **Keine Timestamps auf Relay:** WebRTC hat eigene Timing
+- ✅ **Keine Gift Wraps nötig:** Direkte P2P Verschlüsselung
+- ✅ **Identitäten nur P2P:** Namen werden nie über Relay gesendet
+- ✅ **Relay-unabhängig:** Funktioniert auch wenn Relay offline geht
+
+---
+
+### 6️⃣ **Deal-Room erstellen & Privater Chat (NIP-17)** ⚠️ DEPRECATED
+
+**❌ NICHT MEHR VERWENDET - Ersetzt durch P2P WebRTC Chat**
+
+Die ursprüngliche NIP-17 Implementation wurde durch den P2P WebRTC Chat ersetzt, da:
+- ✅ **Bessere Privacy:** Keine Relay-Metadaten mehr
+- ✅ **Echtzeit:** WebRTC ist schneller als Nostr-Events
+- ✅ **Einfacher:** Keine komplexe 3-Schichten-Verschlüsselung nötig
+- ✅ **Chitchatter-Prinzip:** Bewährte P2P-Architektur
+
+**Legacy-Code bleibt im Repository** für mögliche zukünftige Use-Cases (z.B. Offline-Messaging).
 
 ---
 
@@ -334,16 +415,18 @@ Relay sieht: ✅ Gift Wrap mit zufälligem Pubkey
 
 ### Event-Kinds (aktiv implementiert):
 
-| Kind | Beschreibung | Signiert mit | Verschlüsselt? |
-|------|--------------|--------------|----------------|
-| **42** | Marketplace-Angebot | Temp-Pubkey | ❌ Nein (Klartext) |
-| **30078** | Interesse-Signal | Temp-Pubkey | ✅ Ja (NIP-04: ECDH + AES-256-CBC) |
-| **14** | Chat-Message | User-Pubkey | ✅ Ja (NIP-44) |
-| **13** | Seal (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) |
-| **1059** | Gift Wrap (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) |
-| **30000** | GroupConfig | Admin-Pubkey | ❌ Nein |
-| **30000** | Whitelist | Admin-Pubkey | ❌ Nein |
-| **0** | User-Profil | User-Pubkey | ❌ Nein |
+| Kind | Beschreibung | Signiert mit | Verschlüsselt? | Status |
+|------|--------------|--------------|----------------|--------|
+| **42** | Marketplace-Angebot | Temp-Pubkey | ❌ Nein (Klartext) | ✅ Aktiv |
+| **30078** | Interesse-Signal | Temp-Pubkey | ✅ Ja (NIP-04: ECDH + AES-256-CBC) | ✅ Aktiv |
+| **30000** | GroupConfig | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
+| **30000** | Whitelist | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
+| **0** | User-Profil | User-Pubkey | ❌ Nein | ✅ Aktiv |
+| **14** | Chat-Message (NIP-17) | User-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
+| **13** | Seal (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
+| **1059** | Gift Wrap (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
+
+**⚠️ Legacy Events:** NIP-17 Chat-Events sind noch im Code, werden aber durch P2P WebRTC ersetzt.
 
 ### 🔐 Verschlüsselung (NIP-04):
 
@@ -436,31 +519,46 @@ Zeigt alle Events auf dem Relay:
 | Interesse zeigen | ✅ Fertig | Verschlüsselt (NIP-04) |
 | Interessenten anzeigen | ✅ Fertig | Entschlüsselung funktioniert |
 | Profile anzeigen | ✅ Fertig | Name, NIP-05, etc. |
-| Deal-Status | ✅ Fertig | Kind 30081 (für Tracking) |
-| Deal-Rooms (Chat) | ✅ Fertig | NIP-17 (3-Schichten Verschlüsselung) |
-| Deal-Einladungen | ✅ Fertig | Automatische Benachrichtigung |
-| Whitelist-Broadcast | ✅ Fertig | 2-Phasen (Angebot + Deal-Vergabe) |
-| Privater Chat | ✅ Fertig | Echtzeit, Ende-zu-Ende verschlüsselt |
+| Room-ID Generierung | ✅ Fertig | 16 Zeichen alphanumerisch |
+| NIP-04 Benachrichtigung | ✅ Fertig | Nur an Gewinner (Privacy-optimiert) |
+| Modal-Popups | ✅ Fertig | Dunkles Theme mit Gradients |
+| P2P WebRTC Chat | ✅ Fertig | Trystero (Chitchatter-Prinzip) |
+| Identity Exchange (P2P) | ✅ Fertig | Namen via WebRTC, nie über Relay |
+| Chat-UI (dunkel) | ✅ Fertig | Pink/Violett Theme, responsive |
+| "Chat beenden" | ✅ Fertig | Zurück zum Marktplatz |
+| Auto-Listener | ✅ Fertig | Prüft alle 10s auf Benachrichtigungen |
+| Deal-Status | ⚠️ Legacy | Kind 30081 (NIP-17 Ära) |
+| Deal-Rooms (NIP-17) | ⚠️ Legacy | Ersetzt durch P2P WebRTC |
 | Deletion Events | ⏳ Geplant | Kind 5 (Aufräumen) |
-| Typing-Indikator | ⏳ Geplant | "Partner schreibt..." |
-| Datei-Upload | ⏳ Geplant | Verschlüsselte Anhänge |
+| Typing-Indikator | ⏳ Geplant | "Partner schreibt..." (P2P) |
+| Datei-Upload | ⏳ Geplant | P2P File Transfer |
 
 ---
 
-**🎉 Fazit:** Vollständiger Workflow implementiert! Von Gruppen-Erstellung über anonyme Angebote bis zum verschlüsselten 1:1 Chat ist alles funktionsfähig.
+**🎉 Fazit:** Vollständiger Workflow von Angebot bis P2P Chat implementiert!
 
-**🔒 Privatsphäre:** 
-- **Marketplace:** Temp-Pubkeys + NIP-04 Verschlüsselung
-- **Deal-Rooms:** NIP-17 mit 3-Schichten Verschlüsselung
-- **Whitelist-Broadcast:** 2-Phasen Strategie für perfekte Anonymität
-- **Anonymität:** Relay sieht NICHT wer mit wem dealt, wer Interesse hatte oder wer ausgewählt wurde!
+**🔒 Privacy-Architektur:**
+- **Phase 1 - Marketplace:** Temp-Pubkeys + NIP-04 (Relay-basiert)
+- **Phase 2 - Benachrichtigung:** NIP-04 (nur Gewinner, Privacy-optimiert)
+- **Phase 3 - Chat:** P2P WebRTC (Chitchatter, komplett ohne Relay!)
 
-**🚀 Produktiv einsetzbar:** Alle Kern-Features sind implementiert und getestet. Nutzer können:
-1. Gruppen erstellen/beitreten
-2. Anonyme Angebote veröffentlichen
-3. Interesse zeigen (verschlüsselt)
-4. Private Deal-Rooms starten
-5. Sicher & anonym kommunizieren
-6. Von Whitelist-Broadcast profitieren (maximale Privatsphäre)
+**🚀 Produktiv einsetzbar:** Alle Kern-Features implementiert. Nutzer können:
+1. ✅ Gruppen erstellen/beitreten
+2. ✅ Anonyme Angebote veröffentlichen
+3. ✅ Interesse zeigen (verschlüsselt)
+4. ✅ Schöne Modal-Benachrichtigungen erhalten
+5. ✅ P2P Chat starten (ohne Relay-Metadaten!)
+6. ✅ Identitäten via P2P austauschen
+7. ✅ Sicher & anonym kommunizieren
 
-**🔜 Nächste Features:** Datei-Upload, Typing-Indikator, Multi-Device Sync
+**🎨 Design:**
+- ✅ Konsistentes dunkles Theme (Pink/Violett)
+- ✅ Professionelle Modal-Popups
+- ✅ Smooth Animationen
+- ✅ Responsive & Mobile-optimiert
+
+**🔜 Nächste Features:**
+- Typing-Indikator (P2P)
+- Datei-Upload (P2P File Transfer)
+- Voice/Video Chat (WebRTC nativ)
+- Multi-Device Sync (optional, via Nostr)

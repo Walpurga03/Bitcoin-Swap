@@ -25,6 +25,7 @@
     "@nostr-dev-kit/ndk": "^2.18.1",
     "@types/qrcode": "^1.5.5",
     "nostr-tools": "^2.10.2",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "trystero": "^0.22.0"
   }
 }
