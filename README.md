@@ -30,8 +30,3 @@ Eine ausführliche README mit:
 - Deployment-Guide
 
 ---
-
-**📋 Dokumentation:**
-- [AKTUELLER-STAND.md](./AKTUELLER-STAND.md) - Vollständige technische Dokumentation
-- [WORKFLOW.md](./WORKFLOW.md) - Schritt-für-Schritt Workflow
-- [ANONYMITAET-ERKLAERT.md](./ANONYMITAET-ERKLAERT.md) - Anonymitäts-Prinzipien für Endnutzer
