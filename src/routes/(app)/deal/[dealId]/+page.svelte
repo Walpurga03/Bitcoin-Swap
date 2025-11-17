@@ -52,7 +52,7 @@
             credential: 'cloudflare'
           }
         ],
-        iceTransportPolicy: 'all' // Versuche alle Optionen (relay + direct)
+        iceTransportPolicy: 'all' as RTCIceTransportPolicy // Versuche alle Optionen (relay + direct)
       }
     };
     
