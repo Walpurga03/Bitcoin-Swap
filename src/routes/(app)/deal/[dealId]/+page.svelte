@@ -28,24 +28,25 @@
     
     console.log('👤 Meine Identität:', { myName, myNpub: myNpub.substring(0, 16) + '...' });
     
-    // Dynamischer Import von Trystero
-    console.log('📦 Lade Trystero...');
-    const { joinRoom } = await import('trystero');
-    console.log('✅ Trystero geladen');
+    // Dynamischer Import von Trystero (Torrent Strategy = nur BitTorrent, keine Nostr!)
+    console.log('📦 Lade Trystero/Torrent...');
+    const { joinRoom } = await import('trystero/torrent');
+    console.log('✅ Trystero/Torrent geladen');
     
-    // Erstelle P2P Room (Torrent Strategy für beste Privacy)
+    // Erstelle P2P Room (NUR Torrent Strategy, keine Nostr-Relays!)
     const config = { 
       appId: 'bitcoin-swap-chat',
       // Explizite Torrent-Tracker für bessere Konnektivität
       rtcConfig: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
         ]
       }
     };
     
-    console.log('🏗️ Erstelle P2P Room mit:', { appId: config.appId, roomId });
+    console.log('🏗️ Erstelle P2P Room mit:', { appId: config.appId, roomId, strategy: 'torrent-only' });
     room = joinRoom(config, roomId);
     console.log('✅ Room-Objekt erstellt:', room);
     
