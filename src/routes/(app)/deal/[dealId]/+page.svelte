@@ -151,8 +151,10 @@
   
   onDestroy(() => {
     console.log('🛑 Verlasse P2P Room');
+    console.log('🔍 Grund: Component wird destroyed (Navigation oder unmount)');
     if (room) {
       room.leave();
+      console.log('✅ Room.leave() aufgerufen');
     }
   });
   
