@@ -36,17 +36,28 @@
     // Erstelle P2P Room (NUR Torrent Strategy, keine Nostr-Relays!)
     const config = { 
       appId: 'bitcoin-swap-chat',
-      // Explizite Torrent-Tracker für bessere Konnektivität
+      // Explizite STUN/TURN Server für bessere Mobile-Konnektivität
       rtcConfig: {
         iceServers: [
+          // Google STUN (öffentlich)
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Cloudflare TURN (öffentlich, keine Auth nötig)
+          { 
+            urls: 'turn:turn.cloudflare.com:3478?transport=udp',
+            username: 'cloudflare',
+            credential: 'cloudflare'
+          }
+        ],
+        iceTransportPolicy: 'all' // Versuche alle Optionen (relay + direct)
       }
     };
     
     console.log('🏗️ Erstelle P2P Room mit:', { appId: config.appId, roomId, strategy: 'torrent-only' });
+    console.log('🔧 ICE Server Config:', config.rtcConfig.iceServers.length + ' Server');
     room = joinRoom(config, roomId);
     console.log('✅ Room-Objekt erstellt:', room);
     
@@ -197,6 +208,15 @@
   
   <div class="chat-container">
     <div class="messages">
+      {#if connectionStatus === 'connecting' && messages.length === 0}
+        <div class="waiting-notice">
+          <div class="spinner"></div>
+          <h3>⏳ Warte auf anderen Teilnehmer...</h3>
+          <p>Sobald der andere User den Chat betritt, wird die Verbindung automatisch hergestellt.</p>
+          <small>💡 Tipp: Stelle sicher, dass beide im gleichen Room sind</small>
+        </div>
+      {/if}
+      
       {#each messages as msg}
         <div class="message" class:own={msg.from === 'me'} class:system={msg.from === 'system'}>
           <div class="message-content">
@@ -337,6 +357,47 @@
   
   .messages::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
+  }
+  
+  .waiting-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-secondary);
+    gap: 1rem;
+  }
+  
+  .waiting-notice h3 {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 1.25rem;
+  }
+  
+  .waiting-notice p {
+    margin: 0;
+    max-width: 400px;
+    line-height: 1.6;
+  }
+  
+  .waiting-notice small {
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+  
+  .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
   
   .message {
