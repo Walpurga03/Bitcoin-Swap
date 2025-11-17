@@ -116,6 +116,7 @@
     border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: 12px;
     transition: all 0.3s ease;
+    gap: 12px;
   }
 
   .interest-item:hover {
@@ -126,6 +127,7 @@
 
   .interest-info {
     flex: 1;
+    min-width: 0; /* Wichtig für text-overflow */
   }
 
   .pubkey-row {
@@ -137,18 +139,25 @@
 
   .icon {
     font-size: 1.25rem;
+    flex-shrink: 0;
   }
 
   .pubkey {
     font-family: 'Courier New', monospace;
     color: #fff;
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .name {
     color: #c4b5fd;
     font-size: 0.875rem;
     margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .timestamp {
@@ -166,6 +175,7 @@
     cursor: pointer;
     transition: all 0.3s ease;
     white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .btn-select:hover:not(:disabled) {
@@ -195,5 +205,50 @@
 
   .note strong {
     color: #c4b5fd;
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 640px) {
+    .interest-list {
+      padding: 16px;
+    }
+
+    .list-header h3 {
+      font-size: 1.25rem;
+    }
+
+    .interest-item {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .interest-info {
+      width: 100%;
+    }
+
+    .pubkey-row {
+      flex-wrap: wrap;
+    }
+
+    .pubkey {
+      font-size: 0.8125rem;
+      word-break: break-all;
+      white-space: normal;
+    }
+
+    .btn-select {
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+    }
+
+    .note {
+      padding: 12px;
+    }
+
+    .note p {
+      font-size: 0.8125rem;
+    }
   }
 </style>
