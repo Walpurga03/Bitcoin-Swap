@@ -20,21 +20,54 @@
   
   onMount(async () => {
     console.log('🚀 Deal Room gestartet:', roomId);
+    console.log('📋 User-Store:', $userStore);
     
     // Hole User-Info aus Store
     myName = $userStore.name || '';
     myNpub = $userStore.pubkey || '';
     
+    console.log('👤 Meine Identität:', { myName, myNpub: myNpub.substring(0, 16) + '...' });
+    
     // Dynamischer Import von Trystero
+    console.log('📦 Lade Trystero...');
     const { joinRoom } = await import('trystero');
+    console.log('✅ Trystero geladen');
     
     // Erstelle P2P Room (Torrent Strategy für beste Privacy)
-    room = joinRoom({ appId: 'bitcoin-swap-chat' }, roomId);
+    const config = { 
+      appId: 'bitcoin-swap-chat',
+      // Explizite Torrent-Tracker für bessere Konnektivität
+      rtcConfig: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    };
+    
+    console.log('🏗️ Erstelle P2P Room mit:', { appId: config.appId, roomId });
+    room = joinRoom(config, roomId);
+    console.log('✅ Room-Objekt erstellt:', room);
     
     console.log('🔗 Verbinde mit P2P Room...');
+    console.log('⏳ Warte auf Peer-Verbindungen...');
+    console.log('🌍 Dieser Client ist jetzt im Raum und wartet auf andere Peers');
+    
+    // Debugging: Zeige ob wir im Room sind
+    setTimeout(() => {
+      if (peers.size === 0) {
+        console.warn('⚠️ Nach 5 Sekunden: Noch keine Peer-Verbindung!');
+        console.warn('Mögliche Ursachen:');
+        console.warn('- Anderer User ist noch nicht im Raum');
+        console.warn('- Firewall blockiert WebRTC');
+        console.warn('- NAT-Traversal Problem');
+      }
+    }, 5000);
     
     // Identity Exchange Channel (P2P!)
+    console.log('🔧 Erstelle Identity-Channel...');
     const [sendIdentity, receiveIdentity] = room.makeAction('identity');
+    console.log('✅ Identity-Channel erstellt');
     
     receiveIdentity((data: { name: string; npub: string }, peerId: string) => {
       console.log('👤 Identität empfangen von', peerId, ':', data);
@@ -53,9 +86,11 @@
     // Peer Events
     room.onPeerJoin((peerId: string) => {
       console.log('✅ Peer beigetreten:', peerId);
+      console.log('📊 Aktuelle Peers:', peers.size + 1);
       connectionStatus = 'connected';
       
       // Sende eigene Identität an neuen Peer (P2P!)
+      console.log('📤 Sende meine Identität an Peer:', peerId);
       sendIdentity({ name: myName, npub: myNpub }, peerId);
       
       // Temporärer Eintrag (wird durch identity-message überschrieben)
@@ -65,11 +100,13 @@
     
     room.onPeerLeave((peerId: string) => {
       console.log('❌ Peer verlassen:', peerId);
+      console.log('📊 Verbleibende Peers:', peers.size - 1);
       const peerInfo = peers.get(peerId);
       peers.delete(peerId);
       peers = peers;
       
       if (peers.size === 0) {
+        console.log('⚠️ Keine Peers mehr verbunden');
         connectionStatus = 'disconnected';
       }
       
@@ -82,7 +119,9 @@
     });
     
     // Chat-Nachrichten empfangen
+    console.log('🔧 Erstelle Chat-Channel...');
     const [sendMessage, receiveMessage] = room.makeAction('chat');
+    console.log('✅ Chat-Channel erstellt');
     
     receiveMessage((data: { text: string; name: string; timestamp: number }, peerId: string) => {
       console.log('📩 Nachricht empfangen von', peerId, ':', data.text);
