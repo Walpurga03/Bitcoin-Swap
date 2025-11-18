@@ -180,6 +180,9 @@ Keine erforderlich - alles läuft client-side!
 
 - **NIP-01**: Basic Event Structure (Events, Subscriptions)
 - **NIP-04**: Encrypted Direct Messages (Interest Signals, Deal Notifications)
+- **NIP-05**: Nostr Address (nur Anzeige, keine Verifikation)
+
+> **Hinweis:** NIP-05 Adressen werden aus User-Profilen (Kind 0) gelesen und angezeigt, aber **nicht verifiziert** (kein `.well-known/nostr.json` Fetch).
 
 ### Anonymitäts-Konzept
 

@@ -216,7 +216,7 @@ Nur ein verschlüsselter Text ist sichtbar.
 
 **Was kann der Angebots-Ersteller jetzt tun?**
 - Sieht die **echten Pubkeys** der Interessenten
-- Kann deren **Profile** anzeigen (Name, NIP-05)
+- Kann deren **Profile** anzeigen (Name, NIP-05 - nur Anzeige, keine Verifikation)
 - ✅ **Kann jetzt Kontakt aufnehmen!**
 
 ---
@@ -527,7 +527,7 @@ Zeigt alle Events auf dem Relay:
 | Angebote erstellen | ✅ Fertig | Mit Temp-Pubkeys (anonym) |
 | Interesse zeigen | ✅ Fertig | Verschlüsselt (NIP-04) |
 | Interessenten anzeigen | ✅ Fertig | Entschlüsselung funktioniert |
-| Profile anzeigen | ✅ Fertig | Name, NIP-05, etc. |
+| Profile anzeigen | ✅ Fertig | Name, NIP-05 (nur Anzeige, keine Verifikation) |
 | Room-ID Generierung | ✅ Fertig | 16 Zeichen alphanumerisch |
 | NIP-04 Benachrichtigung | ✅ Fertig | Nur an Gewinner (Privacy-optimiert) |
 | Modal-Popups | ✅ Fertig | Dunkles Theme mit Gradients |
