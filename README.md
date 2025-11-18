@@ -44,7 +44,7 @@ Bitcoin-Tausch-Netzwerk ist eine **dezentrale Plattform** für anonyme Bitcoin-T
 
 - **Angebote erstellen**: Anonyme Bitcoin-Tauschgeschäfte veröffentlichen
 - **Interesse zeigen**: Signal an Angebotsgeber senden
-- **Automatisches Expiry**: Angebote verfallen nach 24 Stunden
+- **Automatisches Expiry**: Angebote verfallen nach 72 Stunden
 - **Whitelist-System**: Admin-kontrollierter Zugang
 
 ### 💬 P2P Deal-Räume
@@ -132,26 +132,40 @@ Keine erforderlich - alles läuft client-side!
 
 ## 📖 Verwendung
 
-### 1. Gruppe beitreten
+### 1. Admin erstellt Gruppe
+
+**Nur für Admins:**
 
 1. Öffne die Anwendung
-2. Gebe Gruppen-Secret ein (vom Admin erhalten)
-3. Erstelle dein Nostr-Keypair
+2. Erstelle eine neue Gruppe mit eigenem Secret
+3. Konfiguriere Whitelist (füge Pubkeys hinzu)
+4. Teile Einladung an Mitglieder:
+   - **QR-Code** scannen lassen (mobil)
+   - **Einladungs-Link** versenden (z.B. `https://app-url.com/?secret=DeinGruppenSecret123`)
 
-### 2. Angebot erstellen
+### 2. Mitglied tritt bei
+
+**Für eingeladene User:**
+
+1. Scanne QR-Code oder öffne Einladungs-Link
+2. App lädt automatisch das Gruppen-Secret
+3. Melde dich mit deinem Nostr-Keypair an
+4. Whitelist-Check → Zugang gewährt ✅
+
+### 3. Angebot erstellen
 
 1. Klicke "Neues Angebot"
 2. Beschreibe dein Bitcoin-Tauschgeschäft
 3. Veröffentliche (automatisch mit temp. Keypair)
-4. Speichere dein Offer-Secret!
+4. **Wichtig:** Speichere dein Offer-Secret!
 
-### 3. Interesse zeigen
+### 4. Interesse zeigen
 
 1. Durchsuche Angebote im Marketplace
 2. Klicke "Interesse zeigen"
 3. Warte auf Auswahl durch Angebotsgeber
 
-### 4. Deal-Room nutzen
+### 5. Deal-Room nutzen
 
 1. Warte auf Benachrichtigung
 2. Öffne Deal-Room (P2P WebRTC)
@@ -164,9 +178,8 @@ Keine erforderlich - alles läuft client-side!
 
 ### Nostr Integration
 
-- **NIP-01**: Basic Event Structure
-- **NIP-04**: Encrypted Direct Messages
-- **NIP-13**: Proof of Work (optional)
+- **NIP-01**: Basic Event Structure (Events, Subscriptions)
+- **NIP-04**: Encrypted Direct Messages (Interest Signals, Deal Notifications)
 
 ### Anonymitäts-Konzept
 
@@ -235,10 +248,6 @@ Die App ist eine statische SvelteKit-Anwendung und kann auf jeder Platform deplo
 - **Mobile NAT/Firewall**: P2P WebRTC funktioniert am besten auf Desktop
 - **Browser-Support**: Chromium-basierte Browser empfohlen
 - **Relay-Verfügbarkeit**: Abhängig von Nostr-Relay-Uptime
-
-### Security Audit
-
-Dieses Projekt wurde **nicht professionell auditiert**. Nutze es nicht für kritische Transaktionen ohne eigene Sicherheitsprüfung.
 
 ---
 
