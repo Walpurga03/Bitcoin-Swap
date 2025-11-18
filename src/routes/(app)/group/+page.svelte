@@ -14,6 +14,7 @@
   import SecretLoginModal from '$lib/components/SecretLoginModal.svelte';
   import DealNotificationModal from '$lib/components/DealNotificationModal.svelte';
   import MarketplaceHeader from '$lib/components/MarketplaceHeader.svelte';
+  import OfferForm from '$lib/components/OfferForm.svelte';
   
   let isAdmin = false;
   let offers: Offer[] = [];
@@ -559,50 +560,15 @@
   {/if}
 
   <div class="marketplace-container">
-    <div class="marketplace-header">
-      <h2>🛒 Marketplace</h2>
-      <button
-        class="btn btn-primary btn-sm"
-        on:click={() => showOfferForm = !showOfferForm}
-        disabled={anyOfferExists && !showOfferForm}
-        title={anyOfferExists ? 'Es existiert bereits ein aktives Angebot' : 'Neues Angebot erstellen'}
-      >
-        {showOfferForm ? '✕ Abbrechen' : '+ Neues Angebot'}
-      </button>
-    </div>
-
-    {#if anyOfferExists && !showOfferForm}
-      <div class="info-banner">
-        ℹ️ Es existiert bereits ein aktives Angebot. Nur 1 Angebot gleichzeitig erlaubt.
-      </div>
-    {/if}
-
-    {#if showOfferForm}
-      <form class="offer-form card" on:submit|preventDefault={createOffer}>
-        <h3>📝 Neues Angebot erstellen</h3>
-        <textarea
-          class="input"
-          bind:value={offerInput}
-          placeholder="z.B. Verkaufe 0.01 BTC gegen EUR-Bargeld in Berlin..."
-          rows="5"
-          disabled={loading}
-        ></textarea>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" disabled={loading || !offerInput.trim()}>
-            {#if loading}
-              <span class="spinner"></span>
-              <span>Wird veröffentlicht...</span>
-            {:else}
-              🚀 Angebot veröffentlichen
-            {/if}
-          </button>
-        </div>
-        <small class="hint">
-          💡 <strong>Hinweis:</strong> Dein Angebot wird anonym veröffentlicht.
-          Andere Nutzer können Interesse zeigen und du kannst dann einen privaten Deal-Room starten.
-        </small>
-      </form>
-    {/if}
+    <OfferForm
+      bind:show={showOfferForm}
+      bind:value={offerInput}
+      {loading}
+      {anyOfferExists}
+      onToggle={() => showOfferForm = !showOfferForm}
+      onSubmit={createOffer}
+      onInput={(v) => offerInput = v}
+    />
 
     <div class="offers-list">
       {#if loading && offers.length === 0}
@@ -709,7 +675,6 @@
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
 
-  .btn-primary { background: var(--primary-color); color: white; }
   .btn-secondary { background: var(--surface-elevated); color: var(--text-color); border: 1px solid var(--border-color); }
   .btn-success { background: #10b981; color: white; }
   .btn-warning { background: #f59e0b; color: white; }
@@ -720,19 +685,6 @@
     padding: 2rem;
     max-width: 1400px;
     margin: 0 auto;
-  }
-
-  .marketplace-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    gap: 1rem;
-  }
-
-  .marketplace-header h2 {
-    font-size: 1.5rem;
-    margin: 0;
   }
 
   /* Messages */
@@ -746,44 +698,12 @@
   .status-message.success { background: rgba(16, 185, 129, 0.1); color: #10b981; }
   .status-message.error { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
-  .info-banner {
-    padding: 1rem;
-    background: rgba(255, 0, 110, 0.1);
-    border: 1px solid rgba(255, 0, 110, 0.3);
-    border-radius: 0.5rem;
-    color: var(--primary-color);
-    margin-bottom: 1rem;
-  }
-
   /* Forms */
   .card {
     background: var(--surface-color);
     border-radius: 1rem;
     padding: 1.5rem;
     border: 1px solid var(--border-color);
-  }
-
-  .input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    background: var(--surface-color);
-    color: var(--text-color);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-  }
-
-  .hint {
-    display: block;
-    padding: 0.75rem;
-    background: rgba(255, 0, 110, 0.08);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    font-size: 0.875rem;
   }
 
   /* Offers */
@@ -876,20 +796,6 @@
   .empty-icon {
     font-size: 3rem;
     margin-bottom: 1rem;
-  }
-
-  .spinner {
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
   }
 
   /* Modal */
