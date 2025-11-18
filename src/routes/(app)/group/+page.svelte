@@ -13,6 +13,7 @@
   import SecretBackupModal from '$lib/components/SecretBackupModal.svelte';
   import SecretLoginModal from '$lib/components/SecretLoginModal.svelte';
   import DealNotificationModal from '$lib/components/DealNotificationModal.svelte';
+  import MarketplaceHeader from '$lib/components/MarketplaceHeader.svelte';
   
   let isAdmin = false;
   let offers: Offer[] = [];
@@ -541,33 +542,15 @@
 </script>
 
 <div class="group-container">
-  <header class="group-header">
-    <div>
-      <h1>🛒 Bitcoin Tausch Netzwerk</h1>
-      <p class="user-info">
-        Angemeldet als: <strong>{$userStore.name || 'Anonym'}</strong>
-        ({truncatePubkey($userStore.pubkey || '')})
-        {#if isAdmin}
-          <span class="admin-badge">👑 Admin</span>
-        {/if}
-      </p>
-    </div>
-    <div class="header-actions">
-      {#if !offerKeypair}
-        <button class="btn btn-secret" on:click={() => showSecretLogin = true}>
-          🔑 Mit Secret anmelden
-        </button>
-      {/if}
-      {#if isAdmin}
-        <button class="btn btn-admin" on:click={() => showWhitelistModal = true}>
-          🔐 Whitelist verwalten
-        </button>
-      {/if}
-      <button class="btn btn-secondary" on:click={handleLogout}>
-        Abmelden
-      </button>
-    </div>
-  </header>
+  <MarketplaceHeader
+    userName={$userStore.name}
+    userPubkey={$userStore.pubkey}
+    {isAdmin}
+    hasOfferKeypair={!!offerKeypair}
+    onOpenWhitelist={() => showWhitelistModal = true}
+    onOpenSecretLogin={() => showSecretLogin = true}
+    onLogout={handleLogout}
+  />
 
   {#if error}
     <div class="status-message" class:loading={error.includes('⏳')} class:success={error.includes('✅')} class:error={error.includes('❌')}>
@@ -712,43 +695,6 @@
     background: linear-gradient(135deg, var(--bg-color), var(--bg-secondary));
   }
 
-  /* Header */
-  .group-header {
-    background: var(--surface-color);
-    padding: 1rem 2rem;
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .group-header h1 {
-    font-size: 1.5rem;
-    margin: 0;
-    color: var(--primary-color);
-  }
-
-  .user-info {
-    font-size: 0.875rem;
-    color: var(--text-muted);
-  }
-
-  .admin-badge {
-    padding: 0.125rem 0.5rem;
-    background: var(--accent-color);
-    color: white;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 0.5rem;
-  }
-
   /* Buttons */
   .btn {
     padding: 0.5rem 1rem;
@@ -768,8 +714,6 @@
   .btn-success { background: #10b981; color: white; }
   .btn-warning { background: #f59e0b; color: white; }
   .btn-danger { background: #ef4444; color: white; }
-  .btn-admin { background: var(--secondary-color); color: white; }
-  .btn-secret { background: #f59e0b; color: white; }
 
   /* Marketplace */
   .marketplace-container {
@@ -971,16 +915,6 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .group-header {
-      flex-direction: column;
-      align-items: flex-start;
-      padding: 1rem;
-    }
-
-    .header-actions {
-      width: 100%;
-    }
-
     .marketplace-container {
       padding: 1rem;
     }
