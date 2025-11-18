@@ -4,8 +4,8 @@
   import { goto } from '$app/navigation';
   import { userStore, isAuthenticated } from '$lib/stores/userStore';
   import { groupStore } from '$lib/stores/groupStore';
-  import { logger, marketplaceLogger, securityLogger } from '$lib/utils/logger';
-  import { truncatePubkey, getTimeRemaining, isExpiringSoon, getErrorMessage } from '$lib/utils';
+  import { logger, marketplaceLogger } from '$lib/utils/logger';
+  import { getErrorMessage } from '$lib/utils';
   import { generateOfferSecret, deriveKeypairFromSecret, validateOfferSecret } from '$lib/nostr/offerSecret';
   import { createOffer as createOfferMarketplace, deleteOffer as deleteOfferMarketplace, loadOffers, type Offer } from '$lib/nostr/marketplace';
   import WhitelistModal from '$lib/components/WhitelistModal.svelte';
