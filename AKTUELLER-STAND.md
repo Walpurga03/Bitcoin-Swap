@@ -120,12 +120,7 @@ Angebots-Secret: "MeinGeheimesAngebot123"
    - Signiert mit: **Temp-Pubkey** (NICHT dem echten Pubkey!)
    - Tags: Channel-ID, Secret-Hash, Expiration (72h)
 
-3. **📢 Whitelist-Broadcast Phase 1:**
-   - **ALLE Whitelist-Mitglieder** bekommen verschlüsselte NIP-17 Nachricht: "Neues Angebot verfügbar"
-   - Relay sieht: X verschlüsselte Gift Wraps
-   - Relay weiß NICHT wer der Anbieter ist ✅
-
-4. **Angebots-Secret wird lokal gespeichert:**
+3. **Angebots-Secret wird lokal gespeichert:**
    - ⚠️ **WICHTIG:** Secret wird im Browser/App gespeichert (localStorage)
    - **Warum?** Damit du später:
      - ✅ Interessenten sehen kannst (zum Entschlüsseln benötigt)
@@ -139,7 +134,7 @@ Angebots-Secret: "MeinGeheimesAngebot123"
 |-------|-----------|----------------|
 | Titel & Details | ✅ Ja | ❌ Nein (Klartext) |
 | **Temp-Pubkey** | ✅ Ja | ❌ Nein |
-| **Echter Pubkey** | ❌ NEIN! | ✅ Im 'author' Tag (für NIP-17) |
+| **Echter Pubkey** | ❌ NEIN! | ✅ Optional im 'author' Tag (Legacy) |
 | Channel-ID | ✅ Ja | ❌ Nein |
 | Secret-Hash | ✅ Ja | ❌ Nein |
 
@@ -314,31 +309,31 @@ Nur ein verschlüsselter Text ist sichtbar.
 
 **Chat-UI (Dunkles Theme):**
 ```
-┌─────────────────────────────────────────────┐
+┌────────────────────────────────────────────┐
 │ 🔒 Private Deal Chat           [Header]    │
-│ Room: a7k3m9x2p5w8q1z4                      │
+│ Room: a7k3m9x2p5w8q1z4                     │
 │ 🔄 Verbunden | 👥 1 Peer                   │
-├─────────────────────────────────────────────┤
-│                                             │
-│  System: Max Mustermann ist beigetreten     │
-│                                             │
+├────────────────────────────────────────────┤
+│                                            │
+│  System: Max Mustermann ist beigetreten    │
+│                                            │
 │  ┌─────────────────────────┐               │
 │  │ Max Mustermann:         │               │
 │  │ Hallo! Wann treffen?    │  [Fremde]     │
 │  │                  14:23  │               │
 │  └─────────────────────────┘               │
-│                                             │
+│                                            │
 │               ┌─────────────────────────┐  │
 │    [Eigene]   │ Du:                     │  │
 │               │ Morgen um 15 Uhr?       │  │
 │               │                  14:25  │  │
 │               └─────────────────────────┘  │
-│                                             │
-├─────────────────────────────────────────────┤
+│                                            │
+├────────────────────────────────────────────┤
 │ [Nachricht eingeben...]        [Senden]    │
-├─────────────────────────────────────────────┤
-│           [Chat beenden]                    │
-└─────────────────────────────────────────────┘
+├────────────────────────────────────────────┤
+│           [Chat beenden]                   │
+└────────────────────────────────────────────┘
 ```
 
 **Styling-Details:**
@@ -385,7 +380,7 @@ Die ursprüngliche NIP-17 Implementation wurde durch den P2P WebRTC Chat ersetzt
 
 1. **Wer erstellt Angebote?**
    - ✅ Nur Temp-Pubkeys sichtbar
-   - ❌ Echter Pubkey nur verschlüsselt im 'author' Tag
+   - ❌ Echter Pubkey optional im 'author' Tag (Legacy, meist nicht verwendet)
 
 2. **Wer zeigt Interesse?**
    - ✅ Nur Temp-Pubkeys sichtbar
@@ -419,14 +414,14 @@ Die ursprüngliche NIP-17 Implementation wurde durch den P2P WebRTC Chat ersetzt
 - Wer Mitglied ist               - Wer welches Angebot erstellt
 - Was angeboten wird             - Wer an welchem Angebot interessiert ist
 - Welche Gruppe                  - Wer mit wem dealt
-- Whitelist-Benachrichtigungen   - Wer die echte Einladung bekommen hat
-  (aber alle verschlüsselt!)       (Whitelist-Broadcast verschleiert das!)
+                                 - Wer ausgewählt wurde
 ```
 
-**🎯 Whitelist-Broadcast Strategie:**
-- **Phase 1:** ALLE bekommen "Neues Angebot" → Relay weiß NICHT wer der Anbieter ist
-- **Phase 2:** ALLE bekommen Nachricht (1x Einladung, Rest Absagen) → Relay weiß NICHT wer ausgewählt wurde
-- **Ergebnis:** Perfekte Anonymität! Interesse-Signal bleibt vollständig anonym ✅✅✅
+**🎯 Privacy-Strategie:**
+- **Temp-Keypairs:** Angebote anonym (niemand weiß wer dahintersteckt)
+- **NIP-04 Verschlüsselung:** Interest-Signale verschlüsselt
+- **Nur 1 Benachrichtigung:** Nur Gewinner bekommt NIP-04 Message → Relay kann NICHT erkennen wer ausgewählt wurde
+- **P2P Chat:** Komplett ohne Relay → Perfekte Anonymität ✅✅✅
 
 ---
 
@@ -441,11 +436,6 @@ Die ursprüngliche NIP-17 Implementation wurde durch den P2P WebRTC Chat ersetzt
 | **30000** | GroupConfig | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
 | **30000** | Whitelist | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
 | **0** | User-Profil | User-Pubkey | ❌ Nein | ✅ Aktiv |
-| **14** | Chat-Message (NIP-17) | User-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
-| **13** | Seal (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
-| **1059** | Gift Wrap (NIP-17) | Random-Pubkey | ✅ Ja (NIP-44) | ⚠️ Legacy |
-
-**⚠️ Legacy Events:** NIP-17 Chat-Events sind noch im Code, werden aber durch P2P WebRTC ersetzt.
 
 ### 🔐 Verschlüsselung (NIP-04):
 

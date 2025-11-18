@@ -1,7 +1,7 @@
 
 import { finalizeEvent, getPublicKey } from 'nostr-tools';
 import { logger } from '$lib/utils/logger';
-import { createNIP17Message, decryptNIP17Message } from './crypto';
+import { nip44Encrypt, nip44Decrypt } from './crypto';
 import { fetchEvents, publishEvent } from './client';
 import type { NostrEvent, NostrFilter } from './types';
 export interface UserConfig {
@@ -36,15 +36,15 @@ export async function saveUserConfig(
       has_link: !!configData.invite_link
     });
     
-    // Verschlüssele Config mit NIP-17 (zu sich selbst)
+    // Verschlüssele Config mit NIP-44 (zu sich selbst)
     const configJson = JSON.stringify(configData);
-    const { giftWrapEvent } = await createNIP17Message(
+    const encryptedContent = nip44Encrypt(
       configJson,
-      pubkey,  // Recipient = Self (zu sich selbst verschlüsselt!)
-      privateKey
+      privateKey,
+      pubkey  // Zu sich selbst verschlüsselt!
     );
     
-    logger.debug('🔐 Config verschlüsselt mit NIP-17 (3-Schichten)');
+    logger.debug('🔐 Config verschlüsselt mit NIP-44');
     
     // Erstelle Replaceable Event (Kind 30078 - Application Data)
     // Damit wird alte Config automatisch ersetzt
@@ -53,10 +53,10 @@ export async function saveUserConfig(
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ['d', 'bitcoin-swap-user-config'],  // Identifier für Replaceable Event
-        ['encrypted', 'nip17'],              // Markierung für Verschlüsselung
+        ['encrypted', 'nip44'],              // Markierung für Verschlüsselung
         ['app', 'bitcoin-swap-network']      // App-Identifier
       ],
-      content: giftWrapEvent.content,  // NIP-17 verschlüsselter Content
+      content: encryptedContent,  // NIP-44 verschlüsselter Content
       pubkey: pubkey
     };
     
@@ -118,24 +118,12 @@ export async function loadUserConfig(
     logger.debug('✅ Config-Event gefunden:', latestEvent.id.substring(0, 16) + '...');
     logger.debug('📅 Erstellt:', new Date(latestEvent.created_at * 1000).toLocaleString());
     
-    // Entschlüssele mit NIP-17
+    // Entschlüssele mit NIP-44
     try {
-      // Das gespeicherte Event IST bereits ein Gift Wrap (Kind 30078 mit NIP-17 Content)
-      // Wir müssen nur den Content als Gift Wrap behandeln
-      const giftWrapEvent = {
-        kind: 1059,  // Gift-Wrapped Event
-        pubkey: pubkey, // Zu sich selbst verschlüsselt
-        content: latestEvent.content,
-        created_at: latestEvent.created_at,
-        id: latestEvent.id,
-        sig: latestEvent.sig,
-        tags: []
-      };
+      const decrypted = nip44Decrypt(latestEvent.content, privateKey, pubkey);
+      const config: UserConfig = JSON.parse(decrypted);
       
-      const decrypted = await decryptNIP17Message(giftWrapEvent, privateKey);
-      const config: UserConfig = JSON.parse(decrypted.content);
-      
-      logger.debug('🔓 Config entschlüsselt (3-Schichten)');
+      logger.debug('🔓 Config entschlüsselt (NIP-44)');
       logger.debug('✅ Config geladen:', {
         is_admin: config.is_group_admin,
         has_secret: !!config.group_secret,

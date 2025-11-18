@@ -19,7 +19,6 @@ export interface Offer {
   id: string;
   content: string;
   tempPubkey: string;
-  authorPubkey?: string; // Echter Public Key des Angebotgebers für NIP-17 DMs (optional für Rückwärtskompatibilität)
   createdAt: number;
   expiresAt: number;
   isExpired: boolean;
@@ -40,7 +39,6 @@ export async function createOffer(
   tempKeypair: { privateKey: string; publicKey: string },
   relay: string,
   channelId: string,
-  authorPubkey?: string, // Echter Public Key des Angebotgebers
   secretHash?: string // Gruppen-spezifischer Hash zur Filterung
 ): Promise<string> {
   try {
@@ -53,11 +51,6 @@ export async function createOffer(
       ['e', channelId, relay, 'root'],
       ['expiration', expiresAt.toString()] // NIP-40 Expiration
     ];
-    
-    // Füge Author-Tag hinzu, falls angegeben (für NIP-17 DMs)
-    if (authorPubkey) {
-      tags.push(['author', authorPubkey]);
-    }
     
     // WICHTIG: Füge gruppen-spezifischen Tag hinzu zur Filterung
     if (secretHash) {
@@ -229,7 +222,6 @@ export async function loadOffers(
       // Konvertiere zu Offer-Objekten
       const offers: Offer[] = events.map(event => {
         const expirationTag = event.tags.find(t => t[0] === 'expiration');
-        const authorTag = event.tags.find(t => t[0] === 'author');
         
         const expiresAt = expirationTag ? parseInt(expirationTag[1]) : 0;
         const isExpired = isOfferExpired(event);
@@ -239,7 +231,6 @@ export async function loadOffers(
           id: event.id,
           content: event.content,
           tempPubkey: event.pubkey,
-          authorPubkey: authorTag ? authorTag[1] : undefined,
           createdAt: event.created_at,
           expiresAt,
           isExpired,

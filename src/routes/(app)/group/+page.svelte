@@ -244,7 +244,6 @@
         offerKeypair,
         $groupStore.relay,
         $groupStore.channelId,
-        $userStore.pubkey,
         $groupStore.secretHash
       );
       
