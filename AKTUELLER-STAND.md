@@ -30,7 +30,7 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr + WebR
 - **Komplett anonym:** Niemand sieht wer Angebote erstellt oder Interesse zeigt
 - **Dezentral:** Läuft auf Nostr-Relays, keine zentrale Datenbank
 - **Privatsphäre:** Echte Identitäten nur verschlüsselt oder via P2P ausgetauscht
-- **P2P Chat:** WebRTC-basierter Chat ohne Relay-Metadaten (Chitchatter-Prinzip)
+- **P2P Chat:** WebRTC-basierter Chat ohne Relay-Metadaten ([Chitchatter-Prinzip](https://github.com/jeremyckahn/chitchatter))
 
 ---
 
@@ -65,7 +65,7 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr + WebR
 ### 2️⃣ **Mitglied tritt Gruppe bei**
 
 **Was macht das Mitglied?**
-- Gibt das **Gruppen-Secret** ein
+- Gibt das **Gruppen-Secret** ein (aus QR-Code oder Link)
 - App berechnet automatisch die **Channel-ID** (Hash)
 - App lädt die **Whitelist** vom Relay
 
@@ -73,26 +73,15 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr + WebR
 - ✅ Pubkey auf Whitelist → Zugang gewährt
 - ❌ Pubkey nicht auf Whitelist → Kein Zugang
 
-**⚠️ WICHTIG - Sicherheits-Hinweis:**
-- **Whitelist wird NUR im Client geprüft**, nicht auf Relay-Ebene!
-- **Relay speichert ALLE Events** (auch von Nicht-Mitgliedern)
-- **Was bedeutet das?**
-  - ✅ Client zeigt nur Angebote von Whitelist-Mitgliedern
-  - ⚠️ Jemand kann direkt ans Relay Events senden (ohne Client)
-  - ✅ Diese Events werden NICHT im Client angezeigt (gefiltert)
-  - ✅ Ohne Gruppen-Secret können sie NICHT in richtigen Channel
-  
-**Schutz-Mechanismen:**
-1. **Secret-Hash Filter:** Nur Angebote mit richtigem Secret-Hash (g-Tag) werden geladen
-2. **Whitelist-Filter:** Client zeigt nur Events von bekannten Mitgliedern
-3. **Channel-ID Filter:** Nur Events für diese Gruppe werden abgerufen
-4. ➡️ Angreifer bräuchten: Gruppen-Secret + Whitelist-Eintrag
+**⚠️ Sicherheits-Hinweis:**
 
-**Technisch möglich, aber nutzlos:**
-- Jemand könnte Events direkt ans Relay senden
-- Diese landen im "falschen" Channel (ohne Secret-Hash)
-- Werden vom Client gefiltert und NICHT angezeigt
-- ✅ Keine Gefahr für die Gruppe!
+Die **Whitelist wird nur im Client geprüft**, nicht auf Relay-Ebene. Das Relay speichert alle Events, aber der Client filtert:
+
+**Schutz-Mechanismen:**
+1. **Secret-Hash Filter:** Nur Angebote mit richtigem `g`-Tag werden geladen
+2. **Whitelist-Filter:** Client zeigt nur Events von Mitgliedern
+3. **Channel-ID Filter:** Nur Events für diese Gruppe
+4. ➡️ Angreifer bräuchten: Gruppen-Secret + Whitelist-Eintrag
 
 **Wichtig:** Whitelist ist **öffentlich sichtbar** auf dem Relay!  
 → Jeder kann sehen WER Mitglied ist, aber nicht WER welches Angebot erstellt.
@@ -101,112 +90,64 @@ Ein **anonymes, dezentrales Bitcoin-Tausch-Netzwerk** auf Basis von Nostr + WebR
 
 ### 3️⃣ **Mitglied erstellt Angebot**
 
-**Was gibt das Mitglied ein?**
+**Eingabe:**
 ```
 Titel: "Tausche 0.1 BTC gegen EUR"
 Details: "Frankfurt, Bargeschäft"
 Angebots-Secret: "MeinGeheimesAngebot123"
 ```
 
-**Was passiert im Hintergrund?**
-
-1. **Temp-Pubkey wird generiert:**
-   - Aus dem Angebots-Secret wird ein **temporärer Keypair** abgeleitet
-   - Dieser Keypair ist **nicht** der echte Keypair des Users!
-   - ➡️ **Vollständige Anonymität auf dem Relay!**
-
-2. **Angebot wird signiert & veröffentlicht:**
-   - Event-Kind: **42** (Marketplace-Angebot)
-   - Signiert mit: **Temp-Pubkey** (NICHT dem echten Pubkey!)
-   - Tags: Channel-ID, Secret-Hash, Expiration (72h)
-
-3. **Angebots-Secret wird lokal gespeichert:**
-   - ⚠️ **WICHTIG:** Secret wird im Browser/App gespeichert (localStorage)
-   - **Warum?** Damit du später:
-     - ✅ Interessenten sehen kannst (zum Entschlüsseln benötigt)
-     - ✅ Angebot löschen kannst (Beweis dass du der Ersteller bist)
-     - ✅ Nachweisen kannst dass es dein Angebot ist
-   - **Sicherheit:** Secret verlässt NIEMALS dein Gerät!
+**Was passiert?**
+1. **Temp-Keypair wird aus Secret generiert** → Vollständige Anonymität!
+2. **Event Kind 42** wird mit Temp-Pubkey signiert (NICHT mit echtem Pubkey!)
+3. **Secret wird lokal gespeichert** (zum späteren Entschlüsseln der Interessenten)
 
 **Was ist öffentlich sichtbar?**
 
-| Daten | Sichtbar? | Verschlüsselt? |
-|-------|-----------|----------------|
-| Titel & Details | ✅ Ja | ❌ Nein (Klartext) |
-| **Temp-Pubkey** | ✅ Ja | ❌ Nein |
-| **Echter Pubkey** | ❌ NEIN! | ✅ Optional im 'author' Tag (Legacy) |
-| Channel-ID | ✅ Ja | ❌ Nein |
-| Secret-Hash | ✅ Ja | ❌ Nein |
+| Daten | Sichtbar auf Relay? |
+|-------|---------------------|
+| Titel & Details | ✅ Ja (Klartext) |
+| **Temp-Pubkey** | ✅ Ja |
+| **Echter Pubkey** | ❌ NEIN! |
 
-⚠️ **WICHTIG:** Auf dem Relay sieht NIEMAND, wer das Angebot erstellt hat!  
-Nur der **Temp-Pubkey** ist sichtbar, nicht der echte User-Pubkey.
+⚠️ **Wichtig:** Auf dem Relay sieht NIEMAND, wer das Angebot erstellt hat!
 
 ---
 
 ### 4️⃣ **Anderes Mitglied zeigt Interesse**
 
 **Was macht der Interessent?**
-- Sieht das Angebot in der Liste
-- Klickt auf "Interesse zeigen"
-- Gibt sein **Angebots-Secret** NICHT ein (hat er ja nicht!)
+- Klickt auf "Interesse zeigen" beim Angebot
+- Generiert **eigenes Temp-Keypair** (für Anonymität)
 
-**Was passiert im Hintergrund?**
-
-1. **Temp-Keypair für Anonymität:**
-   - Interessent generiert **eigenes Temp-Keypair** (wie beim Angebot)
-   - Wird aus einem zufälligen Secret abgeleitet
-   - Event wird mit **Temp-PrivateKey signiert** → Temp-Pubkey im Event sichtbar
-
-2. **Interesse-Signal wird erstellt:**
-   - Event-Kind: **30078** (Interesse-Signal)
-   - Signiert mit: **Temp-Pubkey des Interessenten** (NICHT seinem echten Pubkey!)
-   - Content: **NIP-04 verschlüsselt** (echter Pubkey des Interessenten darin versteckt)
-
-3. **Verschlüsselung (NIP-04 mit ECDH + AES-256-CBC):**
-   - **Algorithmus:** Elliptic Curve Diffie-Hellman + AES-256-CBC
-   - **Verschlüsselt mit:**
-     - Temp-PrivateKey des Interessenten (Sender)
-     - Temp-PublicKey des Angebots (Empfänger)
-   - **Entschlüsselung nur möglich mit:**
-     - Angebots-PrivateKey (Empfänger)
-     - Temp-PublicKey des Interessenten (Sender, im Event sichtbar)
-   - **Inhalt:** Echter Pubkey + Name + Nachricht (JSON)
+**Was passiert?**
+1. **Event Kind 30078** wird mit Temp-Pubkey signiert
+2. **Content wird mit NIP-04 verschlüsselt:**
+   - Algorithmus: ECDH + AES-256-CBC
+   - Inhalt: Echter Pubkey + Name + Nachricht (JSON)
    - ➡️ Nur wer das **Angebots-Secret** kennt, kann entschlüsseln!
-
-**Warum NIP-04 hier SICHER ist:**
-- ✅ Jedes Interesse-Signal = **neue Temp-Keys** (kein Key-Reuse!)
-- ✅ Kein p-Tag im Event (volle Metadata-Privatsphäre)
-- ✅ Perfect Forward Secrecy (jedes Signal isoliert)
-- ✅ Einfacher als NIP-17, aber gleich sicher für diesen Use-Case!
 
 **Was ist öffentlich sichtbar?**
 
-| Daten | Sichtbar? | Verschlüsselt? |
-|-------|-----------|----------------|
-| **Temp-Pubkey (Interessent)** | ✅ Ja | ❌ Nein |
-| **Echter Pubkey (Interessent)** | ❌ NEIN! | ✅ Ja (NIP-04) |
-| Angebots-ID (e-Tag) | ✅ Ja | ❌ Nein |
-| Content | ✅ Ja | ✅ Ja (verschlüsselter Blob) |
+| Daten | Sichtbar auf Relay? |
+|-------|---------------------|
+| Temp-Pubkey (Interessent) | ✅ Ja |
+| **Echter Pubkey** | ❌ NEIN! (verschlüsselt) |
+| Content | ✅ Ja (verschlüsselter Blob) |
 
-⚠️ **Auf dem Relay:** Niemand sieht, WER Interesse gezeigt hat!  
-Nur ein verschlüsselter Text ist sichtbar.
+**Warum NIP-04 hier sicher ist:**
+- ✅ Jedes Interesse-Signal = neue Temp-Keys (kein Key-Reuse!)
+- ✅ Kein `p`-Tag im Event (volle Metadata-Privatsphäre)
+- ✅ Perfect Forward Secrecy (jedes Signal isoliert)
 
 ---
 
 ### 5️⃣ **Angebots-Ersteller sieht Interessenten**
 
-**Was sieht der Angebots-Ersteller?**
-
-1. **App lädt Interesse-Signale vom Relay:**
-   - Filtert nach seiner Angebots-ID
-   - Findet alle Interesse-Signale (verschlüsselt)
-
-2. **App entschlüsselt die Signale:**
-   - Verwendet das **Angebots-Secret** (das nur der Ersteller kennt!)
-   - Leitet daraus den **Temp-Keypair** ab
-   - Entschlüsselt die **echten Pubkeys** der Interessenten
-
-3. **App zeigt die Interessenten:**
+**Was passiert?**
+1. App lädt Interesse-Signale vom Relay (gefiltert nach Angebots-ID)
+2. App entschlüsselt mit **Angebots-Secret** → Zeigt echte Pubkeys
+3. App zeigt Liste:
    ```
    💌 3 Interessenten:
    1. npub1abc... (Max Mustermann)
@@ -214,289 +155,142 @@ Nur ein verschlüsselter Text ist sichtbar.
    3. npub1ghi... (Tom Weber)
    ```
 
-**Was kann der Angebots-Ersteller jetzt tun?**
-- Sieht die **echten Pubkeys** der Interessenten
-- Kann deren **Profile** anzeigen (Name, NIP-05 - nur Anzeige, keine Verifikation)
-- ✅ **Kann jetzt Kontakt aufnehmen!**
-
 ---
 
-### 6️⃣ **Deal-Benachrichtigung & Chat-Einladung (NIP-04 + Modal)**
-
-**✅ Was funktioniert JETZT:**
+### 6️⃣ **Deal-Benachrichtigung & Chat-Einladung**
 
 **Angebots-Ersteller wählt Interessenten aus:**
-1. Sieht **Liste aller Interessenten** mit Namen und Pubkeys
-2. Klickt auf **"Auswählen"** bei einem Interessenten
-3. System führt folgende Schritte aus:
 
 **Schritt 1: Room-ID Generierung**
-- Generiert **16-stellige alphanumerische Room-ID** (z.B. "a7k3m9x2p5w8q1z4")
-- Format: `[a-z0-9]{16}` - Kryptographisch sicher zufällig
-- Diese ID wird für den P2P WebRTC Room verwendet
+- 16-stellige alphanumerische Room-ID (z.B. `a7k3m9x2p5w8q1z4`)
+- Kryptographisch sicher zufällig
 
-**Schritt 2: NIP-04 Benachrichtigung (Privacy-optimiert)**
-- **NUR der ausgewählte Interessent** erhält verschlüsselte NIP-04 Nachricht mit:
-  - Room-ID (für P2P Chat)
-  - Offer-ID
-  - Angebots-Inhalt (gekürzt)
-- **Verschlüsselung:** Temp-Key → Temp-Key (maximale Anonymität!)
-- **Relay sieht nur:** 1 verschlüsseltes Event (kann NICHT unterscheiden wer ausgewählt wurde)
-- **Abgelehnte Interessenten:** Sehen nur, dass Angebot gelöscht wurde (keine Benachrichtigung)
+**Schritt 2: NIP-04 Benachrichtigung**
+- **NUR der Gewinner** erhält verschlüsselte Nachricht mit Room-ID
+- Verschlüsselung: Temp-Key → Temp-Key (maximale Anonymität!)
+- Relay kann NICHT erkennen wer ausgewählt wurde
+- Abgelehnte Interessenten sehen nur, dass Angebot gelöscht wurde
 
-**Schritt 3: Angebot löschen**
-- Alle Interest-Signale werden gelöscht
-- Angebot wird vom Relay entfernt
-- Für alle sichtbar: Angebot ist nicht mehr verfügbar
+**Schritt 3: Modal-Popup**
+- Beide Parteien sehen elegantes Modal mit Room-ID
+- "🚀 Zum Chat" Button → Navigation zu `/deal/[roomId]`
 
-**Schritt 4: Modal-Popup (beide Parteien)**
-- **Angebotsgeber:** Sieht elegantes Modal mit:
-  - "✅ Deal abgeschlossen!"
-  - Room-ID (monospace Font)
-  - "🚀 Zum Chat" Button
-  - "Später" Button
-- **Gewinner:** Empfängt Auto-Listener Benachrichtigung (alle 10s) und sieht:
-  - "🎉 Dein Interesse wurde akzeptiert!"
-  - Room-ID
-  - "🚀 Zum Chat" Button
-  - "Später" Button
-
-**Modal-Design:**
-- Dunkles Theme (var(--surface-color))
-- Pink/Violett Gradient Header
-- Room-ID in elegantem Box-Design
-- Smooth Slide-in Animation
-- Responsive & professionell
-
-**Privacy-Vorteil dieser Architektur:**
-- ✅ Relay sieht nur 1 Event (statt N Events für alle Interessenten)
-- ✅ Relay kann NICHT erkennen wer ausgewählt wurde
-- ✅ Abgelehnte Interessenten bekommen KEINE Nachricht (perfekte Privacy!)
+**Privacy-Vorteil:**
+- ✅ Relay sieht nur 1 Event (statt N für alle Interessenten)
 - ✅ Nur Angebotsgeber und Gewinner kennen die Room-ID
 
 ---
 
-### 7️⃣ **P2P WebRTC Chat (Trystero)**
+### 7️⃣ **P2P WebRTC Chat**
 
-**✅ Vollständig implementiert - Chitchatter-Prinzip:**
+**Vollständig implementiert - [Chitchatter-Prinzip](https://github.com/jeremyckahn/chitchatter):**
 
-**Navigation zum Chat:**
-1. Beide Parteien klicken auf "🚀 Zum Chat" im Modal
-2. Automatische Navigation zu `/deal/[roomId]`
-3. Page lädt und startet P2P-Verbindung
-
-**P2P Verbindung (Trystero):**
-- **Technologie:** WebRTC über Trystero (Torrent Strategy)
+**P2P Verbindung:**
+- **Technologie:** WebRTC über [Trystero](https://github.com/dmotz/trystero) (Torrent Strategy)
 - **Keine zentrale Instanz:** Direkte Peer-to-Peer Verbindung
-- **App-ID:** `bitcoin-swap-chat` (für Room-Namespacing)
+- **App-ID:** `bitcoin-swap-chat`
 - **Room-ID:** Aus NIP-04 Nachricht (16 Zeichen)
 
 **Identity Exchange (via P2P!):**
-1. User A betritt Room → Sendet `{ name: "Max", npub: "npub1..." }` via P2P
-2. User B empfängt → Speichert in lokaler Map
-3. User B sendet ebenfalls seine Identity → User A empfängt
-4. **WICHTIG:** Diese Daten gehen NIEMALS über Nostr-Relay!
-5. **Fallback:** Falls kein Name → Zeigt verkürzten NPUB
+- User A sendet `{ name: "Max", npub: "npub1..." }` via WebRTC
+- User B empfängt und sendet seine Identity zurück
+- **WICHTIG:** Diese Daten gehen NIEMALS über Nostr-Relay!
 
 **Chat-Features:**
-- ✅ **Echtzeit-Messaging:** Sofortige P2P Übertragung
-- ✅ **Namen anzeigen:** "Max Mustermann: Hallo!" statt "Peer abc123: Hallo!"
-- ✅ **System-Nachrichten:** "Max Mustermann ist beigetreten"
-- ✅ **Peer-Counter:** Zeigt Anzahl verbundener Peers
-- ✅ **Connection-Status:** 🔄 Verbinde... → ✅ Verbunden → ❌ Getrennt
-- ✅ **Dunkles Theme:** Pink/Violett Gradients für eigene Nachrichten
-- ✅ **Timestamps:** Zeigt Uhrzeit bei jeder Nachricht
-
-**Chat-UI (Dunkles Theme):**
-```
-┌────────────────────────────────────────────┐
-│ 🔒 Private Deal Chat           [Header]    │
-│ Room: a7k3m9x2p5w8q1z4                     │
-│ 🔄 Verbunden | 👥 1 Peer                   │
-├────────────────────────────────────────────┤
-│                                            │
-│  System: Max Mustermann ist beigetreten    │
-│                                            │
-│  ┌─────────────────────────┐               │
-│  │ Max Mustermann:         │               │
-│  │ Hallo! Wann treffen?    │  [Fremde]     │
-│  │                  14:23  │               │
-│  └─────────────────────────┘               │
-│                                            │
-│               ┌─────────────────────────┐  │
-│    [Eigene]   │ Du:                     │  │
-│               │ Morgen um 15 Uhr?       │  │
-│               │                  14:25  │  │
-│               └─────────────────────────┘  │
-│                                            │
-├────────────────────────────────────────────┤
-│ [Nachricht eingeben...]        [Senden]    │
-├────────────────────────────────────────────┤
-│           [Chat beenden]                   │
-└────────────────────────────────────────────┘
-```
-
-**Styling-Details:**
-- Hintergrund: var(--bg-secondary) - Dunkelgrau
-- Message-Bubbles (eigene): Pink/Violett Gradient
-- Message-Bubbles (fremd): var(--surface-color) mit Border
-- System-Nachrichten: Gestrichelte Border, zentriert
-- Scrollbar: Custom Dark-Themed
-- Animationen: Smooth Slide-in für neue Nachrichten
-- Responsive: Mobile-optimiert
-
-**"Chat beenden" Funktion:**
-- Button am Ende der Page
-- Confirmation-Dialog: "Chat wirklich beenden?"
-- Bei Bestätigung: `goto('/group')` zurück zum Marktplatz
-- Peer erhält automatisch "Peer hat Chat verlassen" Nachricht
+- ✅ Echtzeit-Messaging (P2P)
+- ✅ Namen anzeigen ("Max Mustermann: Hallo!")
+- ✅ System-Nachrichten ("Max ist beigetreten")
+- ✅ Peer-Counter & Connection-Status
+- ✅ Dunkles Theme (Pink/Violett)
+- ✅ Timestamps
+- ✅ "Chat beenden" Button
 
 **🔐 Privacy-Garantien:**
-- ✅ **Keine Relay-Metadaten:** Chat läuft komplett über WebRTC
-- ✅ **Keine Timestamps auf Relay:** WebRTC hat eigene Timing
-- ✅ **Keine Gift Wraps nötig:** Direkte P2P Verschlüsselung
-- ✅ **Identitäten nur P2P:** Namen werden nie über Relay gesendet
-- ✅ **Relay-unabhängig:** Funktioniert auch wenn Relay offline geht
+- ✅ Keine Relay-Metadaten (Chat läuft über WebRTC)
+- ✅ Keine Timestamps auf Relay
+- ✅ Identitäten nur P2P (Namen nie über Relay)
+- ✅ Relay-unabhängig (funktioniert auch offline)
 
 ---
 
-### 6️⃣ **Deal-Room erstellen & Privater Chat (NIP-17)** ⚠️ DEPRECATED
+## 🔐 Privatsphäre & Anonymität
 
-**❌ NICHT MEHR VERWENDET - Ersetzt durch P2P WebRTC Chat**
+### Was ist ANONYM?
 
-Die ursprüngliche NIP-17 Implementation wurde durch den P2P WebRTC Chat ersetzt, da:
-- ✅ **Bessere Privacy:** Keine Relay-Metadaten mehr
-- ✅ **Echtzeit:** WebRTC ist schneller als Nostr-Events
-- ✅ **Einfacher:** Keine komplexe 3-Schichten-Verschlüsselung nötig
-- ✅ **Chitchatter-Prinzip:** Bewährte P2P-Architektur
+- **Wer erstellt Angebote?** → Nur Temp-Pubkeys sichtbar
+- **Wer zeigt Interesse?** → Nur Temp-Pubkeys sichtbar
+- **Wer tauscht mit wem?** → Komplett privat (P2P Chat)
 
-**Legacy-Code bleibt im Repository** für mögliche zukünftige Use-Cases (z.B. Offline-Messaging).
+### Was ist ÖFFENTLICH?
+
+- **Whitelist:** Alle Mitglieds-Pubkeys sichtbar
+- **Angebots-Inhalte:** Titel, Details (Klartext)
+- **Gruppenkonfiguration:** Relay-URL, Secret-Hash
+
+### Privacy-Strategie
+
+```
+ÖFFENTLICH:              PRIVAT:
+- Wer Mitglied ist       - Wer welches Angebot erstellt
+- Was angeboten wird     - Wer Interesse zeigt
+- Welche Gruppe          - Wer mit wem dealt
+```
+
+**3-Phasen-Modell:**
+1. **Marketplace:** Temp-Keypairs (anonym)
+2. **Benachrichtigung:** NIP-04 (nur Gewinner)
+3. **Chat:** P2P WebRTC (keine Relay-Metadaten)
 
 ---
 
-## 🔐 Privatsphäre & Anonymität - Zusammenfassung
+## 📋 Technische Details
 
-### ✅ Was ist ANONYM (auf dem Relay nicht sichtbar):
+### Event-Kinds
 
-1. **Wer erstellt Angebote?**
-   - ✅ Nur Temp-Pubkeys sichtbar
-   - ❌ Echter Pubkey optional im 'author' Tag (Legacy, meist nicht verwendet)
+| Kind | Beschreibung | Signiert mit | Verschlüsselt? |
+|------|--------------|--------------|----------------|
+| **42** | Marketplace-Angebot | Temp-Pubkey | ❌ Nein |
+| **30078** | Interesse-Signal | Temp-Pubkey | ✅ Ja (NIP-04) |
+| **30000** | GroupConfig/Whitelist | Admin-Pubkey | ❌ Nein |
+| **0** | User-Profil | User-Pubkey | ❌ Nein |
 
-2. **Wer zeigt Interesse?**
-   - ✅ Nur Temp-Pubkeys sichtbar
-   - ❌ Echter Pubkey nur verschlüsselt im Content
+### Verschlüsselung (NIP-04)
 
-3. **Wer tauscht mit wem?**
-   - ✅ Komplett privat
-   - ❌ Niemand auf dem Relay kann Verbindungen sehen
-
-### ⚠️ Was ist ÖFFENTLICH (auf dem Relay sichtbar):
-
-1. **Whitelist:**
-   - ✅ Alle Mitglieds-Pubkeys sichtbar
-   - ✅ Admin-Pubkey sichtbar
-   - ➡️ Man kann sehen WER Mitglied ist
-
-2. **Angebots-Inhalte:**
-   - ✅ Titel, Details, Preis (Klartext)
-   - ✅ Channel-ID, Secret-Hash
-   - ➡️ Man kann Angebote lesen
-
-3. **Gruppenkonfiguration:**
-   - ✅ Relay-URL
-   - ✅ Secret-Hash
-   - ➡️ Man kann Gruppen-Metadaten sehen
-
-### 🎭 Das Anonymitäts-Prinzip:
+**Algorithmus:** ECDH + AES-256-CBC
 
 ```
-ÖFFENTLICH:                      PRIVAT:
-- Wer Mitglied ist               - Wer welches Angebot erstellt
-- Was angeboten wird             - Wer an welchem Angebot interessiert ist
-- Welche Gruppe                  - Wer mit wem dealt
-                                 - Wer ausgewählt wurde
+1. Shared-Secret = ECDH(tempPrivKey_Sender, tempPubKey_Empfänger)
+2. Ciphertext = AES-256-CBC(Shared-Secret, Plaintext, IV)
+3. Plaintext = AES-256-CBC-Decrypt(Shared-Secret, Ciphertext, IV)
 ```
 
-**🎯 Privacy-Strategie:**
-- **Temp-Keypairs:** Angebote anonym (niemand weiß wer dahintersteckt)
-- **NIP-04 Verschlüsselung:** Interest-Signale verschlüsselt
-- **Nur 1 Benachrichtigung:** Nur Gewinner bekommt NIP-04 Message → Relay kann NICHT erkennen wer ausgewählt wurde
-- **P2P Chat:** Komplett ohne Relay → Perfekte Anonymität ✅✅✅
+**Sicherheit:**
+- ✅ ECDH: secp256k1 Curve (Bitcoin-Standard)
+- ✅ AES-256-CBC: Industrie-Standard
+- ✅ Neue Keys pro Angebot (kein Key-Reuse)
+- ✅ Kein Metadata-Leak (keine `p`-Tags)
+
+### Temp-Pubkey-Generierung
+
+```
+Secret → SHA-256 Hash → secp256k1 Keypair → Temp-Pubkey
+```
+
+**Eigenschaften:**
+- Deterministisch: Gleiches Secret = gleicher Pubkey
+- Einzigartig: Secret nicht aus Pubkey ableitbar
+- Sicher: SHA-256 ist nicht reversibel
 
 ---
 
-## 📋 Technische Details (kurz & knapp)
+## 🎯 Roadmap
 
-### Event-Kinds (aktiv implementiert):
+### Geplante Features
 
-| Kind | Beschreibung | Signiert mit | Verschlüsselt? | Status |
-|------|--------------|--------------|----------------|--------|
-| **42** | Marketplace-Angebot | Temp-Pubkey | ❌ Nein (Klartext) | ✅ Aktiv |
-| **30078** | Interesse-Signal | Temp-Pubkey | ✅ Ja (NIP-04: ECDH + AES-256-CBC) | ✅ Aktiv |
-| **30000** | GroupConfig | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
-| **30000** | Whitelist | Admin-Pubkey | ❌ Nein | ✅ Aktiv |
-| **0** | User-Profil | User-Pubkey | ❌ Nein | ✅ Aktiv |
-
-### 🔐 Verschlüsselung (NIP-04):
-
-**Algorithmus:** Elliptic Curve Diffie-Hellman (ECDH) + AES-256-CBC
-
-**Wie funktioniert's?**
-```
-1. ECDH Key-Exchange:
-   Shared-Secret = ECDH(tempPrivKey_Sender, tempPubKey_Empfänger)
-
-2. AES-256-CBC Verschlüsselung:
-   Ciphertext = AES-256-CBC(Shared-Secret, Plaintext, IV)
-
-3. Entschlüsselung (nur für Anbieter):
-   Plaintext = AES-256-CBC-Decrypt(Shared-Secret, Ciphertext, IV)
-```
-
-**Warum sicher?**
-- ✅ **ECDH:** Kryptographisch sicherer Key-Exchange (secp256k1 Curve)
-- ✅ **AES-256-CBC:** Industrie-Standard Verschlüsselung
-- ✅ **Neue Keys pro Angebot:** Kein Key-Reuse Problem!
-- ✅ **Kein Metadata-Leak:** Keine p-Tags, nur verschlüsselter Content
-
-### Temp-Pubkey-Generierung:
-
-```javascript
-Angebots-Secret → SHA-256 Hash → Seed für Keypair → Temp-Pubkey
-```
-
-**Beispiel:**
-```
-Secret: "MeinGeheimesAngebot123"
-  ↓
-SHA-256: a1b2c3d4... (256-bit Hash)
-  ↓
-Keypair-Generierung: secp256k1 (Bitcoin-Curve)
-  ↓
-Temp-Pubkey: npub1xyz... (33 bytes compressed)
-```
-
-➡️ **Deterministisch:** Gleiches Secret = gleicher Temp-Pubkey  
-➡️ **Einzigartig:** Niemand kann Secret aus Temp-Pubkey ableiten  
-➡️ **Sicher:** SHA-256 ist nicht reversibel (One-Way-Function)
-
----
-
-## 🎯 Nächste Schritte (geplant)
-
-### 🔜 Deal-Status Tracking:
-- Event-Kind **30081:** Deal-Status Updates
-- Status: `pending` → `accepted` → `completed` / `cancelled`
-- Öffentlich sichtbar (für Transparenz)
-
-### 🔜 Deletion Events:
-- Event-Kind **5:** Angebote/Interessen löschen (NIP-09)
-- Aufräumen abgelaufener/abgeschlossener Deals
-
-### 🔜 Deal-Rooms (NIP-17):
-- Verschlüsselte 1:1 Chats zwischen Anbieter & Interessent
-- Nur für ausgewählte Deals
-- Komplett privat & verschlüsselt
+- **Deletion Events (Kind 5):** Angebote/Interessen aufräumen
+- **Typing-Indikator:** "Partner schreibt..." (P2P)
+- **Datei-Upload:** P2P File Transfer
+- **Voice/Video Chat:** WebRTC nativ
 
 ---
 
@@ -518,56 +312,36 @@ Zeigt alle Events auf dem Relay:
 
 ---
 
-## ✅ Status-Übersicht
+## 📊 Status-Übersicht
 
 | Feature | Status | Kommentar |
 |---------|--------|-----------|
-| Gruppen erstellen | ✅ Fertig | Admin-Funktion |
-| Whitelist-Verwaltung | ✅ Fertig | Mitglieder hinzufügen/entfernen |
-| Angebote erstellen | ✅ Fertig | Mit Temp-Pubkeys (anonym) |
-| Interesse zeigen | ✅ Fertig | Verschlüsselt (NIP-04) |
-| Interessenten anzeigen | ✅ Fertig | Entschlüsselung funktioniert |
-| Profile anzeigen | ✅ Fertig | Name, NIP-05 (nur Anzeige, keine Verifikation) |
-| Room-ID Generierung | ✅ Fertig | 16 Zeichen alphanumerisch |
-| NIP-04 Benachrichtigung | ✅ Fertig | Nur an Gewinner (Privacy-optimiert) |
-| Modal-Popups | ✅ Fertig | Dunkles Theme mit Gradients |
-| P2P WebRTC Chat | ✅ Fertig | Trystero (Chitchatter-Prinzip) |
-| Identity Exchange (P2P) | ✅ Fertig | Namen via WebRTC, nie über Relay |
-| Chat-UI (dunkel) | ✅ Fertig | Pink/Violett Theme, responsive |
-| "Chat beenden" | ✅ Fertig | Zurück zum Marktplatz |
-| Auto-Listener | ✅ Fertig | Prüft alle 10s auf Benachrichtigungen |
-| Deal-Status | ⚠️ Legacy | Kind 30081 (NIP-17 Ära) |
-| Deal-Rooms (NIP-17) | ⚠️ Legacy | Ersetzt durch P2P WebRTC |
-| Deletion Events | ⏳ Geplant | Kind 5 (Aufräumen) |
-| Typing-Indikator | ⏳ Geplant | "Partner schreibt..." (P2P) |
-| Datei-Upload | ⏳ Geplant | P2P File Transfer |
+| Gruppen erstellen | ✅ | Admin-Funktion |
+| Whitelist-Verwaltung | ✅ | Mitglieder hinzufügen/entfernen |
+| Angebote erstellen | ✅ | Mit Temp-Pubkeys (anonym) |
+| Interesse zeigen | ✅ | Verschlüsselt (NIP-04) |
+| Interessenten anzeigen | ✅ | Entschlüsselung |
+| Profile anzeigen | ✅ | Name, NIP-05 (nur Anzeige) |
+| Room-ID Generierung | ✅ | 16 Zeichen alphanumerisch |
+| NIP-04 Benachrichtigung | ✅ | Nur Gewinner (Privacy-optimiert) |
+| Modal-Popups | ✅ | Dunkles Theme |
+| P2P WebRTC Chat | ✅ | Trystero (Chitchatter) |
+| Identity Exchange (P2P) | ✅ | Namen via WebRTC |
+| Chat-UI | ✅ | Pink/Violett Theme |
+| "Chat beenden" | ✅ | Zurück zum Marktplatz |
+| Auto-Listener | ✅ | Prüft alle 10s |
+| Deletion Events | ⏳ | Geplant |
+| Typing-Indikator | ⏳ | Geplant |
+| Datei-Upload | ⏳ | Geplant |
 
 ---
 
 **🎉 Fazit:** Vollständiger Workflow von Angebot bis P2P Chat implementiert!
 
-**🔒 Privacy-Architektur:**
-- **Phase 1 - Marketplace:** Temp-Pubkeys + NIP-04 (Relay-basiert)
-- **Phase 2 - Benachrichtigung:** NIP-04 (nur Gewinner, Privacy-optimiert)
-- **Phase 3 - Chat:** P2P WebRTC (Chitchatter, komplett ohne Relay!)
-
-**🚀 Produktiv einsetzbar:** Alle Kern-Features implementiert. Nutzer können:
+**Nutzer können:**
 1. ✅ Gruppen erstellen/beitreten
 2. ✅ Anonyme Angebote veröffentlichen
 3. ✅ Interesse zeigen (verschlüsselt)
-4. ✅ Schöne Modal-Benachrichtigungen erhalten
-5. ✅ P2P Chat starten (ohne Relay-Metadaten!)
-6. ✅ Identitäten via P2P austauschen
-7. ✅ Sicher & anonym kommunizieren
-
-**🎨 Design:**
-- ✅ Konsistentes dunkles Theme (Pink/Violett)
-- ✅ Professionelle Modal-Popups
-- ✅ Smooth Animationen
-- ✅ Responsive & Mobile-optimiert
-
-**🔜 Nächste Features:**
-- Typing-Indikator (P2P)
-- Datei-Upload (P2P File Transfer)
-- Voice/Video Chat (WebRTC nativ)
-- Multi-Device Sync (optional, via Nostr)
+4. ✅ Modal-Benachrichtigungen erhalten
+5. ✅ P2P Chat starten (ohne Relay-Metadaten)
+6. ✅ Sicher & anonym kommunizieren
