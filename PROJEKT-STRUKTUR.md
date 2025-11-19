@@ -1,264 +1,140 @@
-# 📂 Projekt-Struktur# 📁 Bitcoin-Swap - Projekt-Struktur
+# 📂 Projekt-Struktur
 
+> **Bitcoin-Tausch-Netzwerk - Dateiorganisation & Architektur**
 
+**Stand:** 19. November 2025
 
-> **Bitcoin-Tausch-Netzwerk - Dateiorganisation & Architektur****Stand:** 18. November 2025
+[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue?style=flat)]()
+[![Components](https://img.shields.io/badge/Components-13-success?style=flat)]()
+[![Refactored](https://img.shields.io/badge/Code-Optimized-green?style=flat)]()
 
+---
 
+## 📋 Inhaltsverzeichnis
 
-[![TypeScript](https://img.shields.io/badge/Files-Well%20Organized-success?style=flat)]()---
+- [Verzeichnis-Übersicht](#-verzeichnis-übersicht)
+- [Source Code](#-source-code-detail)
+- [Components](#-components-13)
+- [Nostr Module](#-nostr-module-9)
+- [Code-Statistiken](#-code-statistiken)
 
-[![Components](https://img.shields.io/badge/Components-Modular-blue?style=flat)]()
+---
 
-## 📊 Struktur-Übersicht
+## 🎯 Überblick
 
-**Stand:** 18. November 2025 (Nach Component Refactoring)
+**Modulare SvelteKit-Architektur** mit klarer Trennung:
 
 ```
+📦 ~5.200 Lines of Code
+├── 13 UI Components (modular & wiederverwendbar)
+├── 9 Nostr Module (Protocol Integration)
+├── 3 Stores (State Management)
+└── 100% TypeScript (Type Safety)
+```
 
----Bitcoin-Tausch-Netzwerk/
+---
 
-├── 📄 Dokumentation (Root)
+## 📁 Verzeichnis-Übersicht
 
-## 📋 Inhaltsverzeichnis│   ├── README.md                    # Landing Page (Coming Soon)
-
-│   ├── AKTUELLER-STAND.md          # Technische Dokumentation
-
-- [Überblick](#-überblick)│   ├── ANONYMITAET-ERKLAERT.md     # Endnutzer-Erklärung
-
-- [Verzeichnis-Struktur](#-verzeichnis-struktur)│   ├── WORKFLOW.md                  # Workflow-Übersicht
-
-- [Source Code](#-source-code-src)│   └── CLEANUP-CHECKPOINT.md        # Cleanup-Plan (NEU!)
-
-- [Components](#-components-detail)│
-
-- [Nostr Module](#-nostr-module)├── 📦 archive/                      # Alte Dokumentation
-
-- [Stores](#-stores-state-management)│   └── old-docs/                    # Legacy Docs (NIP-17 Ära)
-
-- [Utilities](#-utilities--helpers)│
-
-- [Routes](#-routes-pages)├── 🔧 Config Files (Root)
-
-- [Code-Statistiken](#-code-statistiken)│   ├── package.json                 # Dependencies
-
-│   ├── package-lock.json
-
----│   ├── svelte.config.js             # SvelteKit Config
-
+```
+Bitcoin-Tausch-Netzwerk/
+├── 📄 Dokumentation
+│   ├── README.md                    # Schnellstart & Überblick
+│   ├── AKTUELLER-STAND.md          # Technische Details
+│   ├── ANONYMITAET-ERKLAERT.md     # Privacy-Erklärung
+│   ├── WORKFLOW.md                  # User Journey
+│   └── PROJEKT-STRUKTUR.md         # Diese Datei
+│
+├── 🔧 Config
+│   ├── package.json                 # Dependencies
+│   ├── svelte.config.js             # SvelteKit Config
 │   ├── tsconfig.json                # TypeScript Config
-
-## 🎯 Überblick│   ├── vite.config.ts               # Vite Build Config
-
-│   └── vercel.json                  # Vercel Deployment
-
-Das Projekt folgt einer **modularen SvelteKit-Architektur** mit klarer Trennung von:│
-
-├── 🧪 Test Scripts (Root)
-
-- **Routes** - Page Components & Routing│   ├── test-nip04.js               # NIP-04 Test
-
-- **Components** - Wiederverwendbare UI-Komponenten│   ├── test-relay-query.js         # Relay Query Tool
-
-- **Stores** - Globales State Management│   └── test-room-id.js             # Room-ID Generator Test
-
-- **Lib** - Business Logic & Utilities│
-
-- **Nostr** - Nostr Protocol Integration└── 📂 src/
-
+│   ├── vite.config.ts               # Build Config
+│   └── vercel.json                  # Deployment
+│
+└── 📂 src/
     ├── app.d.ts                     # Global Types
-
-**Aktuelle Statistiken:**    │
-
-- **Gesamt Lines of Code:** ~5.200+ Zeilen    ├── 📂 lib/
-
-- **Components:** 13 Svelte Components    │   ├── config.ts                # App Config (Relays, etc.)
-
-- **Nostr Modules:** 9 Module    │   │
-
-- **Type Safety:** 100% TypeScript    │   ├── 📂 components/           # UI Components
-
-- **Refactoring:** -44% Code im Main File    │   │   ├── ✅ DonationButton.svelte
-
-    │   │   ├── ✅ InterestListSimple.svelte
-
----    │   │   ├── ✅ SecretBackupModal.svelte
-
-    │   │   ├── ✅ SecretLoginModal.svelte
-
-## 📁 Verzeichnis-Struktur    │   │   ├── ✅ WhitelistModal.svelte
-
-    │   │   ├── ❓ DealInvitations.svelte      # Legacy NIP-17?
-
-```    │   │   ├── ❓ DealRoom.svelte             # Legacy NIP-17?
-
-Bitcoin-Tausch-Netzwerk/    │   │   └── ❓ DealStatusCard.svelte       # Legacy NIP-17?
-
-│    │   │
-
-├── 📄 README.md                    # Haupt-Dokumentation    │   ├── 📂 nostr/                # Nostr Protocol Logic
-
-├── 📄 AKTUELLER-STAND.md          # Technischer Status    │   │   ├── ✅ client.ts                   # Nostr Client
-
-├── 📄 ANONYMITAET-ERKLAERT.md     # Anonymitäts-Konzept    │   │   ├── ✅ crypto.ts                   # Verschlüsselung
-
-├── 📄 WORKFLOW.md                  # User Workflows    │   │   ├── ✅ types.ts                    # TypeScript Types
-
-├── 📄 PROJEKT-STRUKTUR.md         # Diese Datei    │   │   ├── ✅ groupConfig.ts              # Gruppen-Verwaltung
-
-│    │   │   ├── ✅ whitelist.ts                # Whitelist-Verwaltung
-
-├── 📦 package.json                 # Dependencies & Scripts    │   │   ├── ✅ userConfig.ts               # User-Profile
-
-├── ⚙️  svelte.config.js            # SvelteKit Konfiguration    │   │   ├── ✅ marketplace.ts              # Angebote erstellen/laden
-
-├── ⚙️  vite.config.ts              # Vite Build Config    │   │   ├── ✅ interestSignal.ts           # Interesse-Signale
-
-├── ⚙️  tsconfig.json               # TypeScript Config    │   │   ├── ✅ offerSecret.ts              # Temp-Key Generierung
-
-├── 🚀 vercel.json                  # Vercel Deployment    │   │   ├── ✅ offerExpiration.ts          # 72h Expiration
-
-│    │   │   ├── ✅ nip04.ts                    # Deal-Benachrichtigung
-
-├── 📂 src/                         # Source Code    │   │   └── ❓ dealStatus.ts               # Legacy NIP-17?
-
-│   ├── app.html                    # HTML Template    │   │
-
-│   ├── app.css                     # Global Styles    │   ├── 📂 security/             # Security Utils
-
-│   ├── app.d.ts                    # TypeScript Declarations    │   │   └── ✅ validation.ts               # Input Validation
-
-│   │    │   │
-
-│   ├── 📂 lib/                     # Business Logic    │   ├── 📂 stores/               # Svelte Stores
-
-│   │   ├── config.ts              # App Konfiguration    │   │   ├── ✅ userStore.ts                # User State
-
-│   │   │    │   │   ├── ✅ groupStore.ts               # Group State
-
-│   │   ├── 📂 components/         # UI Components (13)    │   │   └── ❓ dealRoomStore.ts            # Legacy NIP-17?
-
-│   │   ├── 📂 nostr/              # Nostr Integration (9)    │   │
-
-│   │   ├── 📂 security/           # Security Validation    │   ├── 📂 utils/                # Utility Functions
-
-│   │   ├── 📂 stores/             # State Management (3)    │   │   ├── ✅ index.ts                    # Helper Functions
-
-│   │   └── 📂 utils/              # Helper Functions    │   │   ├── ✅ logger.ts                   # Logging (DEBUG-heavy!)
-
-│   │    │   │   └── ❓ padding.ts                  # Ungenutzt?
-
-│   └── 📂 routes/                  # SvelteKit Routes    │   │
-
-│       ├── +layout.svelte         # Root Layout    │   └── 📂 __test__/             # Tests
-
-│       ├── +page.svelte           # Landing Page    │       └── ✅ crypto.test.ts              # Unit Tests
-
-│       │    │
-
-│       └── 📂 (app)/              # App Routes (Protected)    └── 📂 routes/                   # SvelteKit Routes
-
-│           ├── 📂 group/          # Marketplace        ├── ✅ +layout.svelte                  # App Layout
-
-│           └── 📂 deal/           # P2P Chat        ├── ✅ +page.svelte                    # Landing Page
-
-│        │
-
-├── 📂 static/                      # Static Assets        ├── 📂 (app)/                # Main App Routes
-
-│   └── favicon.png        │   ├── 📂 group/
-
-│        │   │   └── ✅ +page.svelte            # Marketplace (GROSS!)
-
-└── 📂 archive/                     # Old Docs (Reference)        │   └── 📂 deal/
-
-    └── old-docs/        │       └── 📂 [dealId]/
-
-```        │           └── ✅ +page.svelte        # P2P Chat
-
-        │
-
----        └── 📂 debug-secret/         # Debug Route
-
-            └── ❓ +page.svelte                # Nur für Dev?
-
-## 💻 Source Code (`src/`)```
-
-
-
-### Root Files---
-
-
-
-| Datei | Beschreibung | Zeilen |## 🎯 Legende
-
-|-------|-------------|--------|
-
-| `app.html` | HTML Template mit Dark Mode | ~30 |- ✅ = **Aktiv genutzt** (BEHALTEN)
-
-| `app.css` | Global CSS Variables & Styles | ~100 |- ❓ = **Zu prüfen** (Legacy NIP-17? Ungenutzt?)
-
-| `app.d.ts` | TypeScript Global Declarations | ~20 |- 🔴 = **Löschen** (nach Prüfung)
-
-
-
-------
-
-
-
-## 🎨 Components Detail## 📏 Datei-Größen
-
-
-
-### 📂 `src/lib/components/` (13 Components)### Größte Dateien (zu prüfen):
-
-1. `src/routes/(app)/group/+page.svelte` - **~1256 Zeilen** 🚨 ZU GROSS!
-
-#### **Marketplace Components**2. `src/routes/(app)/deal/[dealId]/+page.svelte` - **~564 Zeilen**
-
-3. `AKTUELLER-STAND.md` - Dokumentation (OK)
-
-| Component | Zeilen | Beschreibung |4. `ANONYMITAET-ERKLAERT.md` - Dokumentation (OK)
-
+    ├── app.html                     # HTML Template
+    ├── app.css                      # Global Styles
+    │
+    ├── 📂 lib/
+    │   ├── config.ts                # App Config
+    │   ├── 📂 components/           # 13 UI Components
+    │   ├── 📂 nostr/                # 9 Nostr Modules
+    │   ├── 📂 stores/               # 3 State Stores
+    │   ├── 📂 security/             # Validation
+    │   └── 📂 utils/                # Helpers
+    │
+    └── 📂 routes/
+        ├── +layout.svelte           # App Layout
+        ├── +page.svelte             # Landing Page
+        └── 📂 (app)/
+            ├── group/+page.svelte   # Marketplace
+            └── deal/[dealId]/       # P2P Chat
+```
+
+---
+
+## 💻 Source Code Detail
+
+### 📂 `src/lib/components/` (13 Components)
+
+| Component | Zeilen | Beschreibung |
 |-----------|--------|--------------|
+| **Marketplace** |
+| MarketplaceHeader.svelte | 128 | Header mit User-Info & Buttons |
+| OfferForm.svelte | 185 | Angebots-Formular |
+| OfferList.svelte | 311 | Angebots-Liste |
+| **Modals** |
+| DealNotificationModal.svelte | 248 | Deal-Benachrichtigung |
+| WhitelistModal.svelte | 300 | Whitelist-Verwaltung |
+| SecretBackupModal.svelte | 200 | Secret Backup |
+| SecretLoginModal.svelte | 180 | Secret Login |
+| **Features** |
+| InterestListSimple.svelte | 250 | Interessenten-Liste |
+| DonationButton.svelte | 50 | Lightning Donations |
 
-| `MarketplaceHeader.svelte` | 128 | Header mit User-Info, Admin-Badge, Buttons |---
+**Gesamt:** 13 Components, ~1.850 Zeilen
 
-| `OfferForm.svelte` | 185 | Marketplace-Header + Angebots-Formular |
+---
 
-| `OfferList.svelte` | 311 | Angebots-Liste mit Loading/Empty States |## 🔍 Cleanup-Priorität
+## 🌐 Nostr Module (9)
 
+### 📂 `src/lib/nostr/`
 
+| Modul | Zeilen | Beschreibung |
+|-------|--------|--------------|
+| client.ts | 150 | Relay Connection & Subscriptions |
+| crypto.ts | 200 | NIP-04 Encryption |
+| marketplace.ts | 400 | Angebote (Create, Read, Delete) |
+| interestSignal.ts | 350 | Interesse-Signale (verschlüsselt) |
+| offerSecret.ts | 100 | Temp-Keypair Generation |
+| nip04.ts | 150 | Direct Messages (NIP-04) |
+| groupConfig.ts | 200 | Gruppen-Verwaltung |
+| whitelist.ts | 250 | Whitelist CRUD |
+| types.ts | 100 | TypeScript Definitions |
 
-#### **Modal Components**### Priorität 1 (SOFORT):
+**Gesamt:** 9 Module, ~1.900 Zeilen
 
-1. **Legacy NIP-17 Code identifizieren & löschen**
+---
 
-| Component | Zeilen | Beschreibung |   - DealInvitations.svelte
+## 🗂️ Stores & Utils
 
-|-----------|--------|--------------|   - DealRoom.svelte
+### State Management (3 Stores)
 
-| `DealNotificationModal.svelte` | 248 | Deal-Benachrichtigung (Pink/Violett Design) |   - DealStatusCard.svelte
+| Store | Zeilen | Beschreibung |
+|-------|--------|--------------|
+| userStore.ts | 200 | User State (Pubkey, Name) |
+| groupStore.ts | 250 | Group State (Relay, Admin) |
+| dealStore.ts | 100 | Deal Room State |
 
-| `WhitelistModal.svelte` | ~300 | Admin-Panel für Whitelist-Verwaltung |   - dealStatus.ts
+### Security & Utils
 
-| `SecretBackupModal.svelte` | ~200 | Offer-Secret Backup & Download |   - dealRoomStore.ts
-
-| `SecretLoginModal.svelte` | ~180 | Secret-basierter Re-Login |
-
-2. **Debug-Logs reduzieren**
-
-#### **Feature Components**   - logger.ts: Production Mode
-
-   - deal/[dealId]/+page.svelte: Console.logs entfernen
-
-| Component | Zeilen | Beschreibung |   - group/+page.svelte: Console.logs entfernen
-
-|-----------|--------|--------------|
-
-| `InterestListSimple.svelte` | ~250 | Liste der Interessenten mit Accept-Button |3. **Ungenutzte Files löschen**
-
-| `DonationButton.svelte` | ~50 | Lightning Donation Button |   - test-nip04.js (optional behalten)
+| File | Zeilen | Beschreibung |
+|------|--------|--------------|
+| security/validation.ts | 100 | Input Validation |
+| utils/index.ts | 150 | Helper Functions |
+| utils/logger.ts | 80 | Production Logger |
 
    - test-room-id.js
 
@@ -377,131 +253,59 @@ routes/
 
 ---
 
+---
+
 ## 📊 Code-Statistiken
 
-### Lines of Code by Category
-
-| Kategorie | Lines | Prozent |
-|-----------|-------|---------|
-| Components | ~1.850 | 35% |
+| Kategorie | Lines of Code | Anteil |
+|-----------|--------------|--------|
 | Nostr Module | ~1.900 | 36% |
-| Routes/Pages | ~2.150 | 41% |
-| Stores | ~550 | 10% |
-| Utils/Security | ~330 | 6% |
+| Components | ~1.850 | 35% |
+| Routes/Pages | ~1.450 | 28% |
 | **Gesamt** | **~5.200** | **100%** |
 
-### TypeScript Coverage
+### Technologie
 
-- **100% TypeScript** in Business Logic
-- **Type Definitions:** Comprehensive
-- **Strict Mode:** Enabled
-- **Type Safety:** ✅ 0 Errors
-
----
-
-## 🚀 Build Output
-
-### Production Build Stats
-
-```
-Client Bundle:
-  - Total Size: ~270 KB (gzipped)
-  - Chunks: 15
-  - Lazy Loading: ✅ Components on demand
-  - Tree Shaking: ✅ Optimized
-
-Server Bundle:
-  - SSR: ✅ SvelteKit SSR
-  - Adapter: Vercel
-  - Build Time: ~3.5s
-```
+- **TypeScript:** 100% (Strict Mode)
+- **Build:** ~270 KB gzipped
+- **Components:** 13 (modular)
+- **Refactoring:** -44% (Marketplace)
 
 ---
 
-## 📦 Dependencies
-
-### Main Dependencies
-
-| Package | Version | Verwendung |
-|---------|---------|------------|
-| `svelte` | 5.x | UI Framework |
-| `@sveltejs/kit` | 2.x | App Framework |
-| `nostr-tools` | Latest | Nostr Protocol |
-| `trystero` | Latest | P2P WebRTC |
-
-### Dev Dependencies
-
-- `typescript` - Type Safety
-- `vite` - Build Tool
-- `vitest` - Testing
-- `@sveltejs/adapter-vercel` - Deployment
-
----
-
-## 🎯 Architektur-Prinzipien
+## �️ Architektur
 
 ### Design Patterns
 
-1. **Component-Based Architecture**
-   - Kleine, wiederverwendbare Components
-   - Single Responsibility Principle
-   - Props-down, Events-up
+```
+1. Component-Based
+   ✅ Wiederverwendbar
+   ✅ Single Responsibility
+   
+2. Store Pattern
+   ✅ Zentrales State Management
+   ✅ Reactive (Svelte Stores)
+   
+3. Module Pattern
+   ✅ Klare Trennung
+   ✅ Type-safe
+```
 
-2. **Store Pattern**
-   - Zentrales State Management
-   - Reactive Updates via Svelte Stores
-   - Persistence Layer (localStorage)
+### Refactoring-Historie
 
-3. **Module Pattern**
-   - Klare Trennung: Nostr, Security, Utils
-   - Dependency Injection
-   - Type-safe Exports
+**Phase 3 (Nov 2025):** Component Extraction
 
-4. **Route-based Code Splitting**
-   - Lazy Loading via SvelteKit
-   - Optimierte Bundle Size
-   - Fast Initial Load
+```
+Problem: Marketplace 1.255 Zeilen
+Lösung: 4 Components extrahiert
+Resultat: -44% (698 Zeilen)
 
----
-
-## 🔐 Security Architecture
-
-### Layers
-
-1. **Input Validation** (`security/validation.ts`)
-2. **Encryption** (`nostr/crypto.ts` - NIP-04)
-3. **Whitelist** (`nostr/whitelist.ts`)
-4. **Temp Keypairs** (`nostr/offerSecret.ts`)
-
-### Best Practices
-
-- ✅ No Private Keys in localStorage
-- ✅ Input Sanitization
-- ✅ Content Security Policy (CSP)
-- ✅ HTTPS-only in Production
-
----
-
-## 📈 Refactoring-Historie
-
-### Phase 3: Component Extraction (Nov 2025)
-
-**Problem:** `group/+page.svelte` war 1.255 Zeilen groß (unübersichtlich)
-
-**Lösung:** Aufgeteilt in 4 wiederverwendbare Components
-
-**Resultat:**
-- Main File: 1.255 → 698 Zeilen (-44%)
-- 4 neue Components: 872 Zeilen
-- TypeScript: ✅ 0 Errors
-- Build: ✅ Successful
-
-**Git Commits:**
-1. `5515d4f` - DealNotificationModal (-213 Zeilen)
-2. `f804347` - MarketplaceHeader (-66 Zeilen)
-3. `9856cb5` - OfferForm (-94 Zeilen)
-4. `8dae213` - OfferList (-184 Zeilen)
-5. `e1df028` - Final Cleanup & Testing
+Commits:
+• 5515d4f - DealNotificationModal
+• f804347 - MarketplaceHeader  
+• 9856cb5 - OfferForm
+• 8dae213 - OfferList
+```
 
 ---
 
