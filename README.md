@@ -28,38 +28,29 @@
 
 Bitcoin-Tausch-Netzwerk ist eine **dezentrale Plattform** für anonyme Bitcoin-Tauschgeschäfte. Die Anwendung kombiniert **Nostr-Relays** für den öffentlichen Marketplace mit **P2P WebRTC** für private, verschlüsselte Deal-Räume.
 
-### Hauptmerkmale
+### Kernprinzip
 
-- 🎭 **Vollständige Anonymität** - Temporäre Keypairs für Angebote
-- 🔐 **Ende-zu-Ende Verschlüsselung** - P2P WebRTC ohne Server-Beteiligung
-- 🌐 **Dezentral** - Keine zentrale Datenbank oder Server
-- ⚡ **Schnell** - Direkte Peer-to-Peer Verbindungen
-- 🛡️ **Sicher** - Whitelist-System und NIP-04 Verschlüsselung
+- 🎭 **Anonymität**: Temporäre Keypairs für Angebote
+- 🔐 **Verschlüsselung**: NIP-04 + P2P WebRTC
+- 🌐 **Dezentral**: Keine zentrale Datenbank
+- ⚡ **Schnell**: Direkte Peer-to-Peer Verbindungen
 
 ---
 
 ## ✨ Features
 
 ### 🛒 Marketplace
-
-- **Angebote erstellen**: Anonyme Bitcoin-Tauschgeschäfte veröffentlichen
-- **Interesse zeigen**: Signal an Angebotsgeber senden
-- **Automatisches Expiry**: Angebote verfallen nach 72 Stunden
-- **Whitelist-System**: Admin-kontrollierter Zugang
+- Anonyme Angebote veröffentlichen (Temp-Keypairs)
+- Interesse zeigen (NIP-04 verschlüsselt)
+- Automatisches Expiry (72 Stunden)
+- Admin-Whitelist für vertrauenswürdige Nutzer
 
 ### 💬 P2P Deal-Räume
+- Direkte WebRTC-Verbindung (kein Relay)
+- BitTorrent Discovery für Peer-Finding
+- Identity Exchange via P2P (keine Relay-Metadaten)
 
-- **WebRTC Chat**: Direkte, verschlüsselte Kommunikation
-- **Kein Relay**: Nachrichten gehen niemals über Nostr-Relays
-- **BitTorrent Discovery**: Peer-Finding über öffentliche Tracker
-- **Desktop-Optimiert**: Läuft stabil auf Desktop-Browsern
-
-### 🔐 Sicherheit
-
-- **Temporäre Keypairs**: Jedes Angebot hat eigenes Keypair
-- **Secret-basierte Auth**: Wiederherstellung via Secret Phrase
-- **NIP-04 Verschlüsselung**: Interesse-Signale verschlüsselt
-- **Admin-Controls**: Whitelist für vertrauenswürdige Nutzer
+> **Hinweis:** Für detaillierte Informationen siehe [AKTUELLER-STAND.md](./AKTUELLER-STAND.md) und [WORKFLOW.md](./WORKFLOW.md)
 
 ---
 
@@ -92,11 +83,11 @@ Bitcoin-Tausch-Netzwerk ist eine **dezentrale Plattform** für anonyme Bitcoin-T
 
 ### Technologie-Stack
 
-- **Frontend**: SvelteKit + TypeScript
-- **Nostr**: nostr-tools (NIP-01, NIP-04, NIP-13)
-- **P2P**: Trystero (WebRTC via BitTorrent)
-- **Crypto**: secp256k1, AES-CBC
-- **Deployment**: Vercel
+- **Frontend**: [SvelteKit](https://kit.svelte.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Nostr**: [nostr-tools](https://github.com/nbd-wtf/nostr-tools) ([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), [NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md), [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md))
+- **P2P**: [Trystero](https://github.com/dmotz/trystero) (WebRTC via BitTorrent)
+- **Crypto**: [secp256k1](https://github.com/bitcoin-core/secp256k1), [AES-GCM](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt#aes-gcm)
+- **Deployment**: [Vercel](https://vercel.com/)
 
 ---
 
@@ -132,82 +123,73 @@ Keine erforderlich - alles läuft client-side!
 
 ## 📖 Verwendung
 
-### 1. Admin erstellt Gruppe
+### Schnellstart
 
-**Nur für Admins:**
+1. **Admin**: Erstelle Gruppe → Teile QR-Code/Link mit Mitgliedern
+2. **Mitglied**: Scanne QR → Melde dich an (Nostr nsec) → Erstelle Angebote
+3. **Deal**: Interesse zeigen → Warte auf Auswahl → Chatte via P2P WebRTC
 
-1. Öffne die Anwendung
-2. Erstelle eine neue Gruppe mit eigenem Secret
-3. Konfiguriere Whitelist (füge Pubkeys hinzu)
-4. Teile Einladung an Mitglieder:
-   - **QR-Code** scannen lassen (mobil)
-   - **Einladungs-Link** versenden (z.B. `https://app-url.com/?secret=DeinGruppenSecret123`)
+### Detaillierter Workflow
 
-### 2. Mitglied tritt bei
+**1. Gruppe erstellen (Admin)**
+- Erstelle Gruppen-Secret
+- Konfiguriere Relay (z.B. wss://damus.io)
+- Füge Mitglieder zur Whitelist hinzu
+- Teile Einladungs-Link: `https://app-url.com/?secret=DeinSecret`
 
-**Für eingeladene User:**
+**2. Gruppe beitreten**
+- Scanne QR-Code oder öffne Link
+- Melde dich mit Nostr-Keypair (nsec) an
+- Whitelist-Check → Zugang gewährt ✅
 
-1. Scanne QR-Code oder öffne Einladungs-Link
-2. App lädt automatisch das Gruppen-Secret
-3. Melde dich mit deinem Nostr-Keypair an
-4. Whitelist-Check → Zugang gewährt ✅
+**3. Angebot erstellen**
+- Beschreibe dein Bitcoin-Tauschgeschäft
+- Angebot wird mit temp. Keypair signiert (anonym!)
+- **Wichtig:** Speichere dein Offer-Secret!
 
-### 3. Angebot erstellen
+**4. Deal abschließen**
+- Bei Interesse: Modal-Benachrichtigung mit Room-ID
+- "🚀 Zum Chat" → P2P WebRTC Chat startet
+- Tausche Bitcoin-Details direkt aus
 
-1. Klicke "Neues Angebot"
-2. Beschreibe dein Bitcoin-Tauschgeschäft
-3. Veröffentliche (automatisch mit temp. Keypair)
-4. **Wichtig:** Speichere dein Offer-Secret!
-
-### 4. Interesse zeigen
-
-1. Durchsuche Angebote im Marketplace
-2. Klicke "Interesse zeigen"
-3. Warte auf Auswahl durch Angebotsgeber
-
-### 5. Deal-Room nutzen
-
-1. Warte auf Benachrichtigung
-2. Öffne Deal-Room (P2P WebRTC)
-3. Chatte direkt mit deinem Handelspartner
-4. Tausche Bitcoin-Details aus
+> **Detaillierte Erklärung:** Siehe [WORKFLOW.md](./WORKFLOW.md) für vollständige User-Journey
 
 ---
 
 ## 🔧 Technische Details
 
-### Nostr Integration
+### Nostr NIPs
 
-- **NIP-01**: Basic Event Structure (Events, Subscriptions)
-- **NIP-04**: Encrypted Direct Messages (Interest Signals, Deal Notifications)
-- **NIP-05**: Nostr Address (nur Anzeige, keine Verifikation)
+- **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)**: Basic Event Structure
+- **[NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md)**: Encrypted Direct Messages
+- **[NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md)**: Nostr Address (nur Anzeige)
 
-> **Hinweis:** NIP-05 Adressen werden aus User-Profilen (Kind 0) gelesen und angezeigt, aber **nicht verifiziert** (kein `.well-known/nostr.json` Fetch).
+### Kernkonzepte
 
-### Anonymitäts-Konzept
+**Anonymität:**
+- Temp-Keypairs pro Angebot (Secret → SHA-256 → Keypair)
+- NIP-04 Verschlüsselung (ECDH + AES-256-CBC)
+- P2P WebRTC Chat (keine Relay-Metadaten)
 
-1. **Marketplace**: Temp. Keypairs pro Angebot
-2. **Interest Signals**: Verschlüsselt via NIP-04
-3. **Deal-Room**: P2P WebRTC (kein Relay)
-4. **Room-ID**: Deterministisch aus Secrets
+**Event-Kinds:**
+- Kind 42: Marketplace-Angebot
+- Kind 30078: Interesse-Signal (NIP-04 verschlüsselt)
+- Kind 30000: GroupConfig/Whitelist
 
-### P2P WebRTC Details
-
-- **Library**: Trystero
-- **Strategy**: torrent (BitTorrent Tracker)
-- **Appid**: Bitcoin-Tausch-P2P
-- **Encryption**: Browser-native WebRTC Encryption
+> **Ausführliche technische Dokumentation:** [AKTUELLER-STAND.md](./AKTUELLER-STAND.md)
 
 ---
 
 ## 📚 Dokumentation
 
+Für detaillierte Informationen siehe:
+
 | Dokument | Beschreibung |
 |----------|-------------|
-| [AKTUELLER-STAND.md](./AKTUELLER-STAND.md) | Vollständiger technischer Status |
-| [ANONYMITAET-ERKLAERT.md](./ANONYMITAET-ERKLAERT.md) | Anonymitäts-Mechanismen erklärt |
-| [WORKFLOW.md](./WORKFLOW.md) | User-Journey & Prozesse |
-| [PROJEKT-STRUKTUR.md](./PROJEKT-STRUKTUR.md) | Dateistruktur & Organisation |
+| [AKTUELLER-STAND.md](./AKTUELLER-STAND.md) | **Technischer Status** - Vollständige Implementierung, Event-Kinds, Verschlüsselung |
+| [WORKFLOW.md](./WORKFLOW.md) | **User-Journey** - 7-Schritte-Workflow von Gruppe bis Chat |
+| [ANONYMITAET-ERKLAERT.md](./ANONYMITAET-ERKLAERT.md) | **Privacy-Konzept** - Anonymitäts-Mechanismen für Nicht-Techniker |
+| [PROJEKT-STRUKTUR.md](./PROJEKT-STRUKTUR.md) | **Code-Organisation** - Dateistruktur & Architektur |
 
 ---
 
@@ -241,16 +223,17 @@ Die App ist eine statische SvelteKit-Anwendung und kann auf jeder Platform deplo
 
 ### Best Practices
 
-- ✅ Speichere deine Secrets sicher (Passwort-Manager)
-- ✅ Nutze nur vertrauenswürdige Nostr-Relays
-- ✅ Überprüfe Room-IDs vor dem Chat-Beitritt
-- ✅ Teile niemals deine Private Keys
+- ✅ Speichere Secrets sicher (Passwort-Manager)
+- ✅ Nutze vertrauenswürdige Nostr-Relays
+- ✅ Teile niemals Private Keys
 
 ### Bekannte Limitierungen
 
-- **Mobile NAT/Firewall**: P2P WebRTC funktioniert am besten auf Desktop
-- **Browser-Support**: Chromium-basierte Browser empfohlen
+- **P2P WebRTC**: Desktop-Browser empfohlen (mobile NAT/Firewall-Probleme)
+- **Browser-Support**: Chromium-basierte Browser optimal
 - **Relay-Verfügbarkeit**: Abhängig von Nostr-Relay-Uptime
+
+> **Anonymitäts-Details:** [ANONYMITAET-ERKLAERT.md](./ANONYMITAET-ERKLAERT.md) erklärt was öffentlich/privat ist
 
 ---
 
