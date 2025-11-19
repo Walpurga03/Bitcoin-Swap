@@ -53,8 +53,8 @@
 ### 📌 Die Situation
 
 ```
-Bob hat:     0.1 Bitcoin      →  Will:  5000 Euro
-Alice hat:   5000 Euro        →  Will:  0.1 Bitcoin
+Bob hat:     0.1 Bitcoin      →  Will:  10000 Euro
+Alice hat:   10000 Euro        →  Will:  0.1 Bitcoin
 ```
 
 ### 🔄 Die 5 Schritte (einfach erklärt)
@@ -62,7 +62,7 @@ Alice hat:   5000 Euro        →  Will:  0.1 Bitcoin
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1️⃣ BOB ERSTELLT ANGEBOT                                    │
-│     Bob: "Verkaufe 0.1 BTC für 5000€"                       │
+│     Bob: "Verkaufe 0.1 BTC für 10000€"                      │
 │     System: Macht Bob anonym → ANONYM_XYZ123                │
 │     ✅ Niemand weiß dass es Bob ist!                        │
 └─────────────────────────────────────────────────────────────┘
@@ -111,7 +111,7 @@ Bob öffnet die App:
 ├────────────────────────────────────┤
 │  Angebots-Text:                    │
 │  ┌──────────────────────────────┐  │
-│  │ Verkaufe 0.1 BTC für 5000€   │  │
+│  │ Verkaufe 0.1 BTC für 10000€  │  │
 │  └──────────────────────────────┘  │
 │                                    │
 │  [Angebot erstellen] ← Klick!      │
@@ -131,7 +131,7 @@ Bob öffnet die App:
    
 3. Angebot veröffentlichen:
    Von: ANONYM_XYZ123 (anonym!)
-   Text: "Verkaufe 0.1 BTC für 5000€"
+   Text: "Verkaufe 0.1 BTC für 10000€"
 ```
 
 ### Was alle anderen sehen
@@ -142,7 +142,7 @@ Marketplace:
 │  📢 Neues Angebot                  │
 ├────────────────────────────────────┤
 │  Von: ANONYM_XYZ123                │
-│  "Verkaufe 0.1 BTC für 5000€"      │
+│  "Verkaufe 0.1 BTC für 10000€"     │
 │                                    │
 │  [Interesse zeigen]                │
 └────────────────────────────────────┘
@@ -169,7 +169,7 @@ Alice sieht das Angebot:
 ┌────────────────────────────────────┐
 │  Angebot von ANONYM_XYZ123         │
 ├────────────────────────────────────┤
-│  "Verkaufe 0.1 BTC für 5000€"      │
+│  "Verkaufe 0.1 BTC für 10000€"     │
 │                                    │
 │  [Interesse zeigen] ← Alice klickt!│
 └────────────────────────────────────┘
@@ -225,7 +225,7 @@ Server speichert:
 Bob öffnet sein Angebot:
 ┌────────────────────────────────────┐
 │  Dein Angebot                      │
-│  "Verkaufe 0.1 BTC für 5000€"      │
+│  "Verkaufe 0.1 BTC für 10000€"     │
 │                                    │
 │  💌 1 Interessent                  │
 │  [Interessenten anzeigen] ← Klick! │
@@ -274,7 +274,7 @@ Interessenten-Liste:
 Andere User sehen:
 ┌────────────────────────────────────┐
 │  Angebot von ANONYM_XYZ123         │
-│  "Verkaufe 0.1 BTC für 5000€"      │
+│  "Verkaufe 0.1 BTC für 10000€"     │
 │  Status: Aktiv ✅                  │
 └────────────────────────────────────┘
 
@@ -292,69 +292,69 @@ Andere User sehen:
 
 ---
 
-## 4️⃣ ALLE BEKOMMEN NACHRICHT (Privacy-Trick!)
+## 4️⃣ BOB WÄHLT ALICE AUS
 
 ### Was Bob macht
 
 ```
-Bob wählt Alice aus:
+Bob öffnet Interessenten-Liste:
 ┌────────────────────────────────────┐
-│  👤 Alice                          │
+│  � Interessenten (1)              │
+├────────────────────────────────────┤
+│  �👤 Alice                          │
+│     npub1alice789xyz...            │
+│                                    │
 │  [Deal mit Alice starten] ← Klick! │
 └────────────────────────────────────┘
 ```
 
-### Was die App automatisch macht (Clever! 🧠)
+### Was die App automatisch macht
 
 ```
-System sendet Nachricht an ALLE 50 Whitelist-Mitglieder:
-
-Alice bekommt:     "🎉 Du wurdest ausgewählt! Chatraum: abc123"
-49 andere bekommen: "📢 Angebot wurde vergeben. Nächstes Mal!"
-
-💡 ALLE Nachrichten sind verschlüsselt!
-💡 Server sieht 50 identische verschlüsselte Blobs!
+1. Erstellt Chatraum-ID:
+   Zufallszahl → abc123xyz...
+   
+2. Sendet verschlüsselte Nachricht an Alice:
+   "🎉 Du wurdest ausgewählt! Chatraum: abc123xyz"
+   (NIP-04 verschlüsselt)
+   
+3. Löscht das Angebot vom Server:
+   Status: "Vergeben" oder komplett gelöscht
 ```
 
-### Warum an ALLE? 🤔
+### Was Alice bekommt
 
 ```
-❌ OHNE Broadcast:
-   Nur Alice bekommt Nachricht
-   → Server sieht: "Nur 1 Nachricht"
-   → Server weiß: "Alice wurde ausgewählt!"
-   → Keine Privacy! ❌
-
-✅ MIT Broadcast:
-   Alle 50 Mitglieder bekommen Nachricht
-   → Server sieht: "50 verschlüsselte Nachrichten"
-   → Server weiß NICHT: "Wer wurde ausgewählt?"
-   → Perfekte Privacy! ✅
+Notification:
+┌────────────────────────────────────┐
+│  🎉 Deal-Einladung!                │
+├────────────────────────────────────┤
+│  Du wurdest ausgewählt!            │
+│  Chatraum: abc123xyz...            │
+│                                    │
+│  [Zum Chat] ← Alice klickt         │
+└────────────────────────────────────┘
 ```
 
-### Was der Server sieht
+### Was andere sehen
 
 ```
-Server speichert 50 verschlüsselte Nachrichten:
-┌─────────────────────────────────────┐
-│ Nachricht 1: "Blob1..." (❓)        │
-│ Nachricht 2: "Blob2..." (❓)        │
-│ Nachricht 3: "Blob3..." (❓)        │
-│ ...                                 │
-│ Nachricht 50: "Blob50..." (❓)      │
-└─────────────────────────────────────┘
+Marketplace:
+┌────────────────────────────────────┐
+│  ⚠️ Angebot nicht mehr verfügbar   │
+│  (wurde vergeben oder gelöscht)    │
+└────────────────────────────────────┘
 
-❓ Welche ist die Einladung?
-❓ Welche sind Absagen?
-→ Server kann es NICHT unterscheiden! Alle gleich!
+💡 Niemand weiß dass Alice ausgewählt wurde!
+💡 Nur Alice bekommt die Chatraum-ID!
 ```
 
 ### ✅ Privacy-Garantie
 
-- ✅ Server weiß nicht wer ausgewählt wurde
-- ✅ Alle Nachrichten sehen gleich aus
-- ✅ Nur Alice sieht ihre Einladung
+- ✅ Nur Alice bekommt Chatraum-ID (NIP-04 verschlüsselt)
+- ✅ Server kann Nachricht nicht lesen
 - ✅ Andere sehen nur "Angebot vergeben"
+- ✅ Niemand weiß wer ausgewählt wurde
 
 ---
 
@@ -433,8 +433,8 @@ Server speichert 50 verschlüsselte Nachrichten:
 │ 3️⃣ AUSWAHL                                              │
 │    Bob gibt Secret ein → Sieht "Alice"                  │
 ├─────────────────────────────────────────────────────────┤
-│ 4️⃣ BROADCAST                                            │
-│    Alle 50 bekommen Nachricht → Server weiß nicht wer   │
+│ 4️⃣ EINLADUNG                                            │
+│    Nur Alice bekommt Chatraum-ID (verschlüsselt)        │
 ├─────────────────────────────────────────────────────────┤
 │ 5️⃣ CHATRAUM                                             │
 │    Alice ↔ Bob direkt verbunden → Kein Server!         │
@@ -518,7 +518,7 @@ Charlie entschlüsselt:
 | **Angebot erstellen** | ✅ Kennt Secret | ❌ Sieht ANONYM_XYZ | ❌ Sieht ANONYM_XYZ | ❌ Sieht ANONYM_XYZ |
 | **Interesse zeigen** | ❌ Noch nichts | ✅ Hat geklickt | ❌ Sieht nichts | ❌ Sieht verschlüsselt |
 | **Secret eingeben** | ✅ Sieht "Alice" | ❌ Weiß nichts | ❌ Sieht nichts | ❌ Sieht verschlüsselt |
-| **Deal auswählen** | ✅ Wählt Alice | ✅ Einladung! | ⚠️ "Vergeben" | ❌ Sieht 50 Blobs |
+| **Alice auswählen** | ✅ Sendet Einladung | ✅ Bekommt Chatraum-ID | ⚠️ "Vergeben" | ❌ Sieht verschlüsselt |
 | **Chatraum** | ✅ Chattet mit Alice | ✅ Chattet mit Bob | ❌ Nichts | ❌ Nichts (P2P!) |
 
 ---
@@ -684,19 +684,29 @@ Knacken dauert:
 </details>
 
 <details>
-<summary><strong>F: Warum bekommen ALLE eine Nachricht?</strong></summary>
+<summary><strong>F: Warum bekommt nur Alice die Einladung?</strong></summary>
 
-**Antwort:** 🛡️ **Privacy by Design!**
+**Antwort:** � **Verschlüsselte Direktnachricht!**
 
 ```
-❌ Nur Alice → Server weiß: "Alice gewonnen!"
-✅ Alle 50 → Server weiß NICHT wer!
+Bob sendet:
+• Verschlüsselte NIP-04 Nachricht an Alice
+• Inhalt: Chatraum-ID (abc123xyz...)
+• Nur Alice kann entschlüsseln
 
-Inhalt:
-• Alice: "🎉 Du wurdest ausgewählt!"
-• 49 andere: "📢 Vergeben!"
-• Alles verschlüsselt
+Angebot wird gelöscht:
+• Status: "Vergeben" oder komplett weg
+• Andere sehen: "Nicht mehr verfügbar"
+• Niemand weiß dass Alice gewonnen hat
+
+Privacy:
+✅ Server kann Nachricht nicht lesen
+✅ Andere wissen nicht wer ausgewählt wurde
+✅ Nur Alice hat die Chatraum-ID
 ```
+
+**Das ist Privacy by Design!** 🎭
+
 </details>
 
 ---
@@ -717,8 +727,9 @@ Inhalt:
 | Phase | Anonymität | Verschlüsselung | Server-Schutz |
 |-------|-----------|----------------|---------------|
 | **Angebot** | ✅ 100% | - | ✅ Ja |
-| **Interesse** | ✅ 100% | ✅ Ja | ✅ Ja |
-| **Chatraum** | ⚠️ Nur Bob & Alice | ✅ Ja | ✅ Kein Server! |
+| **Interesse** | ✅ 100% | ✅ NIP-04 | ✅ Ja |
+| **Einladung** | ⚠️ Nur Bob & Alice | ✅ NIP-04 | ✅ Ja |
+| **Chatraum** | ⚠️ Nur Bob & Alice | ✅ P2P | ✅ Kein Server! |
 
 ---
 
